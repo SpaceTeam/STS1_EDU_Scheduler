@@ -31,4 +31,3 @@ if __name__ == '__main__':
     p.start()
     logging.info(f"{rx_queue.get()}")
     p.kill()
-
