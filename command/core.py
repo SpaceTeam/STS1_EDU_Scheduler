@@ -1,43 +1,42 @@
 import logging
 from typing import Any
+import os
+import shutil
+from zipfile import ZipFile
 
 from communication import COBC_CMD
 
 
-def dispatch_command(cmd: COBC_CMD, data: Any) -> None:
+def dispatch_command(cmd: COBC_CMD, data_path: str) -> None:
     """
     This function dispatches a COBC command to the appropriate functions.
 
     :param cmd: Command type
     :param data: Data associated with the command
     """
-    # TODO implement data preprocessing (locked by CSBI protocol)
-    match cmd:
-        case COBC_CMD.NOP:
-            pass
-        case COBC_CMD.STORE_ARCHIVE:
-            store_archive(data)
-        case COBC_CMD.EXECUTE_FILE:
-            execute_file(data)
-        case COBC_CMD.STOP_FILE:
-            stop_file(data)
-        case COBC_CMD.SEND_RESULTS:
-            send_results(data)
-        case COBC_CMD.LIST_FILES:
-            list_files()
-        case COBC_CMD.UPDATE_TIME:
-            update_time(data)
+    # TODO implement data preprocessing?
+    raise NotImplementedError
 
 
-def store_archive(data: bytes) -> None:
+def store_archive(folder: str, zip: bytes) -> None:
     """
     This function stores the received bytes as a zipped file, the unzips and copies the python script to the
     appropriate location.
 
+    :param path: The name of the folder where the unzipped file should be placed
     :param data: byte stream of a zip file
-    :raise ValueError if the bytes are not a valid zip file
     """
-    raise NotImplementedError
+    path = f"./archives/{folder}"
+    if folder in os.listdir("./archives"):
+        shutil.rmtree(path)
+    os.mkdir(path)
+    with open(f"{path}/tmp.zip", "wb") as f:
+        f.write(zip)
+    with ZipFile(f"{path}/tmp.zip") as z:
+        z.extractall(path)
+    os.remove(f"{path}/tmp.zip")
+
+
 
 
 def execute_file(data: dict) -> None:
