@@ -1,5 +1,5 @@
 import unittest
-import os
+import shutil
 import filecmp
 
 import command
@@ -7,7 +7,7 @@ import command
 
 class CommandHandlingTests(unittest.TestCase):
     def test_store_archive(self):
-        with open("./tests/communication.zip", "rb") as f:
+        with open("./tests/student_program.zip", "rb") as f:
             data = f.read()
 
         command.store_archive("arch1", data)
@@ -17,6 +17,9 @@ class CommandHandlingTests(unittest.TestCase):
         self.assertEqual(len(diff.diff_files), 0)
         self.assertEqual(len(diff.left_only), 0)
         self.assertEqual(len(diff.right_only), 0)
+
+    def tearDown(self) -> None:
+        shutil.rmtree("./archives/arch1")
 
 
 if __name__ == '__main__':

@@ -1,34 +1,14 @@
-import threading
-import time
-import logging
-from multiprocessing import Process, Queue
 import os
+import sys
 
-import communication
+if __name__ == "__main__":
+    if "results" not in os.listdir():
+        os.mkdir("results")
+    if sys.argv[1] not in os.listdir("results"):
+        os.mkdir(sys.argv[1])
 
-
-def heartbeat() -> None:
-    while True:
-        logging.debug("Beat!")
-        time.sleep(2)
-
-
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s:%(levelname)s %(message)s', datefmt="%H:%M:%S")
-
-    paths = os.listdir()
-    for name in ["data", "archives"]:
-        if name not in paths:
-            logging.info(f"Creating folder {name}")
-            os.mkdir(name)
-
-    logging.info("Starting heartbeat & communication process")
-    threading.Thread(target=heartbeat, daemon=True).start()
-
-    rx_queue = Queue()
-    tx_queue = Queue()
-    p = Process(target=communication.main_loop, args=(rx_queue, tx_queue))
-    p.start()
-    logging.info(f"{rx_queue.get()}")
-    p.kill()
-
+    with open(f"results/{sys.argv[1]}/res.txt", "w") as f:
+        f.writelines("""
+        Some test results
+        With multiple lines
+        """)

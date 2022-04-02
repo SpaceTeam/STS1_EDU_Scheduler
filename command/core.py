@@ -1,5 +1,3 @@
-import logging
-from typing import Any
 import os
 import shutil
 from zipfile import ZipFile
@@ -58,7 +56,7 @@ def stop_file(data: dict) -> None:
     raise NotImplementedError
 
 
-def send_results(data: dict) -> None:
+def return_results(data: dict) -> None:
     """
     Sends the results of an execution to the communcation module for transmission
 
