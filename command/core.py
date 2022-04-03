@@ -102,7 +102,13 @@ class CommandHandler:
         :param program_id: The programs result to return
         :param queue_id: The queue_id of the requested run
         """
-        raise NotImplementedError
+        if not os.path.exists(f"./archives/{program_id}/results/{queue_id}"):
+            # TODO error handling
+            return
+        shutil.make_archive(f"./data/{program_id}_{queue_id}", format="zip",
+                            root_dir=f"./archives/{program_id}/results/", base_dir=queue_id)
+
+
 
     def list_files(self) -> None:
         """

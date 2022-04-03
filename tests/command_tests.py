@@ -3,6 +3,7 @@ import unittest
 import os
 import shutil
 import filecmp
+from zipfile import ZipFile
 
 import command
 
@@ -16,8 +17,9 @@ class CommandHandlingTests(unittest.TestCase):
         cls.ch.store_archive("arch1", data)
 
     def test_store_archive(self):
+        # already called in setup
         diff = filecmp.dircmp("./tests/test_data/", "archives/arch1", ignore=["results"])
-        diff.phase4_closure()
+        diff.phase4_closure()  # do recursive comparison
         self.assertEqual(len(diff.diff_files) + len(diff.left_only) + len(diff.right_only), 0,
                          "Difference in files")
 
@@ -36,7 +38,8 @@ class CommandHandlingTests(unittest.TestCase):
         self.ch.execute_file("arch1", "0002")
         while self.ch.is_program_running:
             pass
-        self.assertTrue(self.ch.last_program_killed, "Endless loop not killed")
+        self.assertTrue(self.ch.student_process.poll() == 1, "Program not killed?")
+        self.assertTrue(self.ch.last_program_killed, "Flag not set")
 
     def test_stop_execution(self):
         self.ch.execute_file("arch1", "0002")
@@ -46,12 +49,13 @@ class CommandHandlingTests(unittest.TestCase):
         self.assertFalse(self.ch.is_program_running, "Flag not reset")
         self.assertTrue(self.ch.last_program_killed, "Flag not set")
 
-    def test_return_result(self):
+    def test_return_result_normal(self):
         self.ch.execute_file("arch1", "0001")
         while self.ch.is_program_running:
             pass
         self.ch.return_results("arch1", "0001")
         self.assertTrue("arch1_0001.zip" in os.listdir("data"), "zip file not created")
+        # Manually check archives! difficult because of file metadata
 
 
 

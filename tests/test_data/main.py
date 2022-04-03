@@ -1,6 +1,7 @@
 import os
 import sys
 
+
 def main(queue_id: str):
     if "results" not in os.listdir():
         os.mkdir("results")
@@ -10,6 +11,10 @@ def main(queue_id: str):
     if queue_id == "0001":
         with open(f"results/{queue_id}/res.txt", "w") as f:
             f.write("Some test results\nWith multiple lines\n")
+        if "testa" not in os.listdir(f"results/{queue_id}"):
+            os.mkdir(f"results/{queue_id}/testa")
+        with open(f"results/{queue_id}/out.txt", "w") as f:
+            f.write("With multiple directories")
     elif queue_id == "0002":
         while True:
             pass
