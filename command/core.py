@@ -10,10 +10,13 @@ from communication import COBC_CMD
 
 
 class CommandHandler:
+    is_program_running: bool
+    last_program_killed: bool
+    student_process: subprocess.Popen
+
     def __init__(self):
         self.is_program_running = False
         self.last_program_killed = False
-        self.student_process = None
 
     def dispatch_command(self, cmd: COBC_CMD, data_path: str) -> None:
         """
@@ -56,7 +59,7 @@ class CommandHandler:
         :param queue_id: The id to pass to the program
         """
         if self.is_program_running:
-            return # TODO Error handling, locked by COBC
+            return  # TODO Error handling, locked by COBC
 
         self.last_program_killed = False
         self.is_program_running = True
@@ -75,32 +78,39 @@ class CommandHandler:
 
         if self.student_process.poll() is None:
             self.student_process.kill()
+            self.student_process.wait(0.01)
             self.last_program_killed = True
+        # TODO else: set GPIO?
         self.is_program_running = False
 
     def stop_program(self) -> None:
         """
-        Stops the execution of a currently running python script.
-
-        :param data: a dict containing "program_id" and "queue_id" entries
+        Stops the execution of the currently running student program.
         """
-        raise NotImplementedError
+        if self.is_program_running:
+            self.student_process.kill()
+            self.student_process.wait(0.01)
+            self.last_program_killed = True
+            self.is_program_running = False
+        else:
+            pass  # TODO not running error handling
 
-    def return_results(data: dict) -> None:
+    def return_results(self, program_id: str, queue_id: str) -> None:
         """
         Sends the results of an execution to the communcation module for transmission
 
-        :param data: a dict containing "program_id" and "queue_id" entries
+        :param program_id: The programs result to return
+        :param queue_id: The queue_id of the requested run
         """
         raise NotImplementedError
 
-    def list_files() -> None:
+    def list_files(self) -> None:
         """
         Sends the currently stored python scripts to the communication module for transmission
         """
         raise NotImplementedError
 
-    def update_time(data: int) -> None:
+    def update_time(self, data: int) -> None:
         """
         Updates the EDU systems time.
 

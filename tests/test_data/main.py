@@ -14,7 +14,7 @@ def main(queue_id: str):
         while True:
             pass
     elif queue_id == "0003":
-        from importlib import import_module
+        pass
 
 
 if __name__ == "__main__":
