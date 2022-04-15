@@ -3,3 +3,8 @@ __pycache__/
 *.py[cod]
 venv
 data
+.vscode
+
+# Added by cargo
+
+/target
