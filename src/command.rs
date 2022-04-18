@@ -1,6 +1,6 @@
 #![allow(clippy::collapsible_if)]
 use std::fs::File;
-use std::sync;
+use std::sync::*;
 use std::thread;
 use std::time::Duration;
 use std::io::prelude::*;
@@ -15,11 +15,16 @@ pub enum Command {
 }
 
 pub struct CommandHandler {
-    watchdog_tx: Option<sync::mpsc::Sender<bool>>,
+    watchdog_tx: Option<mpsc::Sender<bool>>,
     watchdog_handle: Option<thread::JoinHandle<()>>,
+    student_program_running: Arc<Mutex<bool>>
 }
 
 impl CommandHandler {
+    pub fn create() -> CommandHandler {
+        CommandHandler {watchdog_tx: None, watchdog_handle: None, student_program_running: Arc::new(Mutex::new(false))}
+    }
+
     /// Dispatches a command to the appropriate handler with preprocessed data
     ///
     /// * `cmd` The received command
@@ -34,7 +39,9 @@ impl CommandHandler {
     /// * `bytes` A vector containing the raw bytes of the zip archive
     pub fn store_archive(folder: &str, bytes: Vec<u8>) {
         log::info!("Store Archive: {}", folder);
-        let mut zip_file = match File::create("./data/tmp.zip") {
+
+        // Store bytes into temporary file
+        let mut zip_file = match File::create("./data/tmp.zip") { // TODO tmp file in /tmp ?
             Ok(f) => f,
             Err(e) => {
                 log::error!("Could not create zipfile: {}", e);
@@ -48,10 +55,11 @@ impl CommandHandler {
                 return;
             },
         }
+
         match subprocess::Exec::cmd("unzip")
-            .arg("-o")
+            .arg("-o") // overwrite silently
             .arg("./data/tmp.zip")
-            .arg("-d")
+            .arg("-d") // target directory
             .arg(format!("./archives/{}", folder))
             .join()
         {
@@ -72,10 +80,11 @@ impl CommandHandler {
     /// * `program_id` The name of the ./archives/ subfolder
     /// * `queue_id` The first argument for the student program
     pub fn execute_program(&mut self, program_id: &str, queue_id: &str) {
+        // Stop already running thread
         if self.watchdog_handle.is_some() {
             if self.watchdog_tx.take().unwrap().send(true).is_ok() {
                 log::warn!("Program already running! Terminating...");
-                self.watchdog_handle.take().unwrap().join();
+                self.watchdog_handle.take().unwrap().join().unwrap();
             }
         }
 
@@ -92,24 +101,53 @@ impl CommandHandler {
                 return;
             }
         };
+        *(self.student_program_running.lock().unwrap()) = true;
         
-        let (tx, rx) = sync::mpsc::channel();
+        let (tx, rx) = mpsc::channel();
         self.watchdog_tx = Some(tx);
+        let wd_flag = Arc::clone(&self.student_program_running);
 
         self.watchdog_handle = Some(thread::spawn(move || {
             // TODO proper timeout
             for _ in 0..2 {
-                if rx.try_recv().is_ok() {
+                if student_process.poll().is_some() { // student program terminated itself
+                    *(wd_flag.lock().unwrap()) = false;
+                    return;
+                }
+                if rx.try_recv().is_ok() { // check for restart/stop cmd
                     break;
                 }
                 thread::sleep(Duration::from_secs(1));
             }
-            student_process.terminate().unwrap();
-            // Allow cleanup, kill if it blocks
-            if student_process.wait_timeout(Duration::from_millis(250)).unwrap().is_none() {
-                student_process.kill().unwrap();
-            }
 
+            student_process.terminate().unwrap(); // SIGTERM
+            if student_process.wait_timeout(Duration::from_millis(250)).unwrap().is_none() {
+                log::warn!("Program not responding to SIGTERM, proceeding with SIGKILL");
+                student_process.kill().unwrap(); // SIGKILL if still running
+            }
+            *(wd_flag.lock().unwrap()) = false;
         }));
+    }
+
+    pub fn is_program_running(&self) -> bool {
+        return *(self.student_program_running.lock().unwrap())
+    }
+
+    pub fn stop_program(&mut self) {
+        log::info!("Stopping program...");
+        if !self.is_program_running() {
+            log::warn!("Attempting to stop program, but none is running");
+            return;
+        }
+
+        if self.watchdog_tx.is_some() {
+            self.watchdog_tx.as_ref().unwrap().send(true).expect("is_program_running() == true, but watchdog channel is dead");
+            self.watchdog_handle.take()
+                .expect("is_program_running() == true, but watchdog handle is none")
+                .join().unwrap();
+        }
+        else {
+            panic!("is_program_running() == true, but watchdog channel is none");
+        }
     }
 }

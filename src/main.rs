@@ -7,5 +7,6 @@ mod command;
 
 
 fn main() {
-    let _ = sl::WriteLogger::init(sl::LevelFilter::Info, sl::Config::default(), std::fs::File::create("log").unwrap());
+    //let _ = sl::WriteLogger::init(sl::LevelFilter::Info, sl::Config::default(), std::fs::File::create("log").unwrap());
+    let _ = sl::SimpleLogger::init(sl::LevelFilter::Info, sl::Config::default());
 }   

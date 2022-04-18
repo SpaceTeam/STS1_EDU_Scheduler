@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 
 
 def main(queue_id: str):
@@ -19,7 +20,11 @@ def main(queue_id: str):
         while True:
             pass
     elif queue_id == "0003":
-        pass
+        with open(f"results/{queue_id}/res.txt", "w") as f:
+            f.write("First Line\n")
+            f.flush()
+            time.sleep(1)
+            f.write("Second Line\n")
 
 
 if __name__ == "__main__":
