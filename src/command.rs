@@ -17,12 +17,12 @@ pub enum Command {
 pub struct CommandHandler {
     watchdog_tx: Option<mpsc::Sender<bool>>,
     watchdog_handle: Option<thread::JoinHandle<()>>,
-    student_program_running: Arc<Mutex<bool>>
+    student_program_running: Arc<atomic::AtomicBool>
 }
 
 impl CommandHandler {
     pub fn create() -> CommandHandler {
-        CommandHandler {watchdog_tx: None, watchdog_handle: None, student_program_running: Arc::new(Mutex::new(false))}
+        CommandHandler {watchdog_tx: None, watchdog_handle: None, student_program_running: Arc::new(atomic::AtomicBool::new(false))}
     }
 
     /// Dispatches a command to the appropriate handler with preprocessed data
@@ -101,7 +101,7 @@ impl CommandHandler {
                 return;
             }
         };
-        *(self.student_program_running.lock().unwrap()) = true;
+        self.student_program_running.store(true, atomic::Ordering::Relaxed);
         
         let (tx, rx) = mpsc::channel();
         self.watchdog_tx = Some(tx);
@@ -111,7 +111,7 @@ impl CommandHandler {
             // TODO proper timeout
             for _ in 0..2 {
                 if student_process.poll().is_some() { // student program terminated itself
-                    *(wd_flag.lock().unwrap()) = false;
+                    wd_flag.store(false, atomic::Ordering::Relaxed);
                     return;
                 }
                 if rx.try_recv().is_ok() { // check for restart/stop cmd
@@ -125,12 +125,12 @@ impl CommandHandler {
                 log::warn!("Program not responding to SIGTERM, proceeding with SIGKILL");
                 student_process.kill().unwrap(); // SIGKILL if still running
             }
-            *(wd_flag.lock().unwrap()) = false;
+            wd_flag.store(false, atomic::Ordering::Relaxed);
         }));
     }
 
     pub fn is_program_running(&self) -> bool {
-        return *(self.student_program_running.lock().unwrap())
+        self.student_program_running.load(atomic::Ordering::Relaxed)
     }
 
     pub fn stop_program(&mut self) {
