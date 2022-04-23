@@ -6,6 +6,7 @@ use std::io::prelude::*;
 use std::sync::*;
 use std::thread;
 use std::time::Duration;
+use std::path;
 
 /// An enum storing a command with its parameters
 pub enum Command {
@@ -28,7 +29,7 @@ pub struct StudentProgram {
 /// `data_path` A path to the file containing the received command
 ///
 /// Returns the resulting command with parameters or passes along the IO Error from file access
-pub fn process_payload(data_path: &str) -> Result<Command, std::io::Error> {
+pub fn process_payload(data_path: path::PathBuf) -> Result<Command, std::io::Error> {
     todo!();
 }
 
@@ -54,7 +55,7 @@ pub fn store_archive(folder: &str, bytes: Vec<u8>) -> Result<(), std::io::Error>
     std::fs::remove_file("./data/tmp.zip")?;
 
     if let Err(err) = exit_status {
-        match err {
+        match err { // TODO replace with if let?
             subprocess::PopenError::IoError(e) => return Err(e),
             _ => {
                 unreachable!() // should only appear on Exec::cmd without args
