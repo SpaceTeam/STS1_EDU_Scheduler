@@ -4,12 +4,22 @@ use simplelog as sl;
 
 
 fn setup() {
-    let _ = sl::SimpleLogger::init(sl::LevelFilter::Error, sl::Config::default());
+    let _ = sl::WriteLogger::init(sl::LevelFilter::Info, sl::Config::default(), std::fs::File::create("log").unwrap());
 }
 
 fn prepare_program(path: &str) {
-    std::fs::create_dir(format!("./archives/{}", path)).unwrap();
-    std::fs::copy("./tests/test_data/main.py", format!("./archives/{}/main.py", path)).unwrap();
+    let ret = std::fs::create_dir(format!("./archives/{}", path));
+    if let Err(e) = ret {
+        if e.kind() != std::io::ErrorKind::AlreadyExists {
+            panic!("Setup Error: {}", e);
+        }
+    }
+    let ret = std::fs::copy("./tests/test_data/main.py", format!("./archives/{}/main.py", path));
+    if let Err(e) = ret {
+        if e.kind() != std::io::ErrorKind::AlreadyExists {
+            panic!("Setup Error: {}", e);
+        }
+    }
 }
 
 #[test]
@@ -17,23 +27,32 @@ fn store_archive() {
     setup();
     let mut buf = Vec::new();
     std::fs::File::open("./tests/student_program.zip").unwrap().read_to_end(&mut buf).unwrap();
-    command::store_archive("testa", buf);
+
+    command::store_archive("store", buf).expect("store returns Err?");
 
     assert_eq!(0, std::process::Command::new("diff")
-        .args(["-yq", "--strip-trailing-cr", "tests/test_data", "archives/testa"])
+        .args(["-yq", "--strip-trailing-cr", "tests/test_data", "archives/store"])
         .status().unwrap().code().unwrap());
     
-    std::fs::remove_dir_all("./archives/testa").unwrap();
+    std::fs::remove_dir_all("./archives/store").unwrap();
+}
+
+#[test]
+fn invalid_store() {
+    setup();
+
+    command::store_archive("dc", vec![1, 2, 4, 5, 6]).expect_err("Should fail");
 }
 
 #[test]
 fn execute_program_normal() {
     setup();
     prepare_program("normal");
-    let mut ch = CommandHandler::create();
-    ch.execute_program("normal", "0001");
-    while ch.is_program_running() {}
-    let mut res = String::new();
+    let mut ec: Option<command::ExecutionContext> = None;
+    command::execute_program(&mut ec, "normal", "0001").expect("execute returns Err?");
+    while ec.as_ref().unwrap().is_running() {}
+
+    let mut res = String::new();    
     std::fs::File::open("./archives/normal/results/0001/res.txt")
         .expect("res.txt not in results folder")
         .read_to_string(&mut res)
@@ -48,9 +67,10 @@ fn execute_program_normal() {
 fn execute_infinite_loop() {
     setup();
     prepare_program("inf");
-    let mut ch = CommandHandler::create();
-    ch.execute_program("inf", "0002");
-    while ch.is_program_running() {}
+    let mut ec: Option<command::ExecutionContext> = None;
+    command::execute_program(&mut ec, "inf", "0002").expect("execute returns Err?");
+    while ec.as_ref().unwrap().is_running() {}
+
 
     std::fs::remove_dir_all("./archives/inf").unwrap();
 }
@@ -59,12 +79,12 @@ fn execute_infinite_loop() {
 fn execute_multiple() {
     setup();
     prepare_program("multiple");
-    let mut ch = CommandHandler::create();
-    ch.execute_program("multiple", "0002");
-    ch.execute_program("multiple", "0001");
-    while ch.is_program_running() {}
-    ch.execute_program("multiple", "0001");
-    while ch.is_program_running() {}
+    let mut ec: Option<command::ExecutionContext> = None;
+    command::execute_program(&mut ec, "multiple", "0002").expect("execute returns Err?");
+    command::execute_program(&mut ec, "multiple", "0001").expect("execute returns Err?");
+    while ec.as_ref().unwrap().is_running() {}
+    command::execute_program(&mut ec, "multiple", "0001").expect("execute returns Err?");
+    while ec.as_ref().unwrap().is_running() {}
 
     // TODO assertions (check log?)
 
@@ -75,12 +95,12 @@ fn execute_multiple() {
 fn stop_program() {
     setup();
     prepare_program("stop");
-    let mut ch = CommandHandler::create();
-    ch.execute_program("stop", "0003");
+    let mut ec: Option<command::ExecutionContext> = None;
+    command::execute_program(&mut ec, "stop", "0003").expect("execute returns Err?");
     std::thread::sleep(std::time::Duration::from_millis(500));
-    ch.stop_program();
+    command::stop_program(&mut ec).expect("stop returns Err?");
 
-    assert!(!ch.is_program_running());
+    assert!(!ec.as_ref().unwrap().is_running(), "Program should be stopped");
 
     let mut res = String::new();
     std::fs::File::open("./archives/stop/results/0003/res.txt")

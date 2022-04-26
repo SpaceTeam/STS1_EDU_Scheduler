@@ -8,7 +8,7 @@ use std::sync::*;
 use std::thread;
 use std::time::Duration;
 
-/// An enum storing a command with its parameters
+/// An enum storing a COBC command with its parameters
 pub enum Command {
     StoreArchive(String, Vec<u8>),
     ExecuteProgram(String, String),
@@ -16,12 +16,6 @@ pub enum Command {
     ReturnResults(String, String),
     ListFiles,
     UpdateTime(u64),
-}
-
-pub struct StudentProgram {
-    watchdog_tx: Option<mpsc::Sender<bool>>,
-    watchdog_handle: Option<thread::JoinHandle<()>>,
-    student_program_running: Arc<atomic::AtomicBool>,
 }
 
 /// Parse a command coming from the COBC
@@ -74,50 +68,49 @@ pub fn store_archive(folder: &str, bytes: Vec<u8>) -> Result<(), std::io::Error>
     Ok(())
 }
 
+
+pub struct ExecutionContext {
+    pub sender: mpsc::Sender<bool>,
+    pub thread_handle: thread::JoinHandle<()>,
+    pub running_flag: Arc<atomic::AtomicBool>,
+}
+
+impl ExecutionContext {
+    pub fn is_running(&self) -> bool {
+        return self.running_flag.load(atomic::Ordering::Relaxed);
+    }
+}
+
 /// Executes a students program and starts a watchdog for it
 ///
 /// * `program_id` The name of the ./archives/ subfolder
 /// * `queue_id` The first argument for the student program
-pub fn execute_program(sp: &mut StudentProgram, program_id: &str, queue_id: &str) {
-    // Stop already running thread
-    if sp.watchdog_handle.is_some() {
-        if sp.watchdog_tx.take().unwrap().send(true).is_ok() {
-            log::warn!("Program already running! Terminating...");
-            sp.watchdog_handle.take().unwrap().join().unwrap();
-        }
-    }
+pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str, queue_id: &str) -> Result<(), Box<dyn Error>> {
+    let _ = stop_program(context); // Ignore return value
 
     log::info!("Executing program: {} with {}", program_id, queue_id);
+
     // TODO config setuid
     let config = subprocess::PopenConfig {
         cwd: Some(format!("./archives/{}", program_id).into()),
         ..Default::default()
     };
-    let mut student_process =
-        match subprocess::Popen::create(&["python", "main.py", queue_id], config) {
-            Ok(p) => p,
-            Err(e) => {
-                log::error!("Could not start student program: {}", e);
-                return;
-            }
-        };
-    sp.student_program_running
-        .store(true, atomic::Ordering::Relaxed);
+    let mut student_process = subprocess::Popen::create(&["python", "main.py", queue_id], config)?;
 
-    let (tx, rx) = mpsc::channel();
-    sp.watchdog_tx = Some(tx);
-    let wd_flag = Arc::clone(&sp.student_program_running);
+    // Interthread communication
+    let (tx, rx): (mpsc::Sender<bool>, mpsc::Receiver<bool>) = mpsc::channel();
+    let wd_flag = Arc::new(atomic::AtomicBool::new(true));
+    let ec_flag = Arc::clone(&wd_flag);
 
-    sp.watchdog_handle = Some(thread::spawn(move || {
+    // Watchdog thread
+    let wd_handle = thread::spawn(move || {
         // TODO proper timeout
         for _ in 0..2 {
-            if student_process.poll().is_some() {
-                // student program terminated itself
+            if student_process.poll().is_some() { // student program terminated itself
                 wd_flag.store(false, atomic::Ordering::Relaxed);
                 return;
             }
-            if rx.try_recv().is_ok() {
-                // check for restart/stop cmd
+            if rx.try_recv().is_ok() { // check if it should terminate
                 break;
             }
             thread::sleep(Duration::from_secs(1));
@@ -125,7 +118,7 @@ pub fn execute_program(sp: &mut StudentProgram, program_id: &str, queue_id: &str
 
         student_process.terminate().unwrap(); // SIGTERM
         if student_process
-            .wait_timeout(Duration::from_millis(250))
+            .wait_timeout(Duration::from_millis(100))
             .unwrap()
             .is_none()
         {
@@ -133,24 +126,37 @@ pub fn execute_program(sp: &mut StudentProgram, program_id: &str, queue_id: &str
             student_process.kill().unwrap(); // SIGKILL if still running
         }
         wd_flag.store(false, atomic::Ordering::Relaxed);
-    }));
+        log::info!("flag {}", wd_flag.load(atomic::Ordering::Relaxed));
+    });
+
+    *context = Some(ExecutionContext {sender: tx, thread_handle: wd_handle, running_flag: Arc::clone(&ec_flag)});
+
+    Ok(())
 }
 
-pub fn stop_program(sp: &mut StudentProgram) {
-    log::info!("Stopping program...");
 
-    if sp.watchdog_tx.is_some() {
-        sp.watchdog_tx
-            .as_ref()
-            .unwrap()
-            .send(true)
-            .expect("is_program_running() == true, but watchdog channel is dead");
-        sp.watchdog_handle
-            .take()
-            .expect("is_program_running() == true, but watchdog handle is none")
-            .join()
-            .unwrap();
-    } else {
-        panic!("is_program_running() == true, but watchdog channel is none");
+/// Stops the currently running student program
+/// 
+/// * `context` The execution context of the student program (returns Err if context is None)
+/// 
+/// Returns Ok after terminating the student program of immediately if it is already stopped
+/// 
+/// **Panics if terminating takes too long**
+pub fn stop_program(context: &mut Option<ExecutionContext>) -> Result<(), Box<dyn Error>> {
+    if let Some(ec) = context {
+        if ec.sender.send(true).is_ok() {
+            log::warn!("Stopping running program"); // only is_ok if thread is still running
+            // wait until it is stopped
+            for _ in 0..120 {
+                if !ec.is_running() {
+                    return Ok(());
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+
+            panic!("Could not stop student process");
+        }
     }
+
+    Err("No program running".into())
 }
