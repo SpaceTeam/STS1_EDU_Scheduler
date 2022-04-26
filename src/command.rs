@@ -3,10 +3,10 @@
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
+use std::path;
 use std::sync::*;
 use std::thread;
 use std::time::Duration;
-use std::path;
 
 /// An enum storing a command with its parameters
 pub enum Command {
@@ -54,13 +54,21 @@ pub fn store_archive(folder: &str, bytes: Vec<u8>) -> Result<(), std::io::Error>
 
     std::fs::remove_file("./data/tmp.zip")?;
 
-    if let Err(err) = exit_status {
-        match err { // TODO replace with if let?
+    match exit_status {
+        Ok(status) => {
+            if !status.success() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Unzip returned with {:?}", status),
+                ));
+            }
+        }
+        Err(err) => match err {
             subprocess::PopenError::IoError(e) => return Err(e),
             _ => {
                 unreachable!() // should only appear on Exec::cmd without args
             }
-        }
+        },
     }
 
     Ok(())
