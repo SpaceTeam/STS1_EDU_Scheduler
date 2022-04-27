@@ -10,6 +10,7 @@ use std::time::Duration;
 use crate::communication;
 
 /// An enum storing a COBC command with its parameters
+#[derive(Debug)]
 pub enum Command {
     StoreArchive(String, Vec<u8>),
     ExecuteProgram(String, String),
@@ -34,36 +35,31 @@ pub fn process_payload(data_path: path::PathBuf) -> Result<Command, std::io::Err
 /// * `bytes` A vector containing the raw bytes of the zip archive
 ///
 /// Returns Ok or passes along a file access/unzip process error
-pub fn store_archive(folder: &str, bytes: Vec<u8>) -> Result<(), std::io::Error> {
+pub fn store_archive(folder: &str, bytes: &Vec<u8>) -> Result<(), Box<dyn Error>> {
     // Store bytes into temporary file
-    let mut zip_file = File::create("./data/tmp.zip")?;
+    let zip_path = format!("./data/{}.zip", folder);
+    let mut zip_file = File::create(&zip_path)?;
     zip_file.write_all(&bytes)?;
     zip_file.sync_all()?;
 
     let exit_status = subprocess::Exec::cmd("unzip")
         .arg("-o") // overwrite silently
-        .arg("./data/tmp.zip")
+        .arg(&zip_path)
         .arg("-d") // target directory
         .arg(format!("./archives/{}", folder))
         .join();
 
-    std::fs::remove_file("./data/tmp.zip")?;
+    std::fs::remove_file(zip_path)?;
 
     match exit_status {
         Ok(status) => {
             if !status.success() {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Unzip returned with {:?}", status),
-                ));
+                return Err(format!("Unzip returned with {:?}", status).into());
             }
         }
-        Err(err) => match err {
-            subprocess::PopenError::IoError(e) => return Err(e),
-            _ => {
-                unreachable!() // should only appear on Exec::cmd without args
-            }
-        },
+        Err(err) => {
+            return Err(err.into());
+        }
     }
 
     Ok(())
@@ -173,6 +169,13 @@ pub fn stop_program(context: &mut Option<ExecutionContext>) -> Result<(), Box<dy
 /// 
 /// **Panics if the filepath can't be sent to the com module**
 pub fn return_results(com_handle: &mut communication::CommunicationHandle, program_id: &str, queue_id: &str) -> Result<(), Box<dyn Error>> {
+    todo!();
+}
+
+/// Places all program names found in the archive folder into a file, and passes it to the communication module.
+/// 
+/// * `com_handle` The communication context, containing the needed sender
+pub fn list_files(com_handle: &mut communication::CommunicationHandle) -> Result<(), Box<dyn Error>> {
     todo!();
 }
 

@@ -28,7 +28,7 @@ fn store_archive() {
     let mut buf = Vec::new();
     std::fs::File::open("./tests/student_program.zip").unwrap().read_to_end(&mut buf).unwrap();
 
-    command::store_archive("store", buf).expect("store returns Err?");
+    command::store_archive("store", &buf).expect("store returns Err?");
 
     assert_eq!(0, std::process::Command::new("diff")
         .args(["-yq", "--strip-trailing-cr", "tests/test_data", "archives/store"])
@@ -41,7 +41,7 @@ fn store_archive() {
 fn invalid_store() {
     setup();
 
-    command::store_archive("dc", vec![1, 2, 4, 5, 6]).expect_err("Should fail");
+    command::store_archive("dc", &vec![1, 2, 4, 5, 6]).expect_err("Should fail");
 }
 
 #[test]
