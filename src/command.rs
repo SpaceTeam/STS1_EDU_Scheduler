@@ -124,7 +124,6 @@ pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str,
             student_process.kill().unwrap(); // SIGKILL if still running
         }
         wd_flag.store(false, atomic::Ordering::Relaxed);
-        log::info!("flag {}", wd_flag.load(atomic::Ordering::Relaxed));
     });
 
     *context = Some(ExecutionContext {sender: tx, thread_handle: wd_handle, running_flag: Arc::clone(&ec_flag)});
