@@ -7,6 +7,7 @@ use std::path;
 use std::sync::*;
 use std::thread;
 use std::time::Duration;
+use crate::communication;
 
 /// An enum storing a COBC command with its parameters
 pub enum Command {
@@ -15,7 +16,7 @@ pub enum Command {
     StopProgram,
     ReturnResults(String, String),
     ListFiles,
-    UpdateTime(u64),
+    UpdateTime(i32),
 }
 
 /// Parse a command coming from the COBC
@@ -69,6 +70,7 @@ pub fn store_archive(folder: &str, bytes: Vec<u8>) -> Result<(), std::io::Error>
 }
 
 
+/// This struct is used to store the relevant handles for when a student program is executed
 pub struct ExecutionContext {
     pub sender: mpsc::Sender<bool>,
     pub thread_handle: thread::JoinHandle<()>,
@@ -100,7 +102,7 @@ pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str,
     // Interthread communication
     let (tx, rx): (mpsc::Sender<bool>, mpsc::Receiver<bool>) = mpsc::channel();
     let wd_flag = Arc::new(atomic::AtomicBool::new(true));
-    let ec_flag = Arc::clone(&wd_flag);
+    let ec_flag = Arc::clone(&wd_flag); // clone before original is moved into thread
 
     // Watchdog thread
     let wd_handle = thread::spawn(move || {
@@ -159,4 +161,24 @@ pub fn stop_program(context: &mut Option<ExecutionContext>) -> Result<(), Box<dy
     }
 
     Err("No program running".into())
+}
+
+
+/// Zips the results of the given program execution and sends the filepath to the communication module.
+/// The results are taken from ./archives/program_id/results/queue_id
+/// 
+/// * `com_handle` The communication context, containing the needed sender
+/// * `program_id` The programs folder name
+/// * `queue_id` The name of the results subfolder
+/// 
+/// **Panics if the filepath can't be sent to the com module**
+pub fn return_results(com_handle: &mut communication::CommunicationHandle, program_id: &str, queue_id: &str) -> Result<(), Box<dyn Error>> {
+    todo!();
+}
+
+/// Updates the system time
+/// 
+/// * `epoch` Seconds since epoch (i32 works until Jan 2038)
+pub fn update_time(epoch: i32) -> Result<(), Box<dyn Error>> {
+    todo!();
 }
