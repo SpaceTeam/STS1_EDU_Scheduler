@@ -1,5 +1,7 @@
 #![allow(clippy::collapsible_if)]
 
+use std::borrow::Borrow;
+use std::borrow::BorrowMut;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
@@ -36,6 +38,8 @@ pub fn process_payload(data_path: path::PathBuf) -> Result<Command, std::io::Err
 ///
 /// Returns Ok or passes along a file access/unzip process error
 pub fn store_archive(folder: &str, bytes: &Vec<u8>) -> Result<(), Box<dyn Error>> {
+    log::info!("Storing archive {}", folder);
+
     // Store bytes into temporary file
     let zip_path = format!("./data/{}.zip", folder);
     let mut zip_file = File::create(&zip_path)?;
@@ -86,7 +90,7 @@ impl ExecutionContext {
 pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str, queue_id: &str) -> Result<(), Box<dyn Error>> {
     let _ = stop_program(context); // Ignore return value
 
-    log::info!("Executing program: {} with {}", program_id, queue_id);
+    log::info!("Executing program {}:{}", program_id, queue_id);
 
     // TODO config setuid
     let config = subprocess::PopenConfig {
@@ -164,16 +168,43 @@ pub fn stop_program(context: &mut Option<ExecutionContext>) -> Result<(), Box<dy
 /// 
 /// * `com_handle` The communication context, containing the needed sender
 /// * `program_id` The programs folder name
-/// * `queue_id` The name of the results subfolder
+/// * `queue_id` The results subfolder name
 /// 
 /// **Panics if the filepath can't be sent to the com module**
-pub fn return_results(com_handle: &mut communication::CommunicationHandle, program_id: &str, queue_id: &str) -> Result<(), Box<dyn Error>> {
-    todo!();
+pub fn return_results(com_handle: &mut impl communication::Communication, program_id: &str, queue_id: &str) -> Result<(), Box<dyn Error>> {
+    log::info!("Returning Results for {}:{}", program_id, queue_id);
+
+    let zip_path = std::path::PathBuf::from(format!("./data/{}{}.zip", program_id, queue_id));
+    let res_path = std::path::PathBuf::from(format!("./archives/{}/results/{}", program_id, queue_id));
+
+    if !res_path.exists() {
+        log::warn!("Results folder does not exist");
+    }
+
+    subprocess::Exec::cmd("zip")
+    .arg("-r")
+    .arg(zip_path.as_os_str())
+    .arg("log")
+    .arg(res_path.as_os_str())
+    .join()?;
+
+    if !zip_path.exists() {
+        return Err("Zipfile was not created".into());
+    }
+
+    com_handle.send(zip_path);
+    
+    let _ = std::fs::remove_dir_all(res_path);
+    std::fs::File::create("log")?.set_len(0)?;
+    
+    Ok(())
 }
 
 /// Places all program names found in the archive folder into a file, and passes it to the communication module.
 /// 
 /// * `com_handle` The communication context, containing the needed sender
+/// 
+/// **Panics if the filepath can't be sent to the com module**
 pub fn list_files(com_handle: &mut communication::CommunicationHandle) -> Result<(), Box<dyn Error>> {
     todo!();
 }

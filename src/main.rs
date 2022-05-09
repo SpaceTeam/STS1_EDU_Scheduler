@@ -32,7 +32,8 @@ fn main() {
         };
 
         if let Err(e) = ret {
-            log::error!("Could not execute <{:?}> returned <{}", received_com, e);
+            log::error!("Could not execute <{:?}> returned <{}>", received_com, e);
+            // TODO Signal Error to COBC
         }
     }
 }   

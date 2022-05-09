@@ -1,5 +1,5 @@
-use STS1_EDU_Scheduler::command;
-use std::io::prelude::*;
+use STS1_EDU_Scheduler::{command, communication};
+use std::{io::{prelude::*, self}, ops::Deref};
 use simplelog as sl;
 
 
@@ -64,6 +64,13 @@ fn execute_program_normal() {
 }
 
 #[test]
+fn execute_not_existing() {
+    setup();
+    let mut ec: Option<command::ExecutionContext> = None;
+    command::execute_program(&mut ec, "none", "existing").expect_err("Should fail");
+}
+
+#[test]
 fn execute_infinite_loop() {
     setup();
     prepare_program("inf");
@@ -110,4 +117,54 @@ fn stop_program() {
     assert_eq!(res, *("First Line\n".to_string()));
 
     std::fs::remove_dir_all("./archives/stop").unwrap();
+}
+
+struct MockCom {
+    pub last_path: std::path::PathBuf
+}
+impl MockCom {
+    fn new() -> MockCom {
+        MockCom {last_path: std::path::PathBuf::new()}
+    }
+}
+
+impl communication::Communication for MockCom {
+    fn send(&mut self, p: std::path::PathBuf) {
+        self.last_path = p;
+    }
+
+    fn receive(&self) -> std::path::PathBuf {
+        unimplemented!();
+    }
+}
+
+#[test]
+fn return_results_normal() {
+    setup();
+    prepare_program("res");
+    let mut ec: Option<command::ExecutionContext> = None;
+    command::execute_program(&mut ec, "res", "0001").unwrap();
+    while ec.as_ref().unwrap().is_running() {}
+    let mut com = MockCom::new();
+    command::return_results(&mut com, "res", "0001").expect("results returns Err?");    
+
+    assert_eq!(com.last_path, std::path::PathBuf::from("./data/res0001.zip"));
+    assert!(com.last_path.metadata().unwrap().len() > 700, "Output should be larger");
+    assert!(std::path::Path::new("log").metadata().unwrap().len() == 0, "Log is not cleared");
+    assert!(!std::path::Path::new("./archives/res/results/0001").exists(), "Results are not deleted");
+
+    std::fs::remove_file("./data/res0001.zip").unwrap();
+    std::fs::remove_dir_all("./archives/res").unwrap();
+}
+
+#[test]
+fn return_results_none() {
+    setup();
+    let mut com = MockCom::new();
+    command::return_results(&mut com, "none", "existing").expect("results returns Err?");
+
+    assert_eq!(com.last_path, std::path::PathBuf::from("./data/noneexisting.zip"));
+    assert!(com.last_path.metadata().unwrap().len() > 4, "Should contain log");
+    assert!(com.last_path.exists());
+    std::fs::remove_file(com.last_path).unwrap();
 }
