@@ -22,6 +22,8 @@ pub enum Command {
     UpdateTime(i32),
 }
 
+type CommandResult = Result<std::path::PathBuf, Box<dyn Error>>;
+
 /// Parse a command coming from the COBC
 ///
 /// `data_path` A path to the file containing the received command
@@ -37,7 +39,7 @@ pub fn process_payload(data_path: path::PathBuf) -> Result<Command, std::io::Err
 /// * `bytes` A vector containing the raw bytes of the zip archive
 ///
 /// Returns Ok or passes along a file access/unzip process error
-pub fn store_archive(folder: &str, bytes: &Vec<u8>) -> Result<(), Box<dyn Error>> {
+pub fn store_archive(folder: &str, bytes: &Vec<u8>) -> CommandResult {
     log::info!("Storing archive {}", folder);
 
     // Store bytes into temporary file
@@ -66,7 +68,7 @@ pub fn store_archive(folder: &str, bytes: &Vec<u8>) -> Result<(), Box<dyn Error>
         }
     }
 
-    Ok(())
+    Ok(create_success_file())
 }
 
 
@@ -87,7 +89,7 @@ impl ExecutionContext {
 ///
 /// * `program_id` The name of the ./archives/ subfolder
 /// * `queue_id` The first argument for the student program
-pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str, queue_id: &str) -> Result<(), Box<dyn Error>> {
+pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str, queue_id: &str) -> CommandResult {
     let _ = stop_program(context); // Ignore return value
 
     log::info!("Executing program {}:{}", program_id, queue_id);
@@ -132,7 +134,7 @@ pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str,
 
     *context = Some(ExecutionContext {sender: tx, thread_handle: wd_handle, running_flag: Arc::clone(&ec_flag)});
 
-    Ok(())
+    Ok(create_success_file())
 }
 
 
@@ -143,14 +145,14 @@ pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str,
 /// Returns Ok after terminating the student program of immediately if it is already stopped
 /// 
 /// **Panics if terminating takes too long**
-pub fn stop_program(context: &mut Option<ExecutionContext>) -> Result<(), Box<dyn Error>> {
+pub fn stop_program(context: &mut Option<ExecutionContext>) -> CommandResult {
     if let Some(ec) = context {
         if ec.sender.send(true).is_ok() {
             log::warn!("Stopping running program"); // only is_ok if thread is still running
             // wait until it is stopped
             for _ in 0..120 {
                 if !ec.is_running() {
-                    return Ok(());
+                    return Ok(create_success_file());
                 }
                 thread::sleep(Duration::from_millis(10));
             }
@@ -159,7 +161,7 @@ pub fn stop_program(context: &mut Option<ExecutionContext>) -> Result<(), Box<dy
         }
     }
 
-    Err("No program running".into())
+    Err("No program running".into()) // TODO Should this be an error?
 }
 
 
@@ -171,7 +173,7 @@ pub fn stop_program(context: &mut Option<ExecutionContext>) -> Result<(), Box<dy
 /// * `queue_id` The results subfolder name
 /// 
 /// **Panics if the filepath can't be sent to the com module**
-pub fn return_results(com_handle: &mut impl communication::Communication, program_id: &str, queue_id: &str) -> Result<(), Box<dyn Error>> {
+pub fn return_results(program_id: &str, queue_id: &str) -> CommandResult {
     log::info!("Returning Results for {}:{}", program_id, queue_id);
 
     let zip_path = std::path::PathBuf::from(format!("./data/{}{}.zip", program_id, queue_id));
@@ -191,13 +193,11 @@ pub fn return_results(com_handle: &mut impl communication::Communication, progra
     if !zip_path.exists() {
         return Err("Zipfile was not created".into());
     }
-
-    com_handle.send(zip_path);
     
     let _ = std::fs::remove_dir_all(res_path);
     std::fs::File::create("log")?.set_len(0)?;
     
-    Ok(())
+    Ok(zip_path)
 }
 
 /// Places all program names found in the archive folder into a file, and passes it to the communication module.
@@ -205,13 +205,27 @@ pub fn return_results(com_handle: &mut impl communication::Communication, progra
 /// * `com_handle` The communication context, containing the needed sender
 /// 
 /// **Panics if the filepath can't be sent to the com module**
-pub fn list_files(com_handle: &mut communication::CommunicationHandle) -> Result<(), Box<dyn Error>> {
+pub fn list_files() -> CommandResult {
     todo!();
 }
 
 /// Updates the system time
 /// 
 /// * `epoch` Seconds since epoch (i32 works until Jan 2038)
-pub fn update_time(epoch: i32) -> Result<(), Box<dyn Error>> {
+pub fn update_time(epoch: i32) -> CommandResult {
     todo!();
+}
+
+/// Creates and returns the path to a file containing the success byte for the COBC
+pub fn create_success_file() -> std::path::PathBuf {
+    const SUCCESS_BYTE: u8 = 0x33;
+    return create_return_file(vec![SUCCESS_BYTE]);
+}
+
+/// Takes a byte array, writes it to file in the data directory and returns the filepath to it
+pub fn create_return_file(bytes: Vec<u8>) -> std::path::PathBuf {
+    let path = std::path::PathBuf::from(format!("./data/{:?}", bytes.as_ptr())); // Slightly ugly way of generating a unique filename
+    let mut file = std::fs::File::create(&path).expect("Could not create file for return value");
+    file.write_all(&bytes).expect("Could not write to return value file");
+    return path;
 }

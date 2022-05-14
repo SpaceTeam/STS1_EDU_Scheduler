@@ -26,14 +26,17 @@ fn main() {
             Command::StoreArchive(arch, bytes) => command::store_archive(&arch, bytes),
             Command::ExecuteProgram(program, queue) => command::execute_program(&mut exec, &program, &queue),
             Command::StopProgram => command::stop_program(&mut exec),
-            Command::ReturnResults(program, queue) => command::return_results(&mut com, &program, &queue),
-            Command::ListFiles => command::list_files(&mut com),
+            Command::ReturnResults(program, queue) => command::return_results(&program, &queue),
+            Command::ListFiles => command::list_files(),
             Command::UpdateTime(epoch) => command::update_time(*epoch)
         };
 
-        if let Err(e) = ret {
-            log::error!("Could not execute <{:?}> returned <{}>", received_com, e);
-            // TODO Signal Error to COBC
+        match ret {
+            Ok(f) => todo!(),
+            Err(e) => {
+                log::error!("Could not execute <{:?}> returned <{}>", received_com, e);
+                
+            },
         }
     }
 }   
