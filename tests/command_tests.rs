@@ -59,10 +59,10 @@ fn execute_program_normal() {
         .read_to_string(&mut res)
         .expect("Could not read res.txt");
 
-    assert_eq!(res, *"Some test results\nWith multiple lines\n".to_string());
+    assert_eq!(res.replace("\r", ""), *"Some test results\nWith multiple lines\n".to_string());
 
     std::fs::remove_dir_all("./archives/normal").unwrap();
-    std::fs::remove_file(ret).unwrap();
+    std::fs::remove_file(ret);
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn execute_infinite_loop() {
 
 
     std::fs::remove_dir_all("./archives/inf").unwrap();
-    std::fs::remove_file(ret).unwrap();
+    std::fs::remove_file(ret);
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn stop_program() {
         .expect("res.txt not in results folder")
         .read_to_string(&mut res)
         .expect("Could not read res.txt");
-    assert_eq!(res, *("First Line\n".to_string()));
+    assert_eq!(res.replace("\r", ""), *("First Line\n".to_string()));
 
     std::fs::remove_dir_all("./archives/stop").unwrap();
     std::fs::remove_file(ret).unwrap();
