@@ -1,35 +1,43 @@
+use std::string;
 use std::thread;
 use std::sync;
 use std::path;
+use std::error::Error;
 
-pub trait Communication {
-    /// Sends the bytes in the file to the COBC
-    fn send(&mut self, p: path::PathBuf);
-    /// Blocks until a command from the COBC is received. Returns its file
-    fn receive(&self) -> path::PathBuf;
+pub trait CommunicationHandle {
+    /// Sends the bytes to the COBC, packaged accordingly
+    fn send(&mut self, bytes: Vec<u8>);
+    /// Blocks until a command from the COBC is received. Returns the raw bytes
+    fn receive(&self) -> Result<Vec<u8>, Box<dyn Error>>;
+    /// Sends a NACK to the COBC
+    fn send_nack(&self);
+    /// Sends a ACK to the COBC
+    fn send_ack(&self);
 }
 
-pub struct CommunicationHandle {
-    pub thread_handle: thread::JoinHandle<()>,
-    /// Used to send filepaths which contain raw bytes to be sent to the COBC
-    pub sender: sync::mpsc::Sender<path::PathBuf>, 
-    /// Receives filepaths which contain raw bytes received from the COBC
-    pub receiver: sync::mpsc::Receiver<path::PathBuf>
+pub struct UARTHandle {
 }
 
-impl Communication for CommunicationHandle {
-    fn send(&mut self, p: path::PathBuf) {
-        todo!();
-    }
-
-    fn receive(&self) -> path::PathBuf {
+impl UARTHandle {
+    pub fn new(baud: i32) -> UARTHandle {
         todo!();
     }
 }
 
-/// Spawns a thread which handles the communication with the CSBI
-/// 
-/// Returns a struct containing the threads JoinHandle and channels for message passing
-pub fn spawn_communication_thread() -> CommunicationHandle {
-    todo!();
+impl CommunicationHandle for UARTHandle {
+    fn send(&mut self, bytes: Vec<u8>) {
+        todo!();
+    }
+
+    fn receive(&self) -> Result<Vec<u8>, Box<dyn Error>> {
+        todo!();
+    }
+
+    fn send_ack(&self) {
+        todo!();
+    }
+
+    fn send_nack(&self) {
+        todo!();
+    }
 }

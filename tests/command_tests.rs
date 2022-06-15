@@ -123,8 +123,8 @@ fn stop_program() {
         .expect("Could not read res.txt");
     assert_eq!(res.replace("\r", ""), *("First Line\n".to_string()));
 
-    std::fs::remove_dir_all("./archives/stop").unwrap();
-    std::fs::remove_file(ret).unwrap();
+    std::fs::remove_dir_all("./archives/stop");
+    std::fs::remove_file(ret);
 }
 
 #[test]

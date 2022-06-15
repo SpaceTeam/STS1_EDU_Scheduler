@@ -10,6 +10,7 @@ use std::sync::*;
 use std::thread;
 use std::time::Duration;
 use crate::communication;
+use crate::communication::CommunicationHandle;
 
 /// An enum storing a COBC command with its parameters
 #[derive(Debug)]
@@ -29,8 +30,38 @@ type CommandResult = Result<std::path::PathBuf, Box<dyn Error>>;
 /// `data_path` A path to the file containing the received command
 ///
 /// Returns the resulting command with parameters or passes along the IO Error from file access
-pub fn process_payload(data_path: path::PathBuf) -> Result<Command, std::io::Error> {
+pub fn preprocess_data(bytes: Vec<u8>) -> Result<Command, Box<dyn Error>> {
     todo!();
+}
+
+/// Main routine. Waits for a command to be received from the COBC, then parses and executes it.
+pub fn process_command<T: CommunicationHandle>(com: &mut T, exec: &mut Option<ExecutionContext>) -> Result<(), Box<dyn Error>> {
+    let data = com.receive().expect("Could not receive command");
+    let cmd = match preprocess_data(data) {
+        Ok(c) => c,
+        Err(e) => {
+            com.send_nack();
+            return Err(e.into());
+        }
+    };
+
+    com.send_ack();
+
+    let ret = match &cmd {
+        Command::StoreArchive(arch, bytes) => store_archive(&arch, bytes),
+        Command::ExecuteProgram(program, queue) => execute_program(exec, &program, &queue),
+        Command::StopProgram => stop_program(exec),
+        Command::ReturnResults(program, queue) => return_results(&program, &queue),
+        Command::ListFiles => list_files(),
+        Command::UpdateTime(epoch) => update_time(*epoch)
+    };
+
+    match ret {
+        Ok(b) => (),
+        Err(_) => com.send(vec![0x55])
+    }
+
+    return Ok(());
 }
 
 /// Stores a received program in the appropriate folder and unzips it
@@ -74,7 +105,6 @@ pub fn store_archive(folder: &str, bytes: &Vec<u8>) -> CommandResult {
 
 /// This struct is used to store the relevant handles for when a student program is executed
 pub struct ExecutionContext {
-    pub sender: mpsc::Sender<bool>,
     pub thread_handle: thread::JoinHandle<()>,
     pub running_flag: Arc<atomic::AtomicBool>,
 }
@@ -102,7 +132,6 @@ pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str,
     let mut student_process = subprocess::Popen::create(&["python", "main.py", queue_id], config)?;
 
     // Interthread communication
-    let (tx, rx): (mpsc::Sender<bool>, mpsc::Receiver<bool>) = mpsc::channel();
     let wd_flag = Arc::new(atomic::AtomicBool::new(true));
     let ec_flag = Arc::clone(&wd_flag); // clone before original is moved into thread
 
@@ -114,7 +143,7 @@ pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str,
                 wd_flag.store(false, atomic::Ordering::Relaxed);
                 return;
             }
-            if rx.try_recv().is_ok() { // check if it should terminate
+            if !wd_flag.load(atomic::Ordering::Relaxed) { // check if it should terminate
                 break;
             }
             thread::sleep(Duration::from_secs(1));
@@ -132,7 +161,7 @@ pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str,
         wd_flag.store(false, atomic::Ordering::Relaxed);
     });
 
-    *context = Some(ExecutionContext {sender: tx, thread_handle: wd_handle, running_flag: Arc::clone(&ec_flag)});
+    *context = Some(ExecutionContext {thread_handle: wd_handle, running_flag: Arc::clone(&ec_flag)});
 
     Ok(create_success_file())
 }
@@ -147,8 +176,9 @@ pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str,
 /// **Panics if terminating takes too long**
 pub fn stop_program(context: &mut Option<ExecutionContext>) -> CommandResult {
     if let Some(ec) = context {
-        if ec.sender.send(true).is_ok() {
-            log::warn!("Stopping running program"); // only is_ok if thread is still running
+        if ec.running_flag.load(atomic::Ordering::Relaxed) {
+            log::warn!("Stopping running program");
+            ec.running_flag.store(false, atomic::Ordering::Relaxed);
             // wait until it is stopped
             for _ in 0..120 {
                 if !ec.is_running() {
