@@ -1,16 +1,12 @@
 #![allow(clippy::collapsible_if)]
 
-use std::borrow::Borrow;
-use std::borrow::BorrowMut;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
-use std::path;
 use std::sync::*;
 use std::thread;
 use std::time::Duration;
-use crate::communication;
-use crate::communication::CommunicationHandle;
+use crate::communication::{CommunicationHandle, CSBIPacket};
 
 /// An enum storing a COBC command with its parameters
 #[derive(Debug)]
@@ -40,12 +36,12 @@ pub fn process_command<T: CommunicationHandle>(com: &mut T, exec: &mut Option<Ex
     let cmd = match preprocess_data(data) {
         Ok(c) => c,
         Err(e) => {
-            com.send_nack();
+            com.send_packet(CSBIPacket::NACK);
             return Err(e.into());
         }
     };
 
-    com.send_ack();
+    com.send_packet(CSBIPacket::ACK);
 
     let ret = match &cmd {
         Command::StoreArchive(arch, bytes) => store_archive(&arch, bytes),
@@ -58,7 +54,7 @@ pub fn process_command<T: CommunicationHandle>(com: &mut T, exec: &mut Option<Ex
 
     match ret {
         Ok(b) => (),
-        Err(_) => com.send(vec![0x55])
+        Err(_) => ()
     }
 
     return Ok(());
