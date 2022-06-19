@@ -1,12 +1,12 @@
 #![allow(clippy::collapsible_if)]
 
+use crate::communication::{CSBIPacket, CommunicationHandle};
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use std::sync::*;
 use std::thread;
 use std::time::Duration;
-use crate::communication::{CommunicationHandle, CSBIPacket};
 
 /// An enum storing a COBC command with its parameters
 #[derive(Debug)]
@@ -19,43 +19,33 @@ pub enum Command {
     UpdateTime(i32),
 }
 
-type CommandResult = Result<std::path::PathBuf, Box<dyn Error>>;
-
-/// Parse a command coming from the COBC
-///
-/// `data_path` A path to the file containing the received command
-///
-/// Returns the resulting command with parameters or passes along the IO Error from file access
-pub fn preprocess_data(bytes: Vec<u8>) -> Result<Command, Box<dyn Error>> {
-    todo!();
-}
+type CommandResult = Result<CSBIPacket, Box<dyn Error>>;
 
 /// Main routine. Waits for a command to be received from the COBC, then parses and executes it.
-pub fn process_command<T: CommunicationHandle>(com: &mut T, exec: &mut Option<ExecutionContext>) -> Result<(), Box<dyn Error>> {
-    let data = com.receive().expect("Could not receive command");
-    let cmd = match preprocess_data(data) {
-        Ok(c) => c,
-        Err(e) => {
-            com.send_packet(CSBIPacket::NACK);
-            return Err(e.into());
-        }
+pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<ExecutionContext>) -> Result<(), Box<dyn Error>> {
+    // Preprocess
+    let data = com.receive_packet().expect("Could not receive command");
+    let cmd = if let CSBIPacket::DATA(bytes) = data {
+        todo!();
+    } 
+    else {
+        return Err("No data packet received".into());
     };
 
-    com.send_packet(CSBIPacket::ACK);
-
+    // Execute
     let ret = match &cmd {
         Command::StoreArchive(arch, bytes) => store_archive(&arch, bytes),
         Command::ExecuteProgram(program, queue) => execute_program(exec, &program, &queue),
         Command::StopProgram => stop_program(exec),
         Command::ReturnResults(program, queue) => return_results(&program, &queue),
         Command::ListFiles => list_files(),
-        Command::UpdateTime(epoch) => update_time(*epoch)
+        Command::UpdateTime(epoch) => update_time(*epoch),
     };
 
     match ret {
-        Ok(b) => (),
-        Err(_) => ()
-    }
+        Ok(p) => com.send_packet(p),
+        Err(_) => com.send_packet(CSBIPacket::NACK),
+    };
 
     return Ok(());
 }
@@ -95,9 +85,8 @@ pub fn store_archive(folder: &str, bytes: &Vec<u8>) -> CommandResult {
         }
     }
 
-    Ok(create_success_file())
+    Ok(CSBIPacket::ACK)
 }
-
 
 /// This struct is used to store the relevant handles for when a student program is executed
 pub struct ExecutionContext {
@@ -115,7 +104,11 @@ impl ExecutionContext {
 ///
 /// * `program_id` The name of the ./archives/ subfolder
 /// * `queue_id` The first argument for the student program
-pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str, queue_id: &str) -> CommandResult {
+pub fn execute_program(
+    context: &mut Option<ExecutionContext>,
+    program_id: &str,
+    queue_id: &str,
+) -> CommandResult {
     let _ = stop_program(context); // Ignore return value
 
     log::info!("Executing program {}:{}", program_id, queue_id);
@@ -135,11 +128,13 @@ pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str,
     let wd_handle = thread::spawn(move || {
         // TODO proper timeout
         for _ in 0..2 {
-            if student_process.poll().is_some() { // student program terminated itself
+            if student_process.poll().is_some() {
+                // student program terminated itself
                 wd_flag.store(false, atomic::Ordering::Relaxed);
                 return;
             }
-            if !wd_flag.load(atomic::Ordering::Relaxed) { // check if it should terminate
+            if !wd_flag.load(atomic::Ordering::Relaxed) {
+                // check if it should terminate
                 break;
             }
             thread::sleep(Duration::from_secs(1));
@@ -157,18 +152,20 @@ pub fn execute_program(context: &mut Option<ExecutionContext>, program_id: &str,
         wd_flag.store(false, atomic::Ordering::Relaxed);
     });
 
-    *context = Some(ExecutionContext {thread_handle: wd_handle, running_flag: Arc::clone(&ec_flag)});
+    *context = Some(ExecutionContext {
+        thread_handle: wd_handle,
+        running_flag: Arc::clone(&ec_flag),
+    });
 
-    Ok(create_success_file())
+    Ok(CSBIPacket::ACK)
 }
 
-
 /// Stops the currently running student program
-/// 
+///
 /// * `context` The execution context of the student program (returns Err if context is None)
-/// 
+///
 /// Returns Ok after terminating the student program of immediately if it is already stopped
-/// 
+///
 /// **Panics if terminating takes too long**
 pub fn stop_program(context: &mut Option<ExecutionContext>) -> CommandResult {
     if let Some(ec) = context {
@@ -178,7 +175,7 @@ pub fn stop_program(context: &mut Option<ExecutionContext>) -> CommandResult {
             // wait until it is stopped
             for _ in 0..120 {
                 if !ec.is_running() {
-                    return Ok(create_success_file());
+                    return Ok(CSBIPacket::ACK);
                 }
                 thread::sleep(Duration::from_millis(10));
             }
@@ -190,68 +187,54 @@ pub fn stop_program(context: &mut Option<ExecutionContext>) -> CommandResult {
     Err("No program running".into()) // TODO Should this be an error?
 }
 
-
 /// Zips the results of the given program execution and sends the filepath to the communication module.
 /// The results are taken from ./archives/program_id/results/queue_id
-/// 
+///
 /// * `com_handle` The communication context, containing the needed sender
 /// * `program_id` The programs folder name
 /// * `queue_id` The results subfolder name
-/// 
+///
 /// **Panics if the filepath can't be sent to the com module**
 pub fn return_results(program_id: &str, queue_id: &str) -> CommandResult {
     log::info!("Returning Results for {}:{}", program_id, queue_id);
 
     let zip_path = std::path::PathBuf::from(format!("./data/{}{}.zip", program_id, queue_id));
-    let res_path = std::path::PathBuf::from(format!("./archives/{}/results/{}", program_id, queue_id));
+    let res_path =
+        std::path::PathBuf::from(format!("./archives/{}/results/{}", program_id, queue_id));
 
     if !res_path.exists() {
         log::warn!("Results folder does not exist");
     }
 
     subprocess::Exec::cmd("zip")
-    .arg("-r")
-    .arg(zip_path.as_os_str())
-    .arg("log")
-    .arg(res_path.as_os_str())
-    .join()?;
+        .arg("-r")
+        .arg(zip_path.as_os_str())
+        .arg("log")
+        .arg(res_path.as_os_str())
+        .join()?;
 
     if !zip_path.exists() {
         return Err("Zipfile was not created".into());
     }
-    
+
     let _ = std::fs::remove_dir_all(res_path);
     std::fs::File::create("log")?.set_len(0)?;
-    
-    Ok(zip_path)
+
+    todo!(); // depends on send multi packet
 }
 
 /// Places all program names found in the archive folder into a file, and passes it to the communication module.
-/// 
+///
 /// * `com_handle` The communication context, containing the needed sender
-/// 
+///
 /// **Panics if the filepath can't be sent to the com module**
 pub fn list_files() -> CommandResult {
     todo!();
 }
 
 /// Updates the system time
-/// 
+///
 /// * `epoch` Seconds since epoch (i32 works until Jan 2038)
 pub fn update_time(epoch: i32) -> CommandResult {
     todo!();
-}
-
-/// Creates and returns the path to a file containing the success byte for the COBC
-pub fn create_success_file() -> std::path::PathBuf {
-    const SUCCESS_BYTE: u8 = 0x33;
-    return create_return_file(vec![SUCCESS_BYTE]);
-}
-
-/// Takes a byte array, writes it to file in the data directory and returns the filepath to it
-pub fn create_return_file(bytes: Vec<u8>) -> std::path::PathBuf {
-    let path = std::path::PathBuf::from(format!("./data/{:?}", bytes.as_ptr())); // Slightly ugly way of generating a unique filename
-    let mut file = std::fs::File::create(&path).expect("Could not create file for return value");
-    file.write_all(&bytes).expect("Could not write to return value file");
-    return path;
 }
