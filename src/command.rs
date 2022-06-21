@@ -26,11 +26,22 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<Exe
     // Preprocess
     let data = com.receive_packet().expect("Could not receive command");
     let cmd = if let CSBIPacket::DATA(bytes) = data {
-        todo!();
+        match bytes[0] {
+            0x01 => {
+                com.send_packet(CSBIPacket::ACK)?;
+                let id = bytes[1].to_string();
+                Command::StoreArchive(id, com.receive_multi_packet(|| {false})?)
+            },
+            _ => {
+                return Err("Invalid command".into());
+            }
+        }
     } 
     else {
         return Err("No data packet received".into());
     };
+
+    com.send_packet(CSBIPacket::ACK)?;
 
     // Execute
     let ret = match &cmd {
@@ -43,8 +54,10 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<Exe
     };
 
     match ret {
-        Ok(p) => com.send_packet(p),
-        Err(_) => com.send_packet(CSBIPacket::NACK),
+        Ok(p) => com.send_packet(p)?,
+        Err(_) => {
+            return Err("Could not execute command".into());
+        },
     };
 
     return Ok(());

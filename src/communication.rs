@@ -24,7 +24,7 @@ impl CSBIPacket {
             CSBIPacket::STOP => vec![0xb4],
             CSBIPacket::EOF => vec![0x59],
             CSBIPacket::DATA(bytes) => {
-                let mut v = vec![0x8bu8];
+                let mut v = vec![0x8b];
                 let crc16 = CSBIPacket::CRC.checksum(&bytes);
                 v.reserve_exact(4 + bytes.len());
                 v.extend((bytes.len() as u16).to_be_bytes());
@@ -90,14 +90,14 @@ pub trait CommunicationHandle {
         loop {
             let pack = self.receive_packet()?;
             if stop_fn() {
-                self.send_packet(CSBIPacket::STOP);
+                self.send_packet(CSBIPacket::STOP)?;
                 return Err("Communication stopped from self".into());
             }
 
             match pack {
                 CSBIPacket::DATA(b) => {
                     buffer.extend(b);
-                    self.send_packet(CSBIPacket::ACK);
+                    self.send_packet(CSBIPacket::ACK)?;
                 },
                 CSBIPacket::EOF => {
                     break;
@@ -106,7 +106,7 @@ pub trait CommunicationHandle {
                     return Err("Communication stopped".into());
                 },
                 _ => {
-                    self.send_packet(CSBIPacket::NACK);
+                    self.send_packet(CSBIPacket::NACK)?;
                 }
             };
         }
