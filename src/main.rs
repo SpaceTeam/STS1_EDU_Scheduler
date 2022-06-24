@@ -4,13 +4,13 @@ use std::io::prelude::*;
 
 mod communication;
 mod command;
-use command::Command;
-use communication::{CSBIPacket, CommunicationHandle};
+mod uart;
+use crate::communication::{CSBIPacket, CommunicationHandle};
 
 fn main() {
     let _ = sl::WriteLogger::init(sl::LevelFilter::Info, sl::Config::default(), std::fs::File::create("log").unwrap());
     
-    let mut com = communication::UARTHandle::new(112500);
+    let mut com = uart::UARTHandle::new(112500);
     let mut exec: Option<command::ExecutionContext> = None;
 
     loop {

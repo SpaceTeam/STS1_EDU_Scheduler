@@ -1,9 +1,11 @@
 #![allow(clippy::collapsible_if)]
 
+use crate::communication::{self, ComError};
 use crate::communication::{CSBIPacket, CommunicationHandle};
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
+use std::process::CommandEnvs;
 use std::sync::*;
 use std::thread;
 use std::time::Duration;
@@ -19,45 +21,30 @@ pub enum Command {
     UpdateTime(i32),
 }
 
-type CommandResult = Result<CSBIPacket, Box<dyn Error>>;
+type CommandResult = Result<(), CommandError>;
 
 /// Main routine. Waits for a command to be received from the COBC, then parses and executes it.
-pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<ExecutionContext>) -> Result<(), Box<dyn Error>> {
+pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<ExecutionContext>) -> Result<(), CommandError> {
     // Preprocess
-    let data = com.receive_packet().expect("Could not receive command");
-    let cmd = if let CSBIPacket::DATA(bytes) = data {
-        match bytes[0] {
-            0x01 => {
-                com.send_packet(CSBIPacket::ACK)?;
-                let id = bytes[1].to_string();
-                Command::StoreArchive(id, com.receive_multi_packet(|| {false})?)
-            },
-            _ => {
-                return Err("Invalid command".into());
-            }
-        }
-    } 
+    let packet = com.receive_packet()?;
+    let data = if let CSBIPacket::DATA(bytes) = packet {
+        bytes
+    }
     else {
-        return Err("No data packet received".into());
+        return Err(CommandError::ComError); // Did not start with a data packet
     };
 
-    com.send_packet(CSBIPacket::ACK)?;
-
-    // Execute
-    let ret = match &cmd {
-        Command::StoreArchive(arch, bytes) => store_archive(&arch, bytes),
-        Command::ExecuteProgram(program, queue) => execute_program(exec, &program, &queue),
-        Command::StopProgram => stop_program(exec),
-        Command::ReturnResults(program, queue) => return_results(&program, &queue),
-        Command::ListFiles => list_files(),
-        Command::UpdateTime(epoch) => update_time(*epoch),
-    };
-
-    match ret {
-        Ok(p) => com.send_packet(p)?,
-        Err(_) => {
-            return Err("Could not execute command".into());
+    let cmd = match data[0] {
+        0x01 => {
+            com.send_packet(CSBIPacket::ACK)?;
+            let id = data[1].to_string();
+            let bytes = com.receive_multi_packet(|| {false})?; // !! TODO !!
+            store_archive(id, bytes)?;
+            com.send_packet(CSBIPacket::ACK)?;
         },
+        _ => {
+            return Err(CommandError::ComError);
+        }
     };
 
     return Ok(());
@@ -69,7 +56,7 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<Exe
 /// * `bytes` A vector containing the raw bytes of the zip archive
 ///
 /// Returns Ok or passes along a file access/unzip process error
-pub fn store_archive(folder: &str, bytes: &Vec<u8>) -> CommandResult {
+pub fn store_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
     log::info!("Storing archive {}", folder);
 
     // Store bytes into temporary file
@@ -90,7 +77,7 @@ pub fn store_archive(folder: &str, bytes: &Vec<u8>) -> CommandResult {
     match exit_status {
         Ok(status) => {
             if !status.success() {
-                return Err(format!("Unzip returned with {:?}", status).into());
+                return Err(CommandError::SystemError);
             }
         }
         Err(err) => {
@@ -98,7 +85,7 @@ pub fn store_archive(folder: &str, bytes: &Vec<u8>) -> CommandResult {
         }
     }
 
-    Ok(CSBIPacket::ACK)
+    Ok(())
 }
 
 /// This struct is used to store the relevant handles for when a student program is executed
@@ -170,7 +157,7 @@ pub fn execute_program(
         running_flag: Arc::clone(&ec_flag),
     });
 
-    Ok(CSBIPacket::ACK)
+    Ok(())
 }
 
 /// Stops the currently running student program
@@ -188,7 +175,7 @@ pub fn stop_program(context: &mut Option<ExecutionContext>) -> CommandResult {
             // wait until it is stopped
             for _ in 0..120 {
                 if !ec.is_running() {
-                    return Ok(CSBIPacket::ACK);
+                    return Ok(());
                 }
                 thread::sleep(Duration::from_millis(10));
             }
@@ -197,7 +184,7 @@ pub fn stop_program(context: &mut Option<ExecutionContext>) -> CommandResult {
         }
     }
 
-    Err("No program running".into()) // TODO Should this be an error?
+    Err(CommandError::SystemError) // TODO Should this be an error?
 }
 
 /// Zips the results of the given program execution and sends the filepath to the communication module.
@@ -227,13 +214,14 @@ pub fn return_results(program_id: &str, queue_id: &str) -> CommandResult {
         .join()?;
 
     if !zip_path.exists() {
-        return Err("Zipfile was not created".into());
+        return Err(CommandError::SystemError);
     }
+
+
+    todo!(); // depends on send multi packet
 
     let _ = std::fs::remove_dir_all(res_path);
     std::fs::File::create("log")?.set_len(0)?;
-
-    todo!(); // depends on send multi packet
 }
 
 /// Places all program names found in the archive folder into a file, and passes it to the communication module.
@@ -251,3 +239,49 @@ pub fn list_files() -> CommandResult {
 pub fn update_time(epoch: i32) -> CommandResult {
     todo!();
 }
+
+#[derive(Debug)]
+pub enum CommandError {
+    /// Captures a system io error
+    IOError(std::io::Error),
+    /// A recoverable communication error (e.g. bit flips in tranmission)
+    ComError,
+    /// A propagated communication error, which signals a problem with the underlying driver
+    InterfaceError,
+    /// Signals that a command was interrupted (e.g. with a STOP condition)
+    Interrupted,
+    /// Signals that an invalid command was received (e.g.)
+    InvalidCommandError,
+    /// Signals that something has gone wrong while using a system tool (e.g. unzip)
+    SystemError
+}
+
+impl From<std::io::Error> for CommandError {
+    fn from(e: std::io::Error) -> Self {
+        CommandError::IOError(e)
+    }
+}
+
+impl From<subprocess::PopenError> for CommandError {
+    fn from(_: subprocess::PopenError) -> Self {
+        CommandError::SystemError
+    }
+}
+
+impl From<ComError> for CommandError {
+    fn from(e: ComError) -> Self {
+        match e {
+            ComError::InterfaceError => CommandError::InterfaceError,
+            ComError::STOPCondition => CommandError::Interrupted,
+            _ => CommandError::ComError
+        }
+    }
+}
+
+impl std::fmt::Display for CommandError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for CommandError {}

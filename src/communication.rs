@@ -1,8 +1,4 @@
 use crc::{Crc, CRC_16_ARC};
-use std::error::Error;
-
-
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 pub enum CSBIPacket {
     ACK,
@@ -41,20 +37,22 @@ impl CSBIPacket {
     }
 }
 
+pub type ComResult<T> = Result<T, ComError>;
+
 pub trait CommunicationHandle {
     /// Sends the bytes to the COBC, packaged accordingly
-    fn send(&mut self, bytes: Vec<u8>) -> Result<()>;
+    fn send(&mut self, bytes: Vec<u8>) -> ComResult<()>;
 
     /// Blocks until n bytes are received or the timeout is reached
-    fn receive(&self, n: u16) -> Result<Vec<u8>>;
+    fn receive(&self, n: u16) -> ComResult<Vec<u8>>;
 
     /// Sends the supplied packet
-    fn send_packet(&mut self, p: CSBIPacket) -> Result<()> {
+    fn send_packet(&mut self, p: CSBIPacket) -> ComResult<()> {
         self.send(p.serialize())
     }
 
     /// Blocks until it receives a CSBIPacket
-    fn receive_packet(&self) -> Result<CSBIPacket> {
+    fn receive_packet(&self) -> ComResult<CSBIPacket> {
         let p = match self.receive(1)?[0] {
             0xd7 => CSBIPacket::ACK,
             0x27 => CSBIPacket::NACK,
@@ -67,14 +65,14 @@ pub trait CommunicationHandle {
                 let crc_field = self.receive(2)?;
                 let crc = u16::from_be_bytes([crc_field[0], crc_field[1]]);
                 if !CSBIPacket::check(&bytes, crc) {
-                    CSBIPacket::INVALID
+                    return Err(ComError::CRCError);
                 }
                 else {
                     CSBIPacket::DATA(bytes)
                 }
             }
             _ => {
-                return Err("Invalid header".into());
+                return Err(ComError::PacketInvalidError);
             }
         };
 
@@ -84,14 +82,14 @@ pub trait CommunicationHandle {
     /// Attempts to continously receive multidata packets and returns them in a concatenated byte vector
     /// `stop_fn` is evaluated after every packet and terminates the communication with a STOP packet if true
     /// An error is returned in this case
-    fn receive_multi_packet(&mut self, stop_fn: impl Fn() -> bool) -> Result<Vec<u8>> {
+    fn receive_multi_packet(&mut self, stop_fn: impl Fn() -> bool) -> ComResult<Vec<u8>> {
         let mut buffer = Vec::new();
 
         loop {
             let pack = self.receive_packet()?;
             if stop_fn() {
                 self.send_packet(CSBIPacket::STOP)?;
-                return Err("Communication stopped from self".into());
+                return Err(ComError::STOPCondition);
             }
 
             match pack {
@@ -103,7 +101,7 @@ pub trait CommunicationHandle {
                     break;
                 },
                 CSBIPacket::STOP => {
-                    return Err("Communication stopped".into());
+                    return Err(ComError::STOPCondition);
                 },
                 _ => {
                     self.send_packet(CSBIPacket::NACK)?;
@@ -115,20 +113,22 @@ pub trait CommunicationHandle {
     }
 }
 
-pub struct UARTHandle {}
+#[derive(Debug)]
+pub enum ComError {
+    /// Signals that an unknown command packet or data packet header was received
+    PacketInvalidError,
+    /// Signals that the CRC checksum of a data packet was wrong
+    CRCError,
+    /// Signals that the underlying sending or receiving failed
+    InterfaceError,
+    /// Signals that a multi packet receive or send was interrupted by a STOP condition
+    STOPCondition
+}
 
-impl UARTHandle {
-    pub fn new(baud: i32) -> UARTHandle {
-        todo!();
+impl std::fmt::Display for ComError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
-impl CommunicationHandle for UARTHandle {
-    fn send(&mut self, bytes: Vec<u8>) -> Result<()> {
-        todo!();
-    }
-
-    fn receive(&self, n: u16) -> Result<Vec<u8>> {
-        todo!();
-    }
-}
+impl std::error::Error for ComError {}
