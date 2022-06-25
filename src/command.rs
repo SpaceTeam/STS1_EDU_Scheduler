@@ -23,10 +23,12 @@ pub enum Command {
 
 type CommandResult = Result<(), CommandError>;
 
+const COM_TIMEOUT: std::time::Duration = std::time::Duration::new(2, 0);
+
 /// Main routine. Waits for a command to be received from the COBC, then parses and executes it.
 pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<ExecutionContext>) -> Result<(), CommandError> {
     // Preprocess
-    let packet = com.receive_packet()?;
+    let packet = com.receive_packet(&COM_TIMEOUT)?;
     let data = if let CSBIPacket::DATA(bytes) = packet {
         bytes
     }
@@ -38,7 +40,7 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<Exe
         0x01 => {
             com.send_packet(CSBIPacket::ACK)?;
             let id = data[1].to_string();
-            let bytes = com.receive_multi_packet(|| {false})?; // !! TODO !!
+            let bytes = com.receive_multi_packet(&COM_TIMEOUT, || {false})?; // !! TODO !!
             store_archive(id, bytes)?;
             com.send_packet(CSBIPacket::ACK)?;
         },
@@ -77,7 +79,7 @@ pub fn store_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
     match exit_status {
         Ok(status) => {
             if !status.success() {
-                return Err(CommandError::SystemError);
+                return Err(CommandError::SystemError("unzip failed".into()));
             }
         }
         Err(err) => {
@@ -184,7 +186,7 @@ pub fn stop_program(context: &mut Option<ExecutionContext>) -> CommandResult {
         }
     }
 
-    Err(CommandError::SystemError) // TODO Should this be an error?
+    Err(CommandError::SystemError("Program not running".into())) // TODO Should this be an error?
 }
 
 /// Zips the results of the given program execution and sends the filepath to the communication module.
@@ -214,7 +216,7 @@ pub fn return_results(program_id: &str, queue_id: &str) -> CommandResult {
         .join()?;
 
     if !zip_path.exists() {
-        return Err(CommandError::SystemError);
+        return Err(CommandError::SystemError("Archive not created".into()));
     }
 
 
@@ -242,29 +244,25 @@ pub fn update_time(epoch: i32) -> CommandResult {
 
 #[derive(Debug)]
 pub enum CommandError {
-    /// Captures a system io error
-    IOError(std::io::Error),
     /// A recoverable communication error (e.g. bit flips in tranmission)
     ComError,
     /// A propagated communication error, which signals a problem with the underlying driver
     InterfaceError,
     /// Signals that a command was interrupted (e.g. with a STOP condition)
     Interrupted,
-    /// Signals that an invalid command was received (e.g.)
-    InvalidCommandError,
     /// Signals that something has gone wrong while using a system tool (e.g. unzip)
-    SystemError
+    SystemError(Box<dyn std::error::Error>)
 }
 
 impl From<std::io::Error> for CommandError {
     fn from(e: std::io::Error) -> Self {
-        CommandError::IOError(e)
+        CommandError::SystemError(e.into())
     }
 }
 
 impl From<subprocess::PopenError> for CommandError {
-    fn from(_: subprocess::PopenError) -> Self {
-        CommandError::SystemError
+    fn from(e: subprocess::PopenError) -> Self {
+        CommandError::SystemError(e.into())
     }
 }
 
@@ -272,7 +270,7 @@ impl From<ComError> for CommandError {
     fn from(e: ComError) -> Self {
         match e {
             ComError::InterfaceError => CommandError::InterfaceError,
-            ComError::STOPCondition => CommandError::Interrupted,
+            ComError::STOPCondition | ComError::TimeoutError => CommandError::Interrupted,
             _ => CommandError::ComError
         }
     }

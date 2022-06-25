@@ -40,11 +40,13 @@ impl CSBIPacket {
 pub type ComResult<T> = Result<T, ComError>;
 
 pub trait CommunicationHandle {
-    /// Sends the bytes to the COBC, packaged accordingly
+    /// Sends the bytes to the COBC, packaged accordingly. This function shall block until all data
+    /// is sent. By returning a [`ComError::InterfaceError`] it can signal that the underlying driver failed.
     fn send(&mut self, bytes: Vec<u8>) -> ComResult<()>;
 
-    /// Blocks until n bytes are received or the timeout is reached
-    fn receive(&self, n: u16) -> ComResult<Vec<u8>>;
+    /// Blocks until n bytes are received or the timeout is reached. A [`ComError`] can signal that it failed
+    /// or timed out.
+    fn receive(&self, n: u16, timeout: &std::time::Duration) -> ComResult<Vec<u8>>;
 
     /// Sends the supplied packet
     fn send_packet(&mut self, p: CSBIPacket) -> ComResult<()> {
@@ -52,17 +54,17 @@ pub trait CommunicationHandle {
     }
 
     /// Blocks until it receives a CSBIPacket
-    fn receive_packet(&self) -> ComResult<CSBIPacket> {
-        let p = match self.receive(1)?[0] {
+    fn receive_packet(&self, timeout: &std::time::Duration) -> ComResult<CSBIPacket> {
+        let p = match self.receive(1, &timeout)?[0] {
             0xd7 => CSBIPacket::ACK,
             0x27 => CSBIPacket::NACK,
             0xb4 => CSBIPacket::STOP,
             0x59 => CSBIPacket::EOF,
             0xb8 => {
-                let length_field = self.receive(2)?;
+                let length_field = self.receive(2, &timeout)?;
                 let length = u16::from_be_bytes([length_field[0], length_field[1]]);
-                let bytes = self.receive(length)?;
-                let crc_field = self.receive(2)?;
+                let bytes = self.receive(length, &timeout)?;
+                let crc_field = self.receive(2, &timeout)?;
                 let crc = u16::from_be_bytes([crc_field[0], crc_field[1]]);
                 if !CSBIPacket::check(&bytes, crc) {
                     return Err(ComError::CRCError);
@@ -82,11 +84,11 @@ pub trait CommunicationHandle {
     /// Attempts to continously receive multidata packets and returns them in a concatenated byte vector
     /// `stop_fn` is evaluated after every packet and terminates the communication with a STOP packet if true
     /// An error is returned in this case
-    fn receive_multi_packet(&mut self, stop_fn: impl Fn() -> bool) -> ComResult<Vec<u8>> {
+    fn receive_multi_packet(&mut self, timeout: &std::time::Duration, stop_fn: impl Fn() -> bool) -> ComResult<Vec<u8>> {
         let mut buffer = Vec::new();
 
         loop {
-            let pack = self.receive_packet()?;
+            let pack = self.receive_packet(&timeout)?;
             if stop_fn() {
                 self.send_packet(CSBIPacket::STOP)?;
                 return Err(ComError::STOPCondition);
@@ -119,10 +121,12 @@ pub enum ComError {
     PacketInvalidError,
     /// Signals that the CRC checksum of a data packet was wrong
     CRCError,
-    /// Signals that the underlying sending or receiving failed
+    /// Signals that the underlying sending or receiving failed. Not recoverable on its own.
     InterfaceError,
     /// Signals that a multi packet receive or send was interrupted by a STOP condition
-    STOPCondition
+    STOPCondition,
+    /// Signals that a receive timed out
+    TimeoutError
 }
 
 impl std::fmt::Display for ComError {

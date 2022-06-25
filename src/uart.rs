@@ -13,7 +13,7 @@ impl CommunicationHandle for UARTHandle {
         todo!();
     }
 
-    fn receive(&self, n: u16) -> ComResult<Vec<u8>> {
-        todo!();
+    fn receive(&self, n: u16, timeout: &std::time::Duration) -> ComResult<Vec<u8>> {
+        todo!()
     }
 }
