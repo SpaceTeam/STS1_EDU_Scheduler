@@ -1,6 +1,6 @@
 #![allow(clippy::collapsible_if)]
 
-use crate::communication::{self, ComError};
+use crate::communication::{self, CommunicationError};
 use crate::communication::{CSBIPacket, CommunicationHandle};
 use std::error::Error;
 use std::fs::File;
@@ -33,7 +33,7 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<Exe
         bytes
     }
     else {
-        return Err(CommandError::ComError); // Did not start with a data packet
+        return Err(CommandError::InvalidCommError); // Did not start with a data packet
     };
 
     let cmd = match data[0] {
@@ -45,10 +45,10 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<Exe
             com.send_packet(CSBIPacket::ACK)?;
         },
         _ => {
-            return Err(CommandError::ComError);
+            return Err(CommandError::InvalidCommError);
         }
     };
-
+    
     return Ok(());
 }
 
@@ -244,14 +244,12 @@ pub fn update_time(epoch: i32) -> CommandResult {
 
 #[derive(Debug)]
 pub enum CommandError {
-    /// A recoverable communication error (e.g. bit flips in tranmission)
-    ComError,
-    /// A propagated communication error, which signals a problem with the underlying driver
-    InterfaceError,
-    /// Signals that a command was interrupted (e.g. with a STOP condition)
-    Interrupted,
+    /// Propagates an error from the communication module
+    CommunicationError(CommunicationError),
     /// Signals that something has gone wrong while using a system tool (e.g. unzip)
-    SystemError(Box<dyn std::error::Error>)
+    SystemError(Box<dyn std::error::Error>),
+    /// Signals that packets that are not useful right now were received
+    InvalidCommError
 }
 
 impl From<std::io::Error> for CommandError {
@@ -266,13 +264,9 @@ impl From<subprocess::PopenError> for CommandError {
     }
 }
 
-impl From<ComError> for CommandError {
-    fn from(e: ComError) -> Self {
-        match e {
-            ComError::InterfaceError => CommandError::InterfaceError,
-            ComError::STOPCondition | ComError::TimeoutError => CommandError::Interrupted,
-            _ => CommandError::ComError
-        }
+impl From<CommunicationError> for CommandError {
+    fn from(e: CommunicationError) -> Self {
+        CommandError::CommunicationError(e)
     }
 }
 

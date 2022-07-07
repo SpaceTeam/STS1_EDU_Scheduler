@@ -37,14 +37,14 @@ impl CSBIPacket {
     }
 }
 
-pub type ComResult<T> = Result<T, ComError>;
+pub type ComResult<T> = Result<T, CommunicationError>;
 
 pub trait CommunicationHandle {
     /// Sends the bytes to the COBC, packaged accordingly. This function shall block until all data
-    /// is sent. By returning a [`ComError::InterfaceError`] it can signal that the underlying driver failed.
+    /// is sent. By returning a [`CommunicationError::InterfaceError`] it can signal that the underlying driver failed.
     fn send(&mut self, bytes: Vec<u8>) -> ComResult<()>;
 
-    /// Blocks until n bytes are received or the timeout is reached. A [`ComError`] can signal that it failed
+    /// Blocks until n bytes are received or the timeout is reached. A [`CommunicationError`] can signal that it failed
     /// or timed out.
     fn receive(&self, n: u16, timeout: &std::time::Duration) -> ComResult<Vec<u8>>;
 
@@ -67,14 +67,14 @@ pub trait CommunicationHandle {
                 let crc_field = self.receive(2, &timeout)?;
                 let crc = u16::from_be_bytes([crc_field[0], crc_field[1]]);
                 if !CSBIPacket::check(&bytes, crc) {
-                    return Err(ComError::CRCError);
+                    return Err(CommunicationError::CRCError);
                 }
                 else {
                     CSBIPacket::DATA(bytes)
                 }
             }
             _ => {
-                return Err(ComError::PacketInvalidError);
+                return Err(CommunicationError::PacketInvalidError);
             }
         };
 
@@ -91,7 +91,7 @@ pub trait CommunicationHandle {
             let pack = self.receive_packet(&timeout)?;
             if stop_fn() {
                 self.send_packet(CSBIPacket::STOP)?;
-                return Err(ComError::STOPCondition);
+                return Err(CommunicationError::STOPCondition);
             }
 
             match pack {
@@ -103,7 +103,7 @@ pub trait CommunicationHandle {
                     break;
                 },
                 CSBIPacket::STOP => {
-                    return Err(ComError::STOPCondition);
+                    return Err(CommunicationError::STOPCondition);
                 },
                 _ => {
                     self.send_packet(CSBIPacket::NACK)?;
@@ -116,8 +116,8 @@ pub trait CommunicationHandle {
 }
 
 #[derive(Debug)]
-pub enum ComError {
-    /// Signals that an unknown command packet or data packet header was received
+pub enum CommunicationError {
+    /// Signals that an unknown command packet was received
     PacketInvalidError,
     /// Signals that the CRC checksum of a data packet was wrong
     CRCError,
@@ -129,10 +129,10 @@ pub enum ComError {
     TimeoutError
 }
 
-impl std::fmt::Display for ComError {
+impl std::fmt::Display for CommunicationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl std::error::Error for ComError {}
+impl std::error::Error for CommunicationError {}

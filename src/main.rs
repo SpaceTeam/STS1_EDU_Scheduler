@@ -5,8 +5,10 @@ use std::io::prelude::*;
 mod communication;
 mod command;
 mod uart;
+mod persist;
 use crate::communication::{CSBIPacket, CommunicationHandle};
 use command::CommandError;
+use communication::CommunicationError;
 
 fn main() {
     let _ = sl::WriteLogger::init(sl::LevelFilter::Info, sl::Config::default(), std::fs::File::create("log").unwrap());
@@ -22,16 +24,26 @@ fn main() {
                     log::error!("Command failed with {}", ioe);
                     com.send_packet(CSBIPacket::NACK);
                 },
-                CommandError::ComError => {
-                    log::error!("Received invalid data");
-                    com.send_packet(CSBIPacket::NACK);
-                },
-                CommandError::InterfaceError => {
-                    log::error!("Could not send or receive data");
-                    panic!("Communication module failed");
-                },
-                CommandError::Interrupted => {
-                    log::info!("Command was interrupted");
+                CommandError::CommunicationError(ce) => {
+                    match ce {
+                        CommunicationError::STOPCondition => {
+                            log::error!("Multi-packet communication stopped");
+                        },
+                        CommunicationError::InterfaceError => {
+                            log::error!("CommunicationHandle failed");
+                            panic!();
+                        },
+                        CommunicationError::PacketInvalidError => {
+                            log::error!("Received unknown packet");
+                        },
+                        CommunicationError::TimeoutError => {
+                            log::error!("Communication timed out");
+                        },            
+                        CommunicationError::CRCError => (),
+                    }
+                }
+                CommandError::InvalidCommError => {
+                    log::error!("Received currently invalid command");
                 }
             };
         }
