@@ -1,5 +1,6 @@
 use crc::{Crc, CRC_16_ARC};
 
+#[derive(Debug, Clone)]
 pub enum CSBIPacket {
     ACK,
     NACK,
@@ -46,7 +47,7 @@ pub trait CommunicationHandle {
 
     /// Blocks until n bytes are received or the timeout is reached. A [`CommunicationError`] can signal that it failed
     /// or timed out.
-    fn receive(&self, n: u16, timeout: &std::time::Duration) -> ComResult<Vec<u8>>;
+    fn receive(&mut self, n: u16, timeout: &std::time::Duration) -> ComResult<Vec<u8>>;
 
     /// Sends the supplied packet
     fn send_packet(&mut self, p: CSBIPacket) -> ComResult<()> {
@@ -54,13 +55,13 @@ pub trait CommunicationHandle {
     }
 
     /// Blocks until it receives a CSBIPacket
-    fn receive_packet(&self, timeout: &std::time::Duration) -> ComResult<CSBIPacket> {
+    fn receive_packet(&mut self, timeout: &std::time::Duration) -> ComResult<CSBIPacket> {
         let p = match self.receive(1, &timeout)?[0] {
             0xd7 => CSBIPacket::ACK,
             0x27 => CSBIPacket::NACK,
             0xb4 => CSBIPacket::STOP,
             0x59 => CSBIPacket::EOF,
-            0xb8 => {
+            0x8b => {
                 let length_field = self.receive(2, &timeout)?;
                 let length = u16::from_be_bytes([length_field[0], length_field[1]]);
                 let bytes = self.receive(length, &timeout)?;
