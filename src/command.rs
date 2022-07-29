@@ -23,12 +23,12 @@ pub enum Command {
 
 type CommandResult = Result<(), CommandError>;
 
-const COM_TIMEOUT: std::time::Duration = std::time::Duration::new(2, 0);
+const COM_TIMEOUT_DURATION: std::time::Duration = std::time::Duration::new(2, 0);
 
 /// Main routine. Waits for a command to be received from the COBC, then parses and executes it.
-pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<ExecutionContext>) -> Result<(), CommandError> {
+pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<ExecutionContext>) -> CommandResult {
     // Preprocess
-    let packet = com.receive_packet(&COM_TIMEOUT)?;
+    let packet = com.receive_packet(&COM_TIMEOUT_DURATION)?;
     let data = if let CSBIPacket::DATA(bytes) = packet {
         bytes
     }
@@ -36,11 +36,11 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<Exe
         return Err(CommandError::InvalidCommError); // Did not start with a data packet
     };
 
-    let cmd = match data[0] {
+    match data[0] {
         0x01 => {
             com.send_packet(CSBIPacket::ACK)?;
             let id = data[1].to_string();
-            let bytes = com.receive_multi_packet(&COM_TIMEOUT, || {false})?; // !! TODO !!
+            let bytes = com.receive_multi_packet(&COM_TIMEOUT_DURATION, || {false})?; // !! TODO !!
             store_archive(id, bytes)?;
             com.send_packet(CSBIPacket::ACK)?;
         },

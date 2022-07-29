@@ -22,26 +22,14 @@ fn main() {
             match e {
                 CommandError::SystemError(ioe) => {
                     log::error!("Command failed with {}", ioe);
-                    com.send_packet(CSBIPacket::NACK);
+                    if com.send_packet(CSBIPacket::NACK).is_err() {
+                        log::error!("Could not send NACK");
+                        panic!();
+                    }
                 },
                 CommandError::CommunicationError(ce) => {
-                    match ce {
-                        CommunicationError::STOPCondition => {
-                            log::error!("Multi-packet communication stopped");
-                        },
-                        CommunicationError::InterfaceError => {
-                            log::error!("CommunicationHandle failed");
-                            panic!();
-                        },
-                        CommunicationError::PacketInvalidError => {
-                            log::error!("Received unknown packet");
-                        },
-                        CommunicationError::TimeoutError => {
-                            log::error!("Communication timed out");
-                        },            
-                        CommunicationError::CRCError => (),
-                    }
-                }
+                    handle_communication_error(ce);
+                },
                 CommandError::InvalidCommError => {
                     log::error!("Received currently invalid command");
                 }
@@ -49,3 +37,22 @@ fn main() {
         }
     }
 }   
+
+fn handle_communication_error(ce: CommunicationError) {
+    match ce {
+        CommunicationError::STOPCondition => {
+            log::error!("Multi-packet communication stopped");
+        },
+        CommunicationError::InterfaceError => {
+            log::error!("CommunicationHandle failed");
+            panic!();
+        },
+        CommunicationError::PacketInvalidError => {
+            log::error!("Received unknown packet");
+        },
+        CommunicationError::TimeoutError => {
+            log::error!("Communication timed out");
+        },            
+        CommunicationError::CRCError => (),
+    }
+}
