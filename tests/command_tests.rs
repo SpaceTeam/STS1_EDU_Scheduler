@@ -2,24 +2,11 @@ use STS1_EDU_Scheduler::{command, communication};
 use std::{io::{prelude::*, self}, ops::Deref};
 use simplelog as sl;
 
+mod common;
+use common::prepare_program;
 
 fn setup() {
     let _ = sl::WriteLogger::init(sl::LevelFilter::Info, sl::Config::default(), std::fs::File::create("log").unwrap());
-}
-
-fn prepare_program(path: &str) {
-    let ret = std::fs::create_dir(format!("./archives/{}", path));
-    if let Err(e) = ret {
-        if e.kind() != std::io::ErrorKind::AlreadyExists {
-            panic!("Setup Error: {}", e);
-        }
-    }
-    let ret = std::fs::copy("./tests/test_data/main.py", format!("./archives/{}/main.py", path));
-    if let Err(e) = ret {
-        if e.kind() != std::io::ErrorKind::AlreadyExists {
-            panic!("Setup Error: {}", e);
-        }
-    }
 }
 
 #[test]
@@ -49,11 +36,11 @@ fn execute_program_normal() {
     setup();
     prepare_program("normal");
     let mut ec: Option<command::ExecutionContext> = None;
-    let ret = command::execute_program(&mut ec, "normal", "0001").expect("execute returns Err?");
+    let ret = command::execute_program(&mut ec, "normal", "0").expect("execute returns Err?");
     while ec.as_ref().unwrap().is_running() {}
 
     let mut res = String::new();    
-    std::fs::File::open("./archives/normal/results/0001/res.txt")
+    std::fs::File::open("./archives/normal/results/0")
         .expect("res.txt not in results folder")
         .read_to_string(&mut res)
         .expect("Could not read res.txt");
@@ -75,7 +62,7 @@ fn execute_infinite_loop() {
     setup();
     prepare_program("inf");
     let mut ec: Option<command::ExecutionContext> = None;
-    let ret = command::execute_program(&mut ec, "inf", "0002").expect("execute returns Err?");
+    let ret = command::execute_program(&mut ec, "inf", "1").expect("execute returns Err?");
     while ec.as_ref().unwrap().is_running() {}
 
 
@@ -87,10 +74,10 @@ fn execute_multiple() {
     setup();
     prepare_program("multiple");
     let mut ec: Option<command::ExecutionContext> = None;
-    let ret = command::execute_program(&mut ec, "multiple", "0002").expect("execute returns Err?");
-    let ret = command::execute_program(&mut ec, "multiple", "0001").expect("execute returns Err?");
+    let ret = command::execute_program(&mut ec, "multiple", "1").expect("execute returns Err?");
+    let ret = command::execute_program(&mut ec, "multiple", "0").expect("execute returns Err?");
     while ec.as_ref().unwrap().is_running() {}
-    let ret = command::execute_program(&mut ec, "multiple", "0001").expect("execute returns Err?");
+    let ret = command::execute_program(&mut ec, "multiple", "0").expect("execute returns Err?");
     while ec.as_ref().unwrap().is_running() {}
 
     // TODO assertions (check log?)
@@ -103,40 +90,18 @@ fn stop_program() {
     setup();
     prepare_program("stop");
     let mut ec: Option<command::ExecutionContext> = None;
-    let ret = command::execute_program(&mut ec, "stop", "0003").expect("execute returns Err?");
+    let ret = command::execute_program(&mut ec, "stop", "2").expect("execute returns Err?");
     std::thread::sleep(std::time::Duration::from_millis(500));
     let ret = command::stop_program(&mut ec).expect("stop returns Err?");
 
     assert!(!ec.as_ref().unwrap().is_running(), "Program should be stopped");
 
     let mut res = String::new();
-    std::fs::File::open("./archives/stop/results/0003/res.txt")
+    std::fs::File::open("./archives/stop/results/2")
         .expect("res.txt not in results folder")
         .read_to_string(&mut res)
         .expect("Could not read res.txt");
     assert_eq!(res.replace("\r", ""), *("First Line\n".to_string()));
 
     std::fs::remove_dir_all("./archives/stop");
-}
-
-#[test]
-fn return_results_normal() {
-    setup();
-    prepare_program("res");
-    let mut ec: Option<command::ExecutionContext> = None;
-    let ret = command::execute_program(&mut ec, "res", "0001").unwrap();
-    while ec.as_ref().unwrap().is_running() {}
-    let path = command::return_results("res", "0001").expect("results returns Err?");    
-
-    assert!(std::path::Path::new("log").metadata().unwrap().len() == 0, "Log is not cleared");
-    assert!(!std::path::Path::new("./archives/res/results/0001").exists(), "Results are not deleted");
-
-    std::fs::remove_file("./data/res0001.zip").unwrap();
-    std::fs::remove_dir_all("./archives/res").unwrap();
-}
-
-#[test]
-fn return_results_none() {
-    setup();
-    let path = command::return_results("none", "existing").expect("results returns Err?");
 }

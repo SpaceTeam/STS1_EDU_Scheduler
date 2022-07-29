@@ -1,11 +1,12 @@
 use std::collections::VecDeque;
 
-use STS1_EDU_Scheduler::communication::{CommunicationHandle, CommunicationError, ComResult, CSBIPacket};
+use STS1_EDU_Scheduler::{communication::{CommunicationHandle, CommunicationError, ComResult, CSBIPacket}, command::ExecutionContext};
 
 #[derive(Debug)]
 pub enum ComEvent {
     COBC(CSBIPacket),
-    EDU(CSBIPacket)
+    EDU(CSBIPacket),
+    SLEEP(std::time::Duration)
 }
 
 pub struct TestCom {
@@ -34,6 +35,11 @@ impl CommunicationHandle for TestCom {
             return Ok(res);
         }
 
+        if let ComEvent::SLEEP(d) = &self.expected_events[self.index] {
+            std::thread::sleep(*d);
+            self.index += 1;
+        }
+
         if let ComEvent::COBC(p) = &self.expected_events[self.index] {
             self.receive_queue.append(&mut p.clone().serialize());
             self.receive(n, timeout)
@@ -50,7 +56,28 @@ impl TestCom {
     }
 
     pub fn is_complete(&self) -> bool {
-        self.expected_events.is_empty()
+        self.index == self.expected_events.len()
     }
 }
 
+pub fn prepare_program(path: &str) {
+    let ret = std::fs::create_dir(format!("./archives/{}", path));
+    if let Err(e) = ret {
+        if e.kind() != std::io::ErrorKind::AlreadyExists {
+            panic!("Setup Error: {}", e);
+        }
+    }
+    let ret = std::fs::copy("./tests/test_data/main.py", format!("./archives/{}/main.py", path));
+    if let Err(e) = ret {
+        if e.kind() != std::io::ErrorKind::AlreadyExists {
+            panic!("Setup Error: {}", e);
+        }
+    }
+}
+
+pub fn prepare_handles(packets: Vec<ComEvent>) -> (TestCom, Option<ExecutionContext>) {
+    let mut com = TestCom::new(packets);
+    let mut exec: Option<ExecutionContext> = None;
+
+    return (com, exec);
+}
