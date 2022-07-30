@@ -1,6 +1,8 @@
 use std::fs;
 use std::io::{Write};
 use std::path;
+use std::str::FromStr;
+use std::sync::Mutex;
 
 pub trait Serializable {
     /// The serialized size in bytes
@@ -11,32 +13,43 @@ pub trait Serializable {
     fn deserialize(bytes: &[u8]) -> Self;
 }
 
-/// Grabs the first [`T::SIZE`] bytes from the given file and returns them as the supplied type.
-/// Returns [`std::io::ErrorKind::InvalidData`] if there arent enough bytes in the file
-pub fn pop<T: Serializable>(file: &path::Path) -> Result<T, std::io::Error> {
-    let mut bytes = fs::read(file)?;
-    if bytes.len() < T::SIZE {
-        return Err(std::io::ErrorKind::InvalidData.into());
-    }
-    let remaining = bytes.split_off(T::SIZE);
-
-    std::fs::File::create(file)?.write_all(&remaining)?;
-
-    Ok(T::deserialize(&bytes))
+pub struct FileQueue {
+    path: path::PathBuf
 }
 
-/// Pushes the given value to the end of the persistent queue
-pub fn push<T: Serializable>(file: &path::Path, val: T) -> Result<(), std::io::Error> {
-    if !file.exists() {
-        fs::File::create(file)?;
+impl FileQueue {
+    pub fn new(path: &str) -> Self {
+        FileQueue { path: path::PathBuf::from_str(path).unwrap() }
     }
-    fs::OpenOptions::new().append(true).open(file)?.write_all(&val.serialize())?;
-    Ok(())
-}
 
-/// Returns wether the given file is empty
-pub fn is_empty(file: &path::Path) -> Result<bool, std::io::Error> {
-    return Ok(!file.exists() || fs::File::open(file)?.metadata()?.len() == 0);
+    /// Grabs the first [`T::SIZE`] bytes from the given file and returns them as the supplied type.
+    /// Returns [`std::io::ErrorKind::InvalidData`] if there arent enough bytes in the file
+    pub fn pop<T: Serializable>(&self) -> Result<T, std::io::Error> {
+        let mut bytes = fs::read(&self.path)?;
+        if bytes.len() < T::SIZE {
+            return Err(std::io::ErrorKind::InvalidData.into());
+        }
+        let remaining = bytes.split_off(T::SIZE);
+
+        std::fs::File::create(&self.path)?.write_all(&remaining)?;
+
+        Ok(T::deserialize(&bytes))
+    }
+
+    /// Pushes the given value to the end of the persistent queue
+    pub fn push<T: Serializable>(&self, val: T) -> Result<(), std::io::Error> {
+        if !self.path.exists() {
+            fs::File::create(&self.path)?;
+        }
+        fs::OpenOptions::new().append(true).open(&self.path)?.write_all(&val.serialize())?;
+        Ok(())
+    }
+
+    /// Returns wether the given file is empty
+    pub fn is_empty(&self) -> Result<bool, std::io::Error> {
+        return Ok(!self.path.exists() || fs::File::open(&self.path)?.metadata()?.len() == 0);
+    }
+
 }
 
 impl Serializable for u8 {
@@ -63,31 +76,15 @@ impl Serializable for u16 {
 
 #[test]
 fn bytes() -> Result<(), Box<dyn std::error::Error>> {
-    let file = path::Path::new("__bytes");
-    assert!(is_empty(&file)?);
-    push::<u8>(&file, 65)?;
-    push::<u8>(&file, 66)?;
-    assert!(!is_empty(&file)?);
-    assert_eq!(pop::<u8>(&file)?, 65);
-    assert_eq!(pop::<u8>(&file)?, 66);
-    assert!(is_empty(&file)?);
+    let q = std::sync::Arc::new(Mutex::new(FileQueue::new("__bytes")));
+    let q2 = q.clone();
+    std::thread::spawn(move || {
+        let qq = q2.lock().unwrap();
+        qq.push(8u8);
+    });
 
-    fs::remove_file("__bytes");
+    let qq = q.lock().unwrap();
+    qq.push(9u8);
+
     Ok(())
 }
-
-#[test]
-fn int() -> Result<(), Box<dyn std::error::Error>> {
-    let file = path::Path::new("__int");
-    assert!(is_empty(&file)?);
-    push::<u16>(&file, 65432)?;
-    push::<u16>(&file, 66)?;
-    assert!(!is_empty(&file)?);
-    assert_eq!(pop::<u16>(&file)?, 65432);
-    assert_eq!(pop::<u16>(&file)?, 66);
-    assert!(is_empty(&file)?);
-
-    fs::remove_file("__int");
-    Ok(())
-}
-
