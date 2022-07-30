@@ -10,24 +10,24 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn store_archive() -> TestResult {
-    let packets = vec![
-        COBC(DATA(vec![0x01, 0x00, 0x01])),
+    let packets = vec![ // Define what should happen during communication
+        COBC(DATA(vec![0x01, 0x00, 0x01])), // Store Archive with ID 1
         EDU(ACK),
         COBC(DATA(fs::read("./tests/student_program.zip")?)),
         EDU(ACK),
         COBC(EOF),
         EDU(ACK)
         ];
-    let (mut com, mut exec) = common::prepare_handles(packets);
+    let (mut com, mut exec) = common::prepare_handles(packets); // construct handles for process_command
     
-    command::process_command(&mut com, &mut exec)?;
-    assert!(com.is_complete());
+    command::process_command(&mut com, &mut exec)?; // test the command processing
+    assert!(com.is_complete()); // check if all packets were sent/received
     
-    assert_eq!(0, std::process::Command::new("diff")
+    assert_eq!(0, std::process::Command::new("diff") // Check for correctness
     .args(["-yq", "--strip-trailing-cr", "tests/test_data", "archives/0"])
     .status()?.code().unwrap());
 
-    std::fs::remove_dir_all("./archives/0")?;
+    std::fs::remove_dir_all("./archives/0")?; // Cleanup
     Ok(())
 }
 
@@ -63,7 +63,7 @@ fn execute_program_infinite() -> TestResult {
     common::prepare_program("2");
     let (mut com, mut exec) = common::prepare_handles(packets);
     
-    command::process_command(&mut com, &mut exec);
+    command::process_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
     std::thread::sleep(std::time::Duration::from_millis(1300));
@@ -87,7 +87,7 @@ fn stop_program() -> TestResult {
     common::prepare_program("3");
     let (mut com, mut exec) = common::prepare_handles(packets);
 
-    command::process_command(&mut com, &mut exec);
+    command::process_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
     std::fs::remove_dir_all("./archives/3")?;
