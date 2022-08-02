@@ -226,21 +226,23 @@ pub fn return_results(program_id: &str, queue_id: &str) -> CommandResult {
     std::fs::File::create("log")?.set_len(0)?;
 }
 
-/// Places all program names found in the archive folder into a file, and passes it to the communication module.
-///
-/// * `com_handle` The communication context, containing the needed sender
-///
-/// **Panics if the filepath can't be sent to the com module**
-pub fn list_files() -> CommandResult {
-    todo!();
-}
 
 /// Updates the system time
 ///
 /// * `epoch` Seconds since epoch (i32 works until Jan 2038)
 pub fn update_time(epoch: i32) -> CommandResult {
-    todo!();
+    let exit_status = subprocess::Exec::cmd("date")
+        .arg("-s")
+        .arg(format!("@{}", epoch))
+        .join()?;
+
+    if !exit_status.success() {
+        return Err(CommandError::SystemError("date utility failed".into()));
+    }
+    
+    Ok(())
 }
+
 
 #[derive(Debug)]
 pub enum CommandError {
