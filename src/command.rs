@@ -10,16 +10,6 @@ use std::sync::*;
 use std::thread;
 use std::time::Duration;
 
-/// An enum storing a COBC command with its parameters
-#[derive(Debug)]
-pub enum Command {
-    StoreArchive(String, Vec<u8>),
-    ExecuteProgram(String, String),
-    StopProgram,
-    ReturnResults(String, String),
-    ListFiles,
-    UpdateTime(i32),
-}
 
 type CommandResult = Result<(), CommandError>;
 
@@ -36,14 +26,66 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<Exe
         return Err(CommandError::InvalidCommError); // Did not start with a data packet
     };
 
+    if data.len() < 1 {
+        return Err(CommandError::InvalidCommError);
+    }
+
     match data[0] {
-        0x01 => {
+        0x01 => { // STORE ARCHIVE
+            if data.len() != 3 {
+                return Err(CommandError::InvalidCommError);
+            }
             com.send_packet(CSBIPacket::ACK)?;
-            let id = data[1].to_string();
+            let id = u16::from_be_bytes([data[1], data[2]]).to_string();
             let bytes = com.receive_multi_packet(&COM_TIMEOUT_DURATION, || {false})?; // !! TODO !!
             store_archive(id, bytes)?;
             com.send_packet(CSBIPacket::ACK)?;
         },
+        0x02 => { // EXECUTE PROGRAM
+            if data.len() != 7 {
+                return Err(CommandError::InvalidCommError);
+            }
+            com.send_packet(CSBIPacket::ACK)?;
+            let program_id = u16::from_be_bytes([data[1], data[2]]).to_string();
+            let queue_id = u16::from_be_bytes([data[3], data[4]]).to_string();
+            let timeout = Duration::from_secs(u16::from_be_bytes([data[5], data[6]]).into());
+            execute_program(exec, &program_id, &queue_id, &timeout)?;
+            com.send_packet(CSBIPacket::ACK)?;
+        },
+        0x03 => { // STOP PROGRAM
+            if data.len() != 1 {
+                return Err(CommandError::InvalidCommError);
+            }
+            stop_program(exec)?;
+            com.send_packet(CSBIPacket::ACK)?;
+        },
+        0x04 => { // GET STATUS
+            if data.len() != 1 {
+                return Err(CommandError::InvalidCommError);
+            }
+            com.send_packet(CSBIPacket::ACK)?;
+            com.send_packet(get_status()?)?;
+            com.receive_packet(&COM_TIMEOUT_DURATION)?; // Throw away ACK
+        },
+        0x05 => { // RETURN RESULT
+            if data.len() != 1 {
+                return Err(CommandError::InvalidCommError);
+            }
+            com.send_packet(CSBIPacket::ACK)?;
+            com.send_multi_packet(return_result()?)?;
+            if let CSBIPacket::ACK = com.receive_packet(&COM_TIMEOUT_DURATION)? {
+                delete_result()?;
+            }
+        },
+        0x06 => { // UPDATE TIME
+            if data.len() != 5 {
+                return Err(CommandError::InvalidCommError);
+            }
+            com.send_packet(CSBIPacket::ACK)?;
+            let time = i32::from_be_bytes([data[1], data[2], data[3], data[4]]);
+            update_time(time)?;
+            com.send_packet(CSBIPacket::ACK)?;
+        }
         _ => {
             return Err(CommandError::InvalidCommError);
         }
@@ -110,6 +152,7 @@ pub fn execute_program(
     context: &mut Option<ExecutionContext>,
     program_id: &str,
     queue_id: &str,
+    timeout: &Duration
 ) -> CommandResult {
     let _ = stop_program(context); // Ignore return value
 
@@ -166,7 +209,7 @@ pub fn execute_program(
 ///
 /// * `context` The execution context of the student program (returns Err if context is None)
 ///
-/// Returns Ok after terminating the student program of immediately if it is already stopped
+/// Returns Ok after terminating the student program or immediately if it is already stopped
 ///
 /// **Panics if terminating takes too long**
 pub fn stop_program(context: &mut Option<ExecutionContext>) -> CommandResult {
@@ -186,44 +229,19 @@ pub fn stop_program(context: &mut Option<ExecutionContext>) -> CommandResult {
         }
     }
 
-    Err(CommandError::SystemError("Program not running".into())) // TODO Should this be an error?
+    Ok(())
 }
 
-/// Zips the results of the given program execution and sends the filepath to the communication module.
-/// The results are taken from ./archives/program_id/results/queue_id
-///
-/// * `com_handle` The communication context, containing the needed sender
-/// * `program_id` The programs folder name
-/// * `queue_id` The results subfolder name
-///
-/// **Panics if the filepath can't be sent to the com module**
-pub fn return_results(program_id: &str, queue_id: &str) -> CommandResult {
-    log::info!("Returning Results for {}:{}", program_id, queue_id);
+pub fn get_status() -> Result<CSBIPacket, CommandError> {
+    todo!();
+}
 
-    let zip_path = std::path::PathBuf::from(format!("./data/{}{}.zip", program_id, queue_id));
-    let res_path =
-        std::path::PathBuf::from(format!("./archives/{}/results/{}", program_id, queue_id));
+pub fn return_result() -> Result<Vec<u8>, CommandError> {
+    todo!();
+}
 
-    if !res_path.exists() {
-        log::warn!("Results folder does not exist");
-    }
-
-    subprocess::Exec::cmd("zip")
-        .arg("-r")
-        .arg(zip_path.as_os_str())
-        .arg("log")
-        .arg(res_path.as_os_str())
-        .join()?;
-
-    if !zip_path.exists() {
-        return Err(CommandError::SystemError("Archive not created".into()));
-    }
-
-
-    todo!(); // depends on send multi packet
-
-    let _ = std::fs::remove_dir_all(res_path);
-    std::fs::File::create("log")?.set_len(0)?;
+pub fn delete_result() -> CommandResult {
+    todo!();
 }
 
 

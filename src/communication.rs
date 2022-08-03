@@ -1,6 +1,6 @@
 use crc::{Crc, CRC_16_ARC};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CSBIPacket {
     ACK,
     NACK,
@@ -113,6 +113,10 @@ pub trait CommunicationHandle {
         }
 
         return Ok(buffer);
+    }
+
+    fn send_multi_packet(&mut self, bytes: Vec<u8>) -> ComResult<()> {
+        todo!();
     }
 }
 
