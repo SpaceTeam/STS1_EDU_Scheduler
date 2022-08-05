@@ -63,6 +63,7 @@ pub fn execute_program(
     // TODO config setuid
     let config = subprocess::PopenConfig {
         cwd: Some(format!("./archives/{}", program_id).into()),
+        detached: false,
         ..Default::default()
     };
     let mut student_process = subprocess::Popen::create(&["python", "main.py", queue_id], config)?;

@@ -18,6 +18,7 @@ fn main() {
 
     loop {
         let ret = command::process_command(&mut com, &mut exec);
+        
         if let Err(e) = ret {
             match e {
                 CommandError::SystemError(ioe) => {

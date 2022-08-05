@@ -44,6 +44,7 @@ fn execute_program_normal() -> TestResult {
     command::process_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
+    std::thread::sleep(std::time::Duration::from_millis(500));
     let mut res = String::new();    
     std::fs::File::open("./archives/1/results/0")?.read_to_string(&mut res)?;
 
@@ -115,5 +116,49 @@ fn stopped_store() -> TestResult {
 
     assert!(!std::path::Path::new("./archives/4").exists());
 
+    Ok(())
+}
+
+#[test]
+fn get_status_none() -> TestResult {
+    let packets = vec![
+        COBC(DATA(vec![4])),
+        EDU(ACK),
+        EDU(DATA(vec![0])),
+        COBC(ACK)
+    ];
+
+    let (mut com, mut exec) = common::prepare_handles(packets);
+    command::process_command(&mut com, &mut exec)?;
+    assert!(com.is_complete());
+
+    Ok(())
+}
+
+#[test]
+fn get_status_finished() -> TestResult {
+    let packets = vec![
+        COBC(DATA(vec![0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x01])), // Execute Program 5, Queue 0, Timeout 1s
+        EDU(ACK),
+        EDU(ACK),
+        SLEEP(std::time::Duration::from_millis(500)),
+        COBC(DATA(vec![4])), // Get Status
+        EDU(ACK),
+        EDU(DATA(vec![1, 0, 5, 0, 0, 0])), // Program Finished
+        COBC(ACK),
+        COBC(DATA(vec![4])), // Get Status
+        EDU(ACK),
+        EDU(DATA(vec![2, 0, 5, 0, 0])), // Result Ready
+        COBC(ACK)
+    ];
+
+    common::prepare_program("5");
+    let (mut com, mut exec) = common::prepare_handles(packets);
+    
+    command::process_command(&mut com, &mut exec)?;
+    command::process_command(&mut com, &mut exec)?;
+    assert!(com.is_complete());
+    
+    std::fs::remove_dir_all("./archives/5")?;
     Ok(())
 }

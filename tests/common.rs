@@ -18,6 +18,7 @@ pub struct TestCom {
 impl CommunicationHandle for TestCom {
     fn send(&mut self, mut bytes: Vec<u8>) -> ComResult<()> {
         if let ComEvent::EDU(p) = &self.expected_events[self.index] {
+            assert_eq!(bytes, p.clone().serialize());
             self.index += 1;
             Ok(())
         }
