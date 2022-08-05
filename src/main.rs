@@ -1,3 +1,4 @@
+use STS1_EDU_Scheduler::persist::FileQueue;
 use log;
 use simplelog as sl;
 use std::io::prelude::*;
@@ -14,7 +15,7 @@ fn main() {
     let _ = sl::WriteLogger::init(sl::LevelFilter::Info, sl::Config::default(), std::fs::File::create("log").unwrap());
     
     let mut com = uart::UARTHandle::new(112500);
-    let mut exec: Option<command::ExecutionContext> = None;
+    let mut exec = command::ExecutionContext::new("./data/status_queue".into(), "./data/result_queue".into()).unwrap();
 
     loop {
         let ret = command::process_command(&mut com, &mut exec);

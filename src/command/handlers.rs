@@ -51,7 +51,7 @@ pub fn store_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
 /// * `program_id` The name of the ./archives/ subfolder
 /// * `queue_id` The first argument for the student program
 pub fn execute_program(
-    context: &mut Option<ExecutionContext>,
+    context: &mut ExecutionContext,
     program_id: &str,
     queue_id: &str,
     timeout: &Duration
@@ -100,10 +100,8 @@ pub fn execute_program(
         wd_flag.store(false, atomic::Ordering::Relaxed);
     });
 
-    *context = Some(ExecutionContext {
-        thread_handle: wd_handle,
-        running_flag: Arc::clone(&ec_flag),
-    });
+    context.thread_handle = Some(wd_handle);
+    context.running_flag = Some(ec_flag);
 
     Ok(())
 }
@@ -115,21 +113,18 @@ pub fn execute_program(
 /// Returns Ok after terminating the student program or immediately if it is already stopped
 ///
 /// **Panics if terminating takes too long**
-pub fn stop_program(context: &mut Option<ExecutionContext>) -> CommandResult {
-    if let Some(ec) = context {
-        if ec.running_flag.load(atomic::Ordering::Relaxed) {
-            log::warn!("Stopping running program");
-            ec.running_flag.store(false, atomic::Ordering::Relaxed);
-            // wait until it is stopped
-            for _ in 0..120 {
-                if !ec.is_running() {
-                    return Ok(());
-                }
-                thread::sleep(Duration::from_millis(10));
+pub fn stop_program(context: &mut ExecutionContext) -> CommandResult {
+    if context.is_running() {
+        let flag = context.running_flag.as_ref().unwrap();
+        let handle = context.thread_handle.as_ref().unwrap();
+        flag.store(false, atomic::Ordering::Relaxed);
+        for _ in 0..120 {
+            if handle.is_finished() {
+                return Ok(())
             }
-
-            panic!("Could not stop student process");
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
+        panic!("Could not stop student program");
     }
 
     Ok(())

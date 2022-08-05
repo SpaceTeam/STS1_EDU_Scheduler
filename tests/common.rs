@@ -76,9 +76,15 @@ pub fn prepare_program(path: &str) {
     }
 }
 
-pub fn prepare_handles(packets: Vec<ComEvent>) -> (TestCom, Option<ExecutionContext>) {
-    let mut com = TestCom::new(packets);
-    let mut exec: Option<ExecutionContext> = None;
+pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, ExecutionContext) {
+    let com = TestCom::new(packets);
+    let exec = ExecutionContext::new(format!("{}_s", unique).into(), format!("{}_r", unique).into()).unwrap();
 
     return (com, exec);
+}
+
+pub fn cleanup(unique: &str) {
+    std::fs::remove_dir_all(format!("./archives/{}", unique));
+    std::fs::remove_file(format!("{}_s", unique));
+    std::fs::remove_file(format!("{}_r", unique));
 }

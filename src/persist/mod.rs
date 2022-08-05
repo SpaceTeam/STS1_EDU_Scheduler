@@ -21,7 +21,7 @@ pub trait Serializable {
 ///
 /// # Examples
 /// Basic usage
-/// ```
+/// ```ignore
 /// let mut q = FileQueue::new("./__queue".into())?;
 /// q.push(10u8);
 /// assert_eq!(10u8, q.pop());
@@ -30,7 +30,7 @@ pub trait Serializable {
 /// This type is not thread safe on its own! When multiple queues, pointing at the same file,
 /// are created, the behaviour is undefined (dependent on the OS). 
 /// Wrap them in Mutexes as required.
-/// ```
+/// ```ignore
 /// let q = std::sync::Arc::new(Mutex::new(FileQueue::new("__bytes".into())?));
 /// let q2 = q.clone();
 /// std::thread::spawn(move || {

@@ -18,7 +18,7 @@ fn store_archive() -> TestResult {
         COBC(EOF),
         EDU(ACK)
         ];
-    let (mut com, mut exec) = common::prepare_handles(packets); // construct handles for process_command
+    let (mut com, mut exec) = common::prepare_handles(packets, "0"); // construct handles for process_command
     
     command::process_command(&mut com, &mut exec)?; // test the command processing
     assert!(com.is_complete()); // check if all packets were sent/received
@@ -27,7 +27,7 @@ fn store_archive() -> TestResult {
     .args(["-yq", "--strip-trailing-cr", "tests/test_data", "archives/0"])
     .status()?.code().unwrap());
 
-    std::fs::remove_dir_all("./archives/0")?; // Cleanup
+    common::cleanup("0");
     Ok(())
 }
 
@@ -39,7 +39,7 @@ fn execute_program_normal() -> TestResult {
         EDU(ACK)
     ];
     common::prepare_program("1");
-    let (mut com, mut exec) = common::prepare_handles(packets);
+    let (mut com, mut exec) = common::prepare_handles(packets, "1");
 
     command::process_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
@@ -50,7 +50,7 @@ fn execute_program_normal() -> TestResult {
 
     assert_eq!(res.replace("\r", ""), *"Some test results\nWith multiple lines\n".to_string());
 
-    std::fs::remove_dir_all("./archives/1")?;
+    common::cleanup("1");
     Ok(())
 }
 
@@ -62,14 +62,14 @@ fn execute_program_infinite() -> TestResult {
         EDU(ACK)
     ];
     common::prepare_program("2");
-    let (mut com, mut exec) = common::prepare_handles(packets);
+    let (mut com, mut exec) = common::prepare_handles(packets, "2");
     
     command::process_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
     std::thread::sleep(std::time::Duration::from_millis(1300));
 
-    std::fs::remove_dir_all("./archives/2")?;
+    common::cleanup("2");
     todo!("Check execution history entry");
     Ok(())
 }
@@ -86,13 +86,13 @@ fn stop_program() -> TestResult {
         EDU(ACK)
     ];
     common::prepare_program("3");
-    let (mut com, mut exec) = common::prepare_handles(packets);
+    let (mut com, mut exec) = common::prepare_handles(packets, "3");
 
     command::process_command(&mut com, &mut exec)?;
     command::process_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
-    std::fs::remove_dir_all("./archives/3")?;
+    common::cleanup("3");
     todo!("Check execution history entry");
     Ok(())
 }
@@ -109,13 +109,14 @@ fn stopped_store() -> TestResult {
         COBC(STOP)
     ];
 
-    let (mut com, mut exec) = common::prepare_handles(packets);
+    let (mut com, mut exec) = common::prepare_handles(packets, "4");
 
     let err = command::process_command(&mut com, &mut exec).unwrap_err();
     assert!(matches!(err, CommandError::CommunicationError(CommunicationError::STOPCondition)));
 
     assert!(!std::path::Path::new("./archives/4").exists());
 
+    common::cleanup("4");
     Ok(())
 }
 
@@ -128,37 +129,38 @@ fn get_status_none() -> TestResult {
         COBC(ACK)
     ];
 
-    let (mut com, mut exec) = common::prepare_handles(packets);
+    let (mut com, mut exec) = common::prepare_handles(packets, "5");
     command::process_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
+    common::cleanup("5");
     Ok(())
 }
 
 #[test]
 fn get_status_finished() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x01])), // Execute Program 5, Queue 0, Timeout 1s
+        COBC(DATA(vec![0x02, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01])), // Execute Program 5, Queue 0, Timeout 1s
         EDU(ACK),
         EDU(ACK),
         SLEEP(std::time::Duration::from_millis(500)),
         COBC(DATA(vec![4])), // Get Status
         EDU(ACK),
-        EDU(DATA(vec![1, 0, 5, 0, 0, 0])), // Program Finished
+        EDU(DATA(vec![1, 0, 6, 0, 0, 0])), // Program Finished
         COBC(ACK),
         COBC(DATA(vec![4])), // Get Status
         EDU(ACK),
-        EDU(DATA(vec![2, 0, 5, 0, 0])), // Result Ready
+        EDU(DATA(vec![2, 0, 6, 0, 0])), // Result Ready
         COBC(ACK)
     ];
 
-    common::prepare_program("5");
-    let (mut com, mut exec) = common::prepare_handles(packets);
+    common::prepare_program("6");
+    let (mut com, mut exec) = common::prepare_handles(packets, "6");
     
     command::process_command(&mut com, &mut exec)?;
     command::process_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
     
-    std::fs::remove_dir_all("./archives/5")?;
+    common::cleanup("6");
     Ok(())
 }

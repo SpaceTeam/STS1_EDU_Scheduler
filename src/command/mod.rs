@@ -1,7 +1,10 @@
 use crate::communication::{CommunicationHandle, CSBIPacket, CommunicationError};
+use crate::persist::{Serializable, FileQueue};
+use std::iter::Product;
+use std::path::PathBuf;
 use std::time::Duration;
 use std::thread;
-use std::sync::{Arc, atomic};
+use std::sync::{Arc, atomic, Mutex};
 
 mod handlers;
 pub use handlers::*;
@@ -11,7 +14,7 @@ type CommandResult = Result<(), CommandError>;
 const COM_TIMEOUT_DURATION: std::time::Duration = std::time::Duration::new(2, 0);
 
 /// Main routine. Waits for a command to be received from the COBC, then parses and executes it.
-pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<ExecutionContext>) -> CommandResult {
+pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut ExecutionContext) -> CommandResult {
     // Preprocess
     let packet = com.receive_packet(&Duration::MAX)?;
     let data = if let CSBIPacket::DATA(data) = packet {
@@ -91,15 +94,77 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<Exe
 }
 
 
+pub struct ProgramStatus {
+    pub program_id: u16,
+    pub queue_id: u16,
+    pub exit_code: u8,
+}
+
+pub struct ResultId {
+    pub program_id: u16,
+    pub queue_id: u16
+}
+
+impl Serializable for ProgramStatus {
+    const SIZE: usize = 5;
+
+    fn serialize(self) -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend(self.program_id.serialize());
+        v.extend(self.queue_id.serialize());
+        v.push(self.exit_code);
+        v
+    }
+
+    fn deserialize(bytes: &[u8]) -> Self {
+        let p_id = u16::from_be_bytes([bytes[0], bytes[1]]);
+        let q_id = u16::from_be_bytes([bytes[2], bytes[3]]);
+        ProgramStatus { program_id: p_id, queue_id: q_id, exit_code: bytes[4] }
+    }
+}
+
+impl Serializable for ResultId {
+    const SIZE: usize = 4;
+
+    fn serialize(self) -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend(self.program_id.serialize());
+        v.extend(self.queue_id.serialize());
+        v
+    }
+
+    fn deserialize(bytes: &[u8]) -> Self {
+        let p_id = u16::from_be_bytes([bytes[0], bytes[1]]);
+        let q_id = u16::from_be_bytes([bytes[2], bytes[3]]);
+        ResultId { program_id: p_id, queue_id: q_id }
+    }
+}
+
 /// This struct is used to store the relevant handles for when a student program is executed
 pub struct ExecutionContext {
-    pub thread_handle: thread::JoinHandle<()>,
-    pub running_flag: Arc<atomic::AtomicBool>,
+    pub thread_handle: Option<thread::JoinHandle<()>>,
+    pub running_flag: Option<Arc<atomic::AtomicBool>>,
+    pub status_q: Arc<Mutex<FileQueue<ProgramStatus>>>,
+    pub result_q: Arc<Mutex<FileQueue<ResultId>>>
 }
 
 impl ExecutionContext {
+    pub fn new(status_path: PathBuf, result_path: PathBuf) -> Result<Self, std::io::Error> {
+        Ok(ExecutionContext {
+            thread_handle: None,
+            running_flag: None,
+            status_q: Arc::new(Mutex::new(FileQueue::<ProgramStatus>::new(status_path)?)),
+            result_q: Arc::new(Mutex::new(FileQueue::<ResultId>::new(result_path)?))
+        })
+    }
+
     pub fn is_running(&self) -> bool {
-        return self.running_flag.load(atomic::Ordering::Relaxed);
+        if let Some(f) = &self.running_flag {
+            f.load(atomic::Ordering::Relaxed)
+        }
+        else {
+            false
+        }
     }
 }
 
