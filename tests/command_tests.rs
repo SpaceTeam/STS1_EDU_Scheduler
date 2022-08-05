@@ -1,5 +1,5 @@
 use STS1_EDU_Scheduler::{command, communication};
-use std::{io::{prelude::*, self}, ops::Deref};
+use std::{io::{prelude::*, self}, ops::Deref, time::Duration};
 use simplelog as sl;
 
 mod common;
@@ -36,7 +36,7 @@ fn execute_program_normal() {
     setup();
     prepare_program("normal");
     let mut ec: Option<command::ExecutionContext> = None;
-    let ret = command::execute_program(&mut ec, "normal", "0").expect("execute returns Err?");
+    let ret = command::execute_program(&mut ec, "normal", "0", &Duration::from_secs(1)).expect("execute returns Err?");
     while ec.as_ref().unwrap().is_running() {}
 
     let mut res = String::new();    
@@ -54,7 +54,7 @@ fn execute_program_normal() {
 fn execute_not_existing() {
     setup();
     let mut ec: Option<command::ExecutionContext> = None;
-    command::execute_program(&mut ec, "none", "existing").expect_err("Should fail");
+    command::execute_program(&mut ec, "none", "existing", &Duration::from_secs(1)).expect_err("Should fail");
 }
 
 #[test]
@@ -62,7 +62,7 @@ fn execute_infinite_loop() {
     setup();
     prepare_program("inf");
     let mut ec: Option<command::ExecutionContext> = None;
-    let ret = command::execute_program(&mut ec, "inf", "1").expect("execute returns Err?");
+    let ret = command::execute_program(&mut ec, "inf", "1", &Duration::from_secs(1)).expect("execute returns Err?");
     while ec.as_ref().unwrap().is_running() {}
 
 
@@ -74,10 +74,10 @@ fn execute_multiple() {
     setup();
     prepare_program("multiple");
     let mut ec: Option<command::ExecutionContext> = None;
-    let ret = command::execute_program(&mut ec, "multiple", "1").expect("execute returns Err?");
-    let ret = command::execute_program(&mut ec, "multiple", "0").expect("execute returns Err?");
+    let ret = command::execute_program(&mut ec, "multiple", "1", &Duration::from_secs(1)).expect("execute returns Err?");
+    let ret = command::execute_program(&mut ec, "multiple", "0", &Duration::from_secs(1)).expect("execute returns Err?");
     while ec.as_ref().unwrap().is_running() {}
-    let ret = command::execute_program(&mut ec, "multiple", "0").expect("execute returns Err?");
+    let ret = command::execute_program(&mut ec, "multiple", "0", &Duration::from_secs(1)).expect("execute returns Err?");
     while ec.as_ref().unwrap().is_running() {}
 
     // TODO assertions (check log?)
@@ -90,7 +90,7 @@ fn stop_program() {
     setup();
     prepare_program("stop");
     let mut ec: Option<command::ExecutionContext> = None;
-    let ret = command::execute_program(&mut ec, "stop", "2").expect("execute returns Err?");
+    let ret = command::execute_program(&mut ec, "stop", "2", &Duration::from_secs(1)).expect("execute returns Err?");
     std::thread::sleep(std::time::Duration::from_millis(500));
     let ret = command::stop_program(&mut ec).expect("stop returns Err?");
 

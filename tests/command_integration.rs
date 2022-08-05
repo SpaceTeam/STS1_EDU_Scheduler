@@ -11,7 +11,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 #[test]
 fn store_archive() -> TestResult {
     let packets = vec![ // Define what should happen during communication
-        COBC(DATA(vec![0x01, 0x00, 0x01])), // Store Archive with ID 1
+        COBC(DATA(vec![0x01, 0x00, 0x00])), // Store Archive with ID 1
         EDU(ACK),
         COBC(DATA(fs::read("./tests/student_program.zip")?)),
         EDU(ACK),
@@ -45,7 +45,7 @@ fn execute_program_normal() -> TestResult {
     assert!(com.is_complete());
 
     let mut res = String::new();    
-    std::fs::File::open("./archives/normal/results/0")?.read_to_string(&mut res)?;
+    std::fs::File::open("./archives/1/results/0")?.read_to_string(&mut res)?;
 
     assert_eq!(res.replace("\r", ""), *"Some test results\nWith multiple lines\n".to_string());
 
@@ -87,6 +87,7 @@ fn stop_program() -> TestResult {
     common::prepare_program("3");
     let (mut com, mut exec) = common::prepare_handles(packets);
 
+    command::process_command(&mut com, &mut exec)?;
     command::process_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 

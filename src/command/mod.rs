@@ -4,7 +4,7 @@ use std::thread;
 use std::sync::{Arc, atomic};
 
 mod handlers;
-use handlers::*;
+pub use handlers::*;
 
 type CommandResult = Result<(), CommandError>;
 
@@ -51,6 +51,7 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<Exe
             if data.len() != 1 {
                 return Err(CommandError::InvalidCommError);
             }
+            com.send_packet(CSBIPacket::ACK)?;
             stop_program(exec)?;
             com.send_packet(CSBIPacket::ACK)?;
         },

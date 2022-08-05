@@ -14,7 +14,7 @@ def main(queue_id: str):
         while True:
             pass
     elif queue_id == "2":
-        with open(f"results/{queue_id}/res.txt", "w") as f:
+        with open(f"results/{queue_id}", "w") as f:
             f.write("First Line\n")
             f.flush()
             time.sleep(1)

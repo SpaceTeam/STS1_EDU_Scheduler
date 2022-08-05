@@ -121,7 +121,7 @@ fn mthread() -> Result<(), Box<dyn std::error::Error>> {
         qq.push(8u8).unwrap();
     });
 
-    std::thread::sleep(std::time::Duration::from_millis(2));
+    std::thread::sleep(std::time::Duration::from_millis(20));
     let mut qq = q.lock().unwrap();
     qq.push(9u8)?;
 
