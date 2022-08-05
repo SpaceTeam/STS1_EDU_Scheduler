@@ -13,9 +13,9 @@ const COM_TIMEOUT_DURATION: std::time::Duration = std::time::Duration::new(2, 0)
 /// Main routine. Waits for a command to be received from the COBC, then parses and executes it.
 pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut Option<ExecutionContext>) -> CommandResult {
     // Preprocess
-    let packet = com.receive_packet(&COM_TIMEOUT_DURATION)?;
-    let data = if let CSBIPacket::DATA(bytes) = packet {
-        bytes
+    let packet = com.receive_packet(&Duration::MAX)?;
+    let data = if let CSBIPacket::DATA(data) = packet {
+        data
     }
     else {
         return Err(CommandError::InvalidCommError); // Did not start with a data packet

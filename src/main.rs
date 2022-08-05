@@ -22,16 +22,14 @@ fn main() {
             match e {
                 CommandError::SystemError(ioe) => {
                     log::error!("Command failed with {}", ioe);
-                    if com.send_packet(CSBIPacket::NACK).is_err() {
-                        log::error!("Could not send NACK");
-                        panic!();
-                    }
+                    com.send_packet(CSBIPacket::NACK).unwrap();
                 },
                 CommandError::CommunicationError(ce) => {
                     handle_communication_error(ce);
                 },
                 CommandError::InvalidCommError => {
                     log::error!("Received currently invalid command");
+                    com.send_packet(CSBIPacket::NACK).unwrap();
                 }
             };
         }

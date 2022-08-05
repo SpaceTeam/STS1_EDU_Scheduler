@@ -1,7 +1,7 @@
 use std::fs;
 use std::io::Read;
-use STS1_EDU_Scheduler::communication::CSBIPacket::*;
-use STS1_EDU_Scheduler::command;
+use STS1_EDU_Scheduler::communication::{CSBIPacket::*, CommunicationError};
+use STS1_EDU_Scheduler::command::{self, CommandError};
 
 mod common;
 use common::ComEvent::*;
@@ -11,7 +11,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 #[test]
 fn store_archive() -> TestResult {
     let packets = vec![ // Define what should happen during communication
-        COBC(DATA(vec![0x01, 0x00, 0x00])), // Store Archive with ID 1
+        COBC(DATA(vec![0x01, 0x00, 0x00])), // Store Archive with ID 0
         EDU(ACK),
         COBC(DATA(fs::read("./tests/student_program.zip")?)),
         EDU(ACK),
@@ -93,5 +93,27 @@ fn stop_program() -> TestResult {
 
     std::fs::remove_dir_all("./archives/3")?;
     todo!("Check execution history entry");
+    Ok(())
+}
+
+#[test]
+fn stopped_store() -> TestResult {
+    let packets = vec![
+        COBC(DATA(vec![0x01, 0x00, 0x04])), // Store Archive with ID 1
+        EDU(ACK),
+        COBC(DATA(fs::read("./tests/student_program.zip")?)),
+        EDU(ACK),
+        COBC(DATA(vec![0, 1, 2, 3])),
+        EDU(ACK),
+        COBC(STOP)
+    ];
+
+    let (mut com, mut exec) = common::prepare_handles(packets);
+
+    let err = command::process_command(&mut com, &mut exec).unwrap_err();
+    assert!(matches!(err, CommandError::CommunicationError(CommunicationError::STOPCondition)));
+
+    assert!(!std::path::Path::new("./archives/4").exists());
+
     Ok(())
 }
