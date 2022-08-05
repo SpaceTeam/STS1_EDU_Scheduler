@@ -4,6 +4,7 @@ use std::io::prelude::*;
 use std::sync::*;
 use std::thread;
 use std::time::Duration;
+use std::process::Command;
 
 use super::{CommandResult, CommandError, ExecutionContext};
 
@@ -22,12 +23,12 @@ pub fn store_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
     zip_file.write_all(&bytes)?;
     zip_file.sync_all()?;
 
-    let exit_status = subprocess::Exec::cmd("unzip")
+    let exit_status = Command::new("unzip")
         .arg("-o") // overwrite silently
         .arg(&zip_path)
         .arg("-d") // target directory
         .arg(format!("./archives/{}", folder))
-        .join();
+        .status();
 
     std::fs::remove_file(zip_path)?;
 
@@ -150,10 +151,10 @@ pub fn delete_result() -> CommandResult {
 ///
 /// * `epoch` Seconds since epoch (i32 works until Jan 2038)
 pub fn update_time(epoch: i32) -> CommandResult {
-    let exit_status = subprocess::Exec::cmd("date")
+    let exit_status = Command::new("date")
         .arg("-s")
         .arg(format!("@{}", epoch))
-        .join()?;
+        .status()?;
 
     if !exit_status.success() {
         return Err(CommandError::SystemError("date utility failed".into()));
