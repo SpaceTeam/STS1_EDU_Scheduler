@@ -1,7 +1,5 @@
-use STS1_EDU_Scheduler::persist::FileQueue;
 use log;
 use simplelog as sl;
-use std::io::prelude::*;
 
 mod communication;
 mod command;

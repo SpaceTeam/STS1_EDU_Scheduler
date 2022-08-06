@@ -1,4 +1,4 @@
-use STS1_EDU_Scheduler::{command, communication};
+use STS1_EDU_Scheduler::communication;
 use communication::CSBIPacket;
 
 #[test]

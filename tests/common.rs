@@ -1,6 +1,4 @@
-use std::collections::VecDeque;
-
-use STS1_EDU_Scheduler::{communication::{CommunicationHandle, CommunicationError, ComResult, CSBIPacket}, command::ExecutionContext};
+use STS1_EDU_Scheduler::{communication::{CommunicationHandle, ComResult, CSBIPacket}, command::ExecutionContext};
 
 #[derive(Debug)]
 pub enum ComEvent {
@@ -16,7 +14,7 @@ pub struct TestCom {
 }
 
 impl CommunicationHandle for TestCom {
-    fn send(&mut self, mut bytes: Vec<u8>) -> ComResult<()> {
+    fn send(&mut self, bytes: Vec<u8>) -> ComResult<()> {
         if let ComEvent::EDU(p) = &self.expected_events[self.index] {
             assert_eq!(bytes, p.clone().serialize());
             self.index += 1;
@@ -84,7 +82,7 @@ pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, Execut
 }
 
 pub fn cleanup(unique: &str) {
-    std::fs::remove_dir_all(format!("./archives/{}", unique));
-    std::fs::remove_file(format!("{}_s", unique));
-    std::fs::remove_file(format!("{}_r", unique));
+    let _ = std::fs::remove_dir_all(format!("./archives/{}", unique));
+    let _ = std::fs::remove_file(format!("{}_s", unique));
+    let _ = std::fs::remove_file(format!("{}_r", unique));
 }

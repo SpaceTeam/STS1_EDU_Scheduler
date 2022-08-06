@@ -7,7 +7,6 @@ pub enum CSBIPacket {
     STOP,
     EOF,
     DATA(Vec<u8>),
-    INVALID
 }
 
 impl CSBIPacket {
@@ -28,8 +27,7 @@ impl CSBIPacket {
                 v.extend(bytes);
                 v.extend(crc16.to_be_bytes());
                 v
-            },
-            _ => vec![0x00]
+            }
         }
     }
 

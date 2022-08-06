@@ -1,6 +1,5 @@
 use crate::communication::{CommunicationHandle, CSBIPacket, CommunicationError};
 use crate::persist::{Serializable, FileQueue};
-use std::iter::Product;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::thread;

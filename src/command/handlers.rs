@@ -1,4 +1,4 @@
-use crate::communication::{CSBIPacket};
+use crate::communication::CSBIPacket;
 use std::fs::File;
 use std::io::prelude::*;
 use std::sync::*;

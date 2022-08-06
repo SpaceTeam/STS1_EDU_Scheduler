@@ -1,9 +1,7 @@
-use std::convert::Infallible;
 use std::fs;
 use std::io::{Write};
 use std::marker::PhantomData;
 use std::path;
-use std::str::FromStr;
 use std::sync::Mutex;
 
 /// A trait for serializing and deserializing objects into bytes.
