@@ -10,3 +10,7 @@ coverage: build_with_cov
 
 clean:
 	rm -rf *.profraw
+
+rebuild_student_archive:
+	rm -f tests/student_program.zip
+	cd tests/test_data; zip -r ../student_program.zip *

@@ -68,9 +68,9 @@ fn execute_program_infinite() -> TestResult {
     assert!(com.is_complete());
 
     std::thread::sleep(std::time::Duration::from_millis(1300));
+    assert!(!exec.status_q.lock().unwrap().is_empty()?);
 
     common::cleanup("2");
-    todo!("Check execution history entry");
     Ok(())
 }
 
@@ -91,9 +91,9 @@ fn stop_program() -> TestResult {
     command::process_command(&mut com, &mut exec)?;
     command::process_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
+    assert!(!exec.status_q.lock().unwrap().is_empty()?);
 
     common::cleanup("3");
-    todo!("Check execution history entry");
     Ok(())
 }
 
@@ -140,7 +140,7 @@ fn get_status_none() -> TestResult {
 #[test]
 fn get_status_finished() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![0x02, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01])), // Execute Program 5, Queue 0, Timeout 1s
+        COBC(DATA(vec![0x02, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01])), // Execute Program 6, Queue 0, Timeout 1s
         EDU(ACK),
         EDU(ACK),
         SLEEP(std::time::Duration::from_millis(500)),
@@ -157,6 +157,7 @@ fn get_status_finished() -> TestResult {
     common::prepare_program("6");
     let (mut com, mut exec) = common::prepare_handles(packets, "6");
     
+    command::process_command(&mut com, &mut exec)?;
     command::process_command(&mut com, &mut exec)?;
     command::process_command(&mut com, &mut exec)?;
     assert!(com.is_complete());

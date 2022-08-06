@@ -43,10 +43,10 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut ExecutionC
                 return Err(CommandError::InvalidCommError);
             }
             com.send_packet(CSBIPacket::ACK)?;
-            let program_id = u16::from_be_bytes([data[1], data[2]]).to_string();
-            let queue_id = u16::from_be_bytes([data[3], data[4]]).to_string();
+            let program_id = u16::from_be_bytes([data[1], data[2]]);
+            let queue_id = u16::from_be_bytes([data[3], data[4]]);
             let timeout = Duration::from_secs(u16::from_be_bytes([data[5], data[6]]).into());
-            execute_program(exec, &program_id, &queue_id, &timeout)?;
+            execute_program(exec, program_id, queue_id, timeout)?;
             com.send_packet(CSBIPacket::ACK)?;
         },
         0x03 => { // STOP PROGRAM
@@ -62,7 +62,7 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut ExecutionC
                 return Err(CommandError::InvalidCommError);
             }
             com.send_packet(CSBIPacket::ACK)?;
-            com.send_packet(get_status()?)?;
+            com.send_packet(get_status(exec)?)?;
             com.receive_packet(&COM_TIMEOUT_DURATION)?; // Throw away ACK
         },
         0x05 => { // RETURN RESULT
@@ -99,6 +99,7 @@ pub struct ProgramStatus {
     pub exit_code: u8,
 }
 
+#[derive(Clone, Copy)]
 pub struct ResultId {
     pub program_id: u16,
     pub queue_id: u16

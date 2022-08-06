@@ -4,6 +4,8 @@ import time
 
 
 def main(queue_id: str):
+    print(f"Hello from Py with Queue ID {queue_id}")
+    
     if "results" not in os.listdir():
         os.mkdir("results")
 
@@ -19,6 +21,11 @@ def main(queue_id: str):
             f.flush()
             time.sleep(1)
             f.write("Second Line\n")
+    elif queue_id == "3":
+        with open(f"results/{queue_id}", "wb") as f:
+            f.write(b"0xde0xad")
+    elif queue_id == "4":
+        raise EnvironmentError
 
 
 if __name__ == "__main__":

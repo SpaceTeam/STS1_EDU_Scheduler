@@ -59,7 +59,7 @@ impl<T: Serializable> FileQueue<T> {
     /// Pops the next element from the queue. Its bytes are removed from the underlying file.
     /// 
     /// If any operation on the filesystem fails, the queue is unchanged.
-    pub fn pop(&mut self) -> Result<T, std::io::Error> {
+    pub fn raw_pop(&mut self) -> Result<Vec<u8>, std::io::Error> {
         let mut bytes = fs::read(&self.path)?;
         if bytes.len() < T::SIZE {
             return Err(std::io::ErrorKind::InvalidData.into());
@@ -68,7 +68,20 @@ impl<T: Serializable> FileQueue<T> {
 
         std::fs::File::create(&self.path)?.write_all(&remaining)?;
 
-        Ok(T::deserialize(&bytes))
+        Ok(bytes)
+    }
+
+    pub fn pop(&mut self) -> Result<T, std::io::Error> {
+        Ok(T::deserialize(&self.raw_pop()?))
+    }
+
+    pub fn raw_peek(&mut self) -> Result<Vec<u8>, std::io::Error> {
+        let mut bytes = fs::read(&self.path)?;
+        if bytes.len() < T::SIZE {
+            return Err(std::io::ErrorKind::InvalidData.into());
+        }
+        let remaining = bytes.split_off(T::SIZE);
+        Ok(bytes)
     }
 
     /// Pushes the given value to the end of the queue. This fails if the underlying file cannot be opened.
