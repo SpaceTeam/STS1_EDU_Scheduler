@@ -56,9 +56,7 @@ impl<T: Serializable> FileQueue<T> {
         Ok(FileQueue { path: path, value_type: PhantomData })
     }
 
-    /// Pops the next element from the queue. Its bytes are removed from the underlying file.
-    /// 
-    /// If any operation on the filesystem fails, the queue is unchanged.
+    /// Similiar to `pop`, but only returns the raw bytes
     pub fn raw_pop(&mut self) -> Result<Vec<u8>, std::io::Error> {
         let mut bytes = fs::read(&self.path)?;
         if bytes.len() < T::SIZE {
@@ -71,16 +69,20 @@ impl<T: Serializable> FileQueue<T> {
         Ok(bytes)
     }
 
+    /// Pops the next element from the queue. Its bytes are removed from the underlying file.
+    /// 
+    /// If any operation on the filesystem fails, the queue is unchanged.
     pub fn pop(&mut self) -> Result<T, std::io::Error> {
         Ok(T::deserialize(&self.raw_pop()?))
     }
 
+    /// Peeks at the next element in the queue, without removing it. Only returns the raw bytes.
     pub fn raw_peek(&mut self) -> Result<Vec<u8>, std::io::Error> {
         let mut bytes = fs::read(&self.path)?;
         if bytes.len() < T::SIZE {
             return Err(std::io::ErrorKind::InvalidData.into());
         }
-        let remaining = bytes.split_off(T::SIZE);
+        let _ = bytes.split_off(T::SIZE);
         Ok(bytes)
     }
 

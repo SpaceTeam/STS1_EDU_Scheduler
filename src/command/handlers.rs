@@ -49,10 +49,14 @@ pub fn store_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
     Ok(())
 }
 
-/// Executes a students program and starts a watchdog for it
+/// Executes a students program and starts a watchdog for it. The watchdog also creates entries in the
+/// status and result queue found in `context`. The result, including logs, is packed into
+/// `./data/{program_id}_{queue_id}`
 ///
+/// * `context` The object containing the execution state
 /// * `program_id` The name of the ./archives/ subfolder
 /// * `queue_id` The first argument for the student program
+/// * `timeout` The maxmimum time the student program shall execute. Will be rounded up to the nearest second
 pub fn execute_program(
     context: &mut ExecutionContext,
     program_id: u16,
@@ -125,6 +129,9 @@ pub fn execute_program(
     Ok(())
 }
 
+/// The function uses `tar` to create an uncompressed archive that includes the result file specified, as well as
+/// the programs stdout/stderr and the schedulers log file. If any of the files is missing, the archive
+/// is created without them.
 fn build_result_archive(res: ResultId) {
     let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
     let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
@@ -162,6 +169,9 @@ pub fn stop_program(context: &mut ExecutionContext) -> CommandResult {
     Ok(())
 }
 
+/// The function returns a DATA packet that conforms to the Get Status specification in the PDD.
+/// 
+/// **Panics if no lock can be obtained on the queues.**
 pub fn get_status(context: &mut ExecutionContext) -> Result<CSBIPacket, CommandError> {
     let mut s_queue = context.status_q.lock().unwrap();
     let mut r_queue = context.result_q.lock().unwrap();
@@ -184,10 +194,14 @@ pub fn get_status(context: &mut ExecutionContext) -> Result<CSBIPacket, CommandE
     }
 }
 
+/// Returns a byte vector containing the tar archive of the next element in the result queue.
+/// It does **not** delete said element, as transmission might have been stopped/failed.
 pub fn return_result() -> Result<Vec<u8>, CommandError> {
     todo!();
 }
 
+/// Deletes the result archive corresponding to the next element in the result queue and removes
+/// that element from the queue.
 pub fn delete_result() -> CommandResult {
     todo!();
 }
