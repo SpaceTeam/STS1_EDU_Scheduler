@@ -196,14 +196,28 @@ pub fn get_status(context: &mut ExecutionContext) -> Result<CSBIPacket, CommandE
 
 /// Returns a byte vector containing the tar archive of the next element in the result queue.
 /// It does **not** delete said element, as transmission might have been stopped/failed.
-pub fn return_result() -> Result<Vec<u8>, CommandError> {
-    todo!();
+pub fn return_result(context: &ExecutionContext) -> Result<Vec<u8>, CommandError> {
+    let mut r_queue = context.result_q.lock().unwrap();
+    let res = r_queue.peek()?;
+    let bytes = std::fs::read(format!("./data/{}_{}", res.program_id, res.queue_id))?;
+    Ok(bytes)
 }
 
 /// Deletes the result archive corresponding to the next element in the result queue and removes
 /// that element from the queue.
-pub fn delete_result() -> CommandResult {
-    todo!();
+pub fn delete_result(context: &mut ExecutionContext) -> CommandResult {
+    let mut r_queue = context.result_q.lock().unwrap();
+    let res = r_queue.pop()?;
+    drop(r_queue); // Unlock Mutex
+    
+    let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
+    let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
+    let out_path = format!("./data/{}_{}", res.program_id, res.queue_id);
+    let _ = std::fs::remove_file(res_path);
+    let _ = std::fs::remove_file(log_path);
+    let _ = std::fs::remove_file(out_path);
+
+    Ok(())
 }
 
 
