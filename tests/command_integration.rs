@@ -165,3 +165,39 @@ fn get_status_finished() -> TestResult {
     common::cleanup("6");
     Ok(())
 }
+
+#[test]
+fn return_result() -> TestResult {
+    let packets = vec![
+        COBC(DATA(vec![0x02, 0x00, 0x07, 0x00, 0x03, 0x00, 0x01])), // Execute Program 6, Queue 0, Timeout 1s
+        EDU(ACK),
+        EDU(ACK),
+        SLEEP(std::time::Duration::from_millis(500)),
+        COBC(DATA(vec![4])), // Get Status
+        EDU(ACK),
+        EDU(DATA(vec![1, 0, 7, 0, 3, 0])), // Program Finished
+        COBC(ACK),
+        COBC(DATA(vec![4])), // Get Status
+        EDU(ACK),
+        EDU(DATA(vec![2, 0, 7, 0, 3])), // Result Ready
+        COBC(ACK),
+        COBC(DATA(vec![5])),
+        EDU(ACK),
+        ANY, // INCOMPLETE TEST! CHECK THIS COMMAND THOROUGHLY IN FULL INTEGRATION
+        COBC(ACK),
+        EDU(EOF),
+        COBC(ACK)
+    ];
+
+    common::prepare_program("7");
+    let (mut com, mut exec) = common::prepare_handles(packets, "7");
+
+    command::process_command(&mut com, &mut exec)?;
+    command::process_command(&mut com, &mut exec)?;
+    command::process_command(&mut com, &mut exec)?;
+    command::process_command(&mut com, &mut exec)?;
+    assert!(com.is_complete());
+
+    common::cleanup("7");
+    Ok(())
+}

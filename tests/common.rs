@@ -4,7 +4,8 @@ use STS1_EDU_Scheduler::{communication::{CommunicationHandle, ComResult, CSBIPac
 pub enum ComEvent {
     COBC(CSBIPacket),
     EDU(CSBIPacket),
-    SLEEP(std::time::Duration)
+    SLEEP(std::time::Duration),
+    ANY
 }
 
 pub struct TestCom {
@@ -15,36 +16,50 @@ pub struct TestCom {
 
 impl CommunicationHandle for TestCom {
     fn send(&mut self, bytes: Vec<u8>) -> ComResult<()> {
-        if let ComEvent::EDU(p) = &self.expected_events[self.index] {
-            assert_eq!(bytes, p.clone().serialize());
-            self.index += 1;
-            Ok(())
-        }
-        else {
-            panic!("EDU should not send now, expected {}: {:?}", self.index, self.expected_events[self.index]);
+        match &self.expected_events[self.index] {
+            ComEvent::EDU(p) => {
+                assert_eq!(bytes, p.clone().serialize(), "Wrong packet {}", self.index);
+                self.index += 1;
+                Ok(())    
+            }
+            ComEvent::SLEEP(d) => {
+                std::thread::sleep(*d);
+                self.index += 1;
+                Ok(())
+            }
+            ComEvent::ANY => {
+                self.index += 1;
+                Ok(())
+            },
+            _ => {
+                panic!("EDU should not send now, expected {}: {:?}", self.index, self.expected_events[self.index]);
+            }
         }
     }
 
     fn receive(&mut self, n: u16, timeout: &std::time::Duration) -> ComResult<Vec<u8>> {
-        if !self.receive_queue.is_empty() {
-            let res: Vec<u8> = self.receive_queue.drain(0..(n as usize)).collect();
-            if self.receive_queue.is_empty() {
+        match &self.expected_events[self.index] {
+            ComEvent::COBC(p) => {
+                if !self.receive_queue.is_empty() {
+                    let res: Vec<u8> = self.receive_queue.drain(0..(n as usize)).collect();
+                    if self.receive_queue.is_empty() {
+                        self.index += 1;
+                    }
+                    Ok(res)
+                }
+                else {
+                    self.receive_queue.append(&mut p.clone().serialize());
+                    self.receive(n, timeout)
+                }
+            },
+            ComEvent::SLEEP(d) => {
+                std::thread::sleep(*d);
                 self.index += 1;
+                self.receive(n, timeout)
+            },
+            _ => {
+                panic!("EDU should send now, expected {}: {:?}", self.index, self.expected_events[self.index]);
             }
-            return Ok(res);
-        }
-
-        if let ComEvent::SLEEP(d) = &self.expected_events[self.index] {
-            std::thread::sleep(*d);
-            self.index += 1;
-        }
-
-        if let ComEvent::COBC(p) = &self.expected_events[self.index] {
-            self.receive_queue.append(&mut p.clone().serialize());
-            self.receive(n, timeout)
-        }
-        else {
-            panic!("EDU should send now, expected {}: {:?}", self.index, self.expected_events[self.index]);
         }
     }
 }

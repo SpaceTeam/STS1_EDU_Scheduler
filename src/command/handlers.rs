@@ -135,10 +135,10 @@ pub fn execute_program(
 fn build_result_archive(res: ResultId) {
     let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
     let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
-    let out_path = format!("./data/{}_{}", res.program_id, res.queue_id);
-    let _ = Command::new("tar")
-        .arg("cf")
+    let out_path = format!("./data/{}_{}.zip", res.program_id, res.queue_id);
+    let _ = Command::new("zip")
         .arg(out_path)
+        .arg("--junk-paths")
         .arg("log")
         .arg(res_path)
         .arg(log_path)
@@ -199,7 +199,7 @@ pub fn get_status(context: &mut ExecutionContext) -> Result<CSBIPacket, CommandE
 pub fn return_result(context: &ExecutionContext) -> Result<Vec<u8>, CommandError> {
     let mut r_queue = context.result_q.lock().unwrap();
     let res = r_queue.peek()?;
-    let bytes = std::fs::read(format!("./data/{}_{}", res.program_id, res.queue_id))?;
+    let bytes = std::fs::read(format!("./data/{}_{}.zip", res.program_id, res.queue_id))?;
     Ok(bytes)
 }
 
@@ -212,7 +212,7 @@ pub fn delete_result(context: &mut ExecutionContext) -> CommandResult {
     
     let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
     let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
-    let out_path = format!("./data/{}_{}", res.program_id, res.queue_id);
+    let out_path = format!("./data/{}_{}.zip", res.program_id, res.queue_id);
     let _ = std::fs::remove_file(res_path);
     let _ = std::fs::remove_file(log_path);
     let _ = std::fs::remove_file(out_path);

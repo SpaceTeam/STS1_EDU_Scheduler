@@ -1,4 +1,5 @@
 use crc::{Crc, CRC_16_ARC};
+use subprocess::CommunicateError;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CSBIPacket {
@@ -113,8 +114,37 @@ pub trait CommunicationHandle {
         return Ok(buffer);
     }
 
-    fn send_multi_packet(&mut self, bytes: Vec<u8>) -> ComResult<()> {
-        todo!();
+    fn send_multi_packet(&mut self, bytes: Vec<u8>, timeout: &std::time::Duration) -> ComResult<()> {
+        let num_packets = bytes.len() / 32768 + 1;
+        let chunks: Vec<&[u8]> = bytes.chunks(num_packets).collect();
+
+        let mut i = 0;
+        loop {
+            if i == num_packets {
+                break;
+            }
+
+            self.send_packet(CSBIPacket::DATA(chunks[i].to_vec()))?;
+
+            match self.receive_packet(&timeout)? {
+                CSBIPacket::NACK => {
+                    log::warn!("NACK on packet. Resending...");
+                },
+                CSBIPacket::ACK => {
+                    i += 1;
+                },
+                CSBIPacket::STOP => {
+                    return Err(CommunicationError::STOPCondition);
+                },
+                _ => {
+                    return Err(CommunicationError::PacketInvalidError);
+                }
+            }   
+        }
+
+        self.send_packet(CSBIPacket::EOF)?;
+
+        Ok(())
     }
 }
 

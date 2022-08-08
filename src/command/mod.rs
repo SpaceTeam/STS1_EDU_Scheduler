@@ -70,7 +70,7 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut ExecutionC
                 return Err(CommandError::InvalidCommError);
             }
             com.send_packet(CSBIPacket::ACK)?;
-            com.send_multi_packet(return_result(exec)?)?;
+            com.send_multi_packet(return_result(exec)?, &COM_TIMEOUT_DURATION)?;
             if let CSBIPacket::ACK = com.receive_packet(&COM_TIMEOUT_DURATION)? {
                 delete_result(exec)?;
             }
