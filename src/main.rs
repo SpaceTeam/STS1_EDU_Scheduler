@@ -24,7 +24,7 @@ fn main() {
     thread::spawn(|| {
         const HEARTBEAT_FREQ: u64 = 2;
         const HEARTBEAT_PIN: u8 = 23;
-        const TOGGLE_TIME_MS:time::Duration = time::Duration::from_millis(HEARTBEAT_FREQ * 500);
+        const TOGGLE_TIME_MS: time::Duration = time::Duration::from_millis(HEARTBEAT_FREQ * 500);
 
         let gpio = Gpio::new().unwrap();
         let mut pin = gpio.get(HEARTBEAT_PIN).unwrap().into_output();
