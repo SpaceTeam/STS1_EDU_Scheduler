@@ -1,3 +1,7 @@
+use core::time;
+use std::thread;
+use rppal::gpio::Gpio;
+
 use log;
 use simplelog as sl;
 
@@ -9,11 +13,29 @@ use crate::communication::{CSBIPacket, CommunicationHandle};
 use command::CommandError;
 use communication::CommunicationError;
 
+
 fn main() {
     let _ = sl::WriteLogger::init(sl::LevelFilter::Info, sl::Config::default(), std::fs::File::create("log").unwrap());
     
     let mut com = uart::UARTHandle::new(112500);
     let mut exec = command::ExecutionContext::new("./data/status_queue".into(), "./data/result_queue".into()).unwrap();
+
+    //Heartbeat thread
+    thread::spawn(|| {
+        const HEARTBEAT_FREQ: u64 = 2;
+        const HEARTBEAT_PIN: u8 = 23;
+        const TOGGLE_TIME_MS: time::Duration = time::Duration::from_millis(HEARTBEAT_FREQ * 500);
+
+        let gpio = Gpio::new().unwrap();
+        let mut pin = gpio.get(HEARTBEAT_PIN).unwrap().into_output();
+
+        loop {
+            pin.set_high();
+            thread::sleep(TOGGLE_TIME_MS);
+            pin.set_low();
+            thread::sleep(TOGGLE_TIME_MS);
+        }
+    });
 
     loop {
         let ret = command::process_command(&mut com, &mut exec);
