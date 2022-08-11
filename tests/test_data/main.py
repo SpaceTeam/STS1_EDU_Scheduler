@@ -23,9 +23,13 @@ def main(queue_id: str):
             f.write("Second Line\n")
     elif queue_id == "3":
         with open(f"results/{queue_id}", "wb") as f:
-            f.write(b"0xde0xad")
+            f.write(b"\xde\xad")
     elif queue_id == "4":
         raise EnvironmentError
+    elif queue_id == "5":
+        with open(f"results/{queue_id}", "wb") as f:
+            for _ in range(1700000):
+                f.write(b"\xfe")
 
 
 if __name__ == "__main__":

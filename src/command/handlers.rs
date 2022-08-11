@@ -137,11 +137,12 @@ fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
     let out_path = format!("./data/{}_{}.zip", res.program_id, res.queue_id);
 
     const MAXIMUM_FILE_SIZE: u64 = 1_000_000;
-    truncate_to_size(&log_path, MAXIMUM_FILE_SIZE)?;
-    truncate_to_size(&out_path, MAXIMUM_FILE_SIZE)?;
-    truncate_to_size("log", MAXIMUM_FILE_SIZE)?;
+    let _ = truncate_to_size(&log_path, MAXIMUM_FILE_SIZE);
+    let _ = truncate_to_size(&res_path, MAXIMUM_FILE_SIZE);
+    let _ = truncate_to_size("lpog", MAXIMUM_FILE_SIZE);
 
     let _ = Command::new("zip")
+        .arg("-0")
         .arg(out_path)
         .arg("--junk-paths")
         .arg("log")
@@ -159,6 +160,7 @@ fn truncate_to_size(path: &str, n_bytes: u64) -> Result<(), std::io::Error> {
     if size > n_bytes {
         log::warn!("Truncating {} from {} bytes", path, size);
         file.set_len(n_bytes)?;
+        file.sync_all()?;
     }
     Ok(())
 }

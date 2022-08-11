@@ -169,7 +169,7 @@ fn get_status_finished() -> TestResult {
 #[test]
 fn return_result() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![0x02, 0x00, 0x07, 0x00, 0x03, 0x00, 0x01])), // Execute Program 6, Queue 0, Timeout 1s
+        COBC(DATA(vec![0x02, 0x00, 0x07, 0x00, 0x03, 0x00, 0x01])), // Execute Program 7, Queue 0, Timeout 1s
         EDU(ACK),
         EDU(ACK),
         SLEEP(std::time::Duration::from_millis(500)),
@@ -199,5 +199,31 @@ fn return_result() -> TestResult {
     assert!(com.is_complete());
 
     common::cleanup("7");
+    Ok(())
+}
+
+#[test]
+fn truncate_result() -> TestResult {
+    let packets = vec![
+        COBC(DATA(vec![2, 0, 8, 0, 5, 0, 2])), // Execute Program 8, Queue 5, Timeout 1s
+        EDU(ACK),
+        EDU(ACK),
+        SLEEP(std::time::Duration::from_millis(1000)),
+        COBC(DATA(vec![4])),
+        EDU(ACK),
+        EDU(DATA(vec![1, 0, 8, 0, 5, 0])),
+        COBC(ACK)
+    ];
+
+    common::prepare_program("8");
+    let (mut com, mut exec) = common::prepare_handles(packets, "8");
+
+    command::process_command(&mut com, &mut exec)?;
+    command::process_command(&mut com, &mut exec)?;
+    assert!(com.is_complete());
+
+    assert!(fs::File::open("./data/8_5.zip")?.metadata()?.len() < 1_001_000);
+
+    common::cleanup("8");
     Ok(())
 }
