@@ -93,7 +93,6 @@ pub fn execute_program(
         for _ in 0..timeout.as_secs() {
             if let Some(status) = student_process.wait_timeout(Duration::from_secs(1)).unwrap() {
                 // student program terminated itself
-                wd_flag.store(false, atomic::Ordering::Relaxed);
                 if let subprocess::ExitStatus::Exited(n) = status {
                     exit_code = n as u8
                 }
@@ -107,13 +106,13 @@ pub fn execute_program(
         }
 
         if should_kill {
-            log::warn!("Student Process timed out or stopped");
+            log::warn!("Student Process timed out or is stopped");
             student_process.kill().unwrap();
             student_process.wait_timeout(Duration::from_millis(200)).unwrap().unwrap(); // Panic if not stopped
         }
 
         let rid = ResultId { program_id, queue_id };
-        build_result_archive(rid);
+        build_result_archive(rid).unwrap();
 
         let mut s_queue = status_queue.lock().unwrap();
         let mut r_queue = result_queue.lock().unwrap(); 
@@ -132,17 +131,38 @@ pub fn execute_program(
 /// The function uses `tar` to create an uncompressed archive that includes the result file specified, as well as
 /// the programs stdout/stderr and the schedulers log file. If any of the files is missing, the archive
 /// is created without them.
-fn build_result_archive(res: ResultId) {
+fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
     let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
     let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
     let out_path = format!("./data/{}_{}.zip", res.program_id, res.queue_id);
+
+    const MAXIMUM_FILE_SIZE: u64 = 1_000_000;
+    let _ = truncate_to_size(&log_path, MAXIMUM_FILE_SIZE);
+    let _ = truncate_to_size(&res_path, MAXIMUM_FILE_SIZE);
+    let _ = truncate_to_size("lpog", MAXIMUM_FILE_SIZE);
+
     let _ = Command::new("zip")
+        .arg("-0")
         .arg(out_path)
         .arg("--junk-paths")
         .arg("log")
         .arg(res_path)
         .arg(log_path)
         .status();
+    
+    Ok(())
+}
+
+/// Truncates the file at `path` to the given size
+fn truncate_to_size(path: &str, n_bytes: u64) -> Result<(), std::io::Error> {
+    let file = std::fs::File::options().write(true).open(path)?;
+    let size = file.metadata()?.len();
+    if size > n_bytes {
+        log::warn!("Truncating {} from {} bytes", path, size);
+        file.set_len(n_bytes)?;
+        file.sync_all()?;
+    }
+    Ok(())
 }
 
 /// Stops the currently running student program
