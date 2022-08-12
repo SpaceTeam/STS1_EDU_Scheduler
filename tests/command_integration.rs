@@ -196,7 +196,7 @@ fn return_result() -> TestResult {
         })),
         COBC(ACK),
         EDU(EOF),
-        COBC(NACK)
+        COBC(ACK)
     ];
 
     common::prepare_program("7");
@@ -244,5 +244,93 @@ fn truncate_result() -> TestResult {
     assert!(fs::File::open("./data/8_5.zip")?.metadata()?.len() < 1_001_000);
 
     common::cleanup("8");
+    Ok(())
+}
+
+#[test]
+fn stopped_return() -> TestResult {
+    let packets = vec![
+        COBC(DATA(vec![2, 0, 9, 0, 5, 0, 2])),
+        EDU(ACK),
+        EDU(ACK),
+        SLEEP(std::time::Duration::from_millis(500)),
+        COBC(DATA(vec![4])),
+        EDU(ACK),
+        EDU(DATA(vec![1, 0, 9, 0, 5, 0])),
+        COBC(ACK),
+        COBC(DATA(vec![4])),
+        EDU(ACK),
+        EDU(DATA(vec![2, 0, 9, 0, 5])),
+        COBC(ACK),
+        COBC(DATA(vec![5])),
+        EDU(ACK),
+        ANY,
+        COBC(ACK),
+        ANY,
+        COBC(STOP),
+        COBC(DATA(vec![4])),
+        EDU(ACK),
+        EDU(DATA(vec![2, 0, 9, 0, 5])),
+        COBC(ACK)
+    ];
+    common::prepare_program("9");
+    let (mut com, mut exec) = common::prepare_handles(packets, "9");
+
+    command::process_command(&mut com, &mut exec)?;
+    command::process_command(&mut com, &mut exec)?;
+    command::process_command(&mut com, &mut exec)?;
+    let err = command::process_command(&mut com, &mut exec).unwrap_err();
+    assert!(matches!(err, CommandError::CommunicationError(CommunicationError::STOPCondition)));
+    command::process_command(&mut com, &mut exec)?;
+    assert!(com.is_complete());
+
+    assert!(fs::File::open("./data/9_5.zip").is_ok());
+
+    common::cleanup("9");
+    Ok(())
+}
+
+#[test]
+fn no_result_ready() -> TestResult {
+    let packets = vec![
+        COBC(DATA(vec![5])),
+        EDU(ACK),
+        // NACK should be here, but currently comes from main
+    ];
+    let (mut com, mut exec) = common::prepare_handles(packets, "10");
+
+    command::process_command(&mut com, &mut exec).unwrap_err();
+    assert!(com.is_complete());
+
+    common::cleanup("10");
+    Ok(())
+}
+
+#[test]
+fn stop_no_running_program() -> TestResult {
+    let packets = vec![
+        COBC(DATA(vec![3])),
+        EDU(ACK),
+        EDU(ACK)
+    ];
+    let (mut com, mut exec) = common::prepare_handles(packets, "11");
+    command::process_command(&mut com, &mut exec)?;
+    assert!(com.is_complete());
+    Ok(())
+}
+
+#[test]
+fn execute_missing_program() -> TestResult {
+    let packets = vec![
+        COBC(DATA(vec![2, 0, 0x0b, 0, 0, 0, 1])),
+        EDU(ACK),
+        // NACK
+    ];
+    let (mut com, mut exec) = common::prepare_handles(packets, "12");
+     
+    command::process_command(&mut com, &mut exec).unwrap_err();
+    assert!(com.is_complete());
+    
+    common::cleanup("12");
     Ok(())
 }
