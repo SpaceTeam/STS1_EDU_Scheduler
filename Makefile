@@ -11,7 +11,7 @@ coverage: build_with_cov
 clean:
 	rm -rf *.profraw
 	rm -f data/*
-	rm -f archives/*
+	rm -rf archives/*
 	rm -rf tests/tmp
 
 rebuild_student_archive:

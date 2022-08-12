@@ -1,13 +1,20 @@
 use STS1_EDU_Scheduler::{communication::{CommunicationHandle, ComResult, CSBIPacket}, command::ExecutionContext};
 
 pub enum ComEvent {
+    /// EDU shall want to receive the given packet
     COBC(CSBIPacket),
+    /// EDU shall send the given packet
     EDU(CSBIPacket),
+    /// Makes the thread sleep for the given duration. Can be used to wait for execution to complete
     SLEEP(std::time::Duration),
+    /// Allow the EDU to send any packet
     ANY,
+    /// EDU shall send a packet, which is then passed to a given function (e.g. to allow for further checks on data)
     ACTION(Box<dyn Fn(Vec<u8>)>)
 }
 
+/// This communciation handle can simulate what is going on between EDU and COBC. Any send or receive call is
+/// checked against the supplied expected events vector
 pub struct TestCom {
     expected_events: Vec<ComEvent>,
     receive_queue: Vec<u8>,
@@ -79,6 +86,8 @@ impl TestCom {
     }
 }
 
+/// Copy the mockup student program from `tests/test_data/main.py` into `archives/{path}`. This absolves the need
+/// to include an extra store_archive command.
 pub fn prepare_program(path: &str) {
     let ret = std::fs::create_dir(format!("./archives/{}", path));
     if let Err(e) = ret {
@@ -94,6 +103,9 @@ pub fn prepare_program(path: &str) {
     }
 }
 
+/// Construct a communication and execution handle for testing.
+/// * `packets` is a vector of expected communication see [ComEvent] for documentation
+/// * `unique` A string that is unique among other tests. Can be a simple incrementing number
 pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, ExecutionContext) {
     let _ = std::fs::create_dir("tests/tmp");
     let com = TestCom::new(packets);

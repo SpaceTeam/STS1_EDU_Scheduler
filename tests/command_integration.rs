@@ -10,23 +10,31 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn store_archive() -> TestResult {
-    let packets = vec![ // Define what should happen during communication
-        COBC(DATA(vec![0x01, 0x00, 0x00])), // Store Archive with ID 0
-        EDU(ACK),
-        COBC(DATA(fs::read("./tests/student_program.zip")?)),
-        EDU(ACK),
-        COBC(EOF),
-        EDU(ACK)
-        ];
+    // Define what should happen during communication. How this should look is defined in the PDD
+    let packets = vec![
+        COBC(DATA(vec![0x01, 0x00, 0x00])), // COBC sends Store Archive Command (0x01 -> Header, [0x00, 0x00] -> Program Id)
+        EDU(ACK), // EDU acknowledges packet integrity
+        COBC(DATA(fs::read("./tests/student_program.zip")?)), // COBC sends the archive
+        EDU(ACK), // EDU acknowledges packet integrity
+        COBC(EOF), // COBC signals end of packets
+        EDU(ACK) // EDU signals successful Store Archive
+    ];
+    
+    // Setup testing environment
     let (mut com, mut exec) = common::prepare_handles(packets, "0"); // construct handles for process_command
     
+    // Run actual test
     command::process_command(&mut com, &mut exec)?; // test the command processing
-    assert!(com.is_complete()); // check if all packets were sent/received
+
+    // Check if all packets haven been sent/received
+    assert!(com.is_complete());
     
-    assert_eq!(0, std::process::Command::new("diff") // Check for correctness
+    // Perform further checks
+    assert_eq!(0, std::process::Command::new("diff") // check wether the archive was stored correctly
     .args(["-yq", "--strip-trailing-cr", "tests/test_data", "archives/0"])
     .status()?.code().unwrap());
 
+    // Cleanup testing environment
     common::cleanup("0");
     Ok(())
 }
