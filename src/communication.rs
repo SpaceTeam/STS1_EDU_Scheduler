@@ -116,7 +116,7 @@ pub trait CommunicationHandle {
 
     fn send_multi_packet(&mut self, bytes: Vec<u8>, timeout: &std::time::Duration) -> ComResult<()> {
         let num_packets = bytes.len() / 32768 + 1;
-        let chunks: Vec<&[u8]> = bytes.chunks(num_packets).collect();
+        let chunks: Vec<&[u8]> = bytes.chunks(32768).collect();
 
         let mut i = 0;
         loop {
