@@ -6,6 +6,7 @@ venv
 log
 archives/
 data/
+tests/tmp/
 
 # Added by cargo
 

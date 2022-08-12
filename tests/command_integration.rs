@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Write};
 use STS1_EDU_Scheduler::communication::{CSBIPacket::*, CommunicationError};
 use STS1_EDU_Scheduler::command::{self, CommandError};
 
@@ -183,10 +183,12 @@ fn return_result() -> TestResult {
         COBC(ACK),
         COBC(DATA(vec![5])),
         EDU(ACK),
-        ANY, // INCOMPLETE TEST! CHECK THIS COMMAND THOROUGHLY IN FULL INTEGRATION
+        ACTION(Box::new(|bytes| {
+            std::fs::File::create("tests/tmp/7.zip").unwrap().write(&bytes).unwrap();
+        })),
         COBC(ACK),
         EDU(EOF),
-        COBC(ACK)
+        COBC(NACK)
     ];
 
     common::prepare_program("7");
@@ -197,6 +199,15 @@ fn return_result() -> TestResult {
     command::process_command(&mut com, &mut exec)?;
     command::process_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
+
+    std::process::Command::new("unzip")
+        .current_dir("./tests/tmp")
+        .arg("-o")
+        .arg("7.zip")
+        .status()?;
+    
+    assert_eq!(std::fs::read("tests/tmp/3")?, vec![0xde, 0xad]);
+    assert!(std::fs::read("tests/tmp/7_3.log").is_ok());
 
     common::cleanup("7");
     Ok(())

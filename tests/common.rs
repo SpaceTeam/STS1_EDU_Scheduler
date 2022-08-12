@@ -1,11 +1,11 @@
 use STS1_EDU_Scheduler::{communication::{CommunicationHandle, ComResult, CSBIPacket}, command::ExecutionContext};
 
-#[derive(Debug)]
 pub enum ComEvent {
     COBC(CSBIPacket),
     EDU(CSBIPacket),
     SLEEP(std::time::Duration),
-    ANY
+    ANY,
+    ACTION(Box<dyn Fn(Vec<u8>)>)
 }
 
 pub struct TestCom {
@@ -31,8 +31,13 @@ impl CommunicationHandle for TestCom {
                 self.index += 1;
                 Ok(())
             },
+            ComEvent::ACTION(f) => {
+                f(bytes);
+                self.index += 1;
+                Ok(())
+            }
             _ => {
-                panic!("EDU should not send now, expected {}: {:?}", self.index, self.expected_events[self.index]);
+                panic!("EDU should not send now, index {}", self.index);
             }
         }
     }
@@ -58,7 +63,7 @@ impl CommunicationHandle for TestCom {
                 self.receive(n, timeout)
             },
             _ => {
-                panic!("EDU should send now, expected {}: {:?}", self.index, self.expected_events[self.index]);
+                panic!("EDU should send now, index {}", self.index);
             }
         }
     }
@@ -90,14 +95,15 @@ pub fn prepare_program(path: &str) {
 }
 
 pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, ExecutionContext) {
+    let _ = std::fs::create_dir("tests/tmp");
     let com = TestCom::new(packets);
-    let exec = ExecutionContext::new(format!("{}_s", unique).into(), format!("{}_r", unique).into()).unwrap();
+    let exec = ExecutionContext::new(format!("tests/tmp/{}_s", unique).into(), format!("tests/tmp/{}_r", unique).into()).unwrap();
 
     return (com, exec);
 }
 
 pub fn cleanup(unique: &str) {
     let _ = std::fs::remove_dir_all(format!("./archives/{}", unique));
-    let _ = std::fs::remove_file(format!("{}_s", unique));
-    let _ = std::fs::remove_file(format!("{}_r", unique));
+    let _ = std::fs::remove_file(format!("tests/tmp/{}_s", unique));
+    let _ = std::fs::remove_file(format!("tests/tmp/{}_r", unique));
 }
