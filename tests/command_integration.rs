@@ -24,7 +24,7 @@ fn store_archive() -> TestResult {
     let (mut com, mut exec) = common::prepare_handles(packets, "0"); // construct handles for process_command
     
     // Run actual test
-    command::process_command(&mut com, &mut exec)?; // test the command processing
+    command::handle_command(&mut com, &mut exec)?; // test the command processing
 
     // Check if all packets haven been sent/received
     assert!(com.is_complete());
@@ -49,7 +49,7 @@ fn execute_program_normal() -> TestResult {
     common::prepare_program("1");
     let (mut com, mut exec) = common::prepare_handles(packets, "1");
 
-    command::process_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
     std::thread::sleep(std::time::Duration::from_millis(500));
@@ -72,7 +72,7 @@ fn execute_program_infinite() -> TestResult {
     common::prepare_program("2");
     let (mut com, mut exec) = common::prepare_handles(packets, "2");
     
-    command::process_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
     std::thread::sleep(std::time::Duration::from_millis(1300));
@@ -96,8 +96,8 @@ fn stop_program() -> TestResult {
     common::prepare_program("3");
     let (mut com, mut exec) = common::prepare_handles(packets, "3");
 
-    command::process_command(&mut com, &mut exec)?;
-    command::process_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
     assert!(!exec.status_q.lock().unwrap().is_empty()?);
 
@@ -119,7 +119,7 @@ fn stopped_store() -> TestResult {
 
     let (mut com, mut exec) = common::prepare_handles(packets, "4");
 
-    let err = command::process_command(&mut com, &mut exec).unwrap_err();
+    let err = command::handle_command(&mut com, &mut exec).unwrap_err();
     assert!(matches!(err, CommandError::CommunicationError(CommunicationError::STOPCondition)));
 
     assert!(!std::path::Path::new("./archives/4").exists());
@@ -138,7 +138,7 @@ fn get_status_none() -> TestResult {
     ];
 
     let (mut com, mut exec) = common::prepare_handles(packets, "5");
-    command::process_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
     common::cleanup("5");
@@ -165,9 +165,9 @@ fn get_status_finished() -> TestResult {
     common::prepare_program("6");
     let (mut com, mut exec) = common::prepare_handles(packets, "6");
     
-    command::process_command(&mut com, &mut exec)?;
-    command::process_command(&mut com, &mut exec)?;
-    command::process_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
     
     common::cleanup("6");
@@ -202,10 +202,10 @@ fn return_result() -> TestResult {
     common::prepare_program("7");
     let (mut com, mut exec) = common::prepare_handles(packets, "7");
 
-    command::process_command(&mut com, &mut exec)?;
-    command::process_command(&mut com, &mut exec)?;
-    command::process_command(&mut com, &mut exec)?;
-    command::process_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
     std::process::Command::new("unzip")
@@ -237,8 +237,8 @@ fn truncate_result() -> TestResult {
     common::prepare_program("8");
     let (mut com, mut exec) = common::prepare_handles(packets, "8");
 
-    command::process_command(&mut com, &mut exec)?;
-    command::process_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
     assert!(fs::File::open("./data/8_5.zip")?.metadata()?.len() < 1_001_000);
@@ -276,12 +276,12 @@ fn stopped_return() -> TestResult {
     common::prepare_program("9");
     let (mut com, mut exec) = common::prepare_handles(packets, "9");
 
-    command::process_command(&mut com, &mut exec)?;
-    command::process_command(&mut com, &mut exec)?;
-    command::process_command(&mut com, &mut exec)?;
-    let err = command::process_command(&mut com, &mut exec).unwrap_err();
+    command::handle_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
+    let err = command::handle_command(&mut com, &mut exec).unwrap_err();
     assert!(matches!(err, CommandError::CommunicationError(CommunicationError::STOPCondition)));
-    command::process_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
     assert!(fs::File::open("./data/9_5.zip").is_ok());
@@ -295,11 +295,11 @@ fn no_result_ready() -> TestResult {
     let packets = vec![
         COBC(DATA(vec![5])),
         EDU(ACK),
-        // NACK should be here, but currently comes from main
+        EDU(NACK)
     ];
     let (mut com, mut exec) = common::prepare_handles(packets, "10");
 
-    command::process_command(&mut com, &mut exec).unwrap_err();
+    command::handle_command(&mut com, &mut exec).unwrap_err();
     assert!(com.is_complete());
 
     common::cleanup("10");
@@ -314,7 +314,7 @@ fn stop_no_running_program() -> TestResult {
         EDU(ACK)
     ];
     let (mut com, mut exec) = common::prepare_handles(packets, "11");
-    command::process_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
     Ok(())
 }
@@ -324,11 +324,11 @@ fn execute_missing_program() -> TestResult {
     let packets = vec![
         COBC(DATA(vec![2, 0, 0x0b, 0, 0, 0, 1])),
         EDU(ACK),
-        // NACK
+        EDU(NACK)
     ];
     let (mut com, mut exec) = common::prepare_handles(packets, "12");
-     
-    command::process_command(&mut com, &mut exec).unwrap_err();
+    
+    command::handle_command(&mut com, &mut exec).unwrap_err();
     assert!(com.is_complete());
     
     common::cleanup("12");

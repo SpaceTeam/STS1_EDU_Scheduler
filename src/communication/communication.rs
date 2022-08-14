@@ -1,5 +1,4 @@
 use crc::{Crc, CRC_16_ARC};
-use subprocess::CommunicateError;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CSBIPacket {
