@@ -3,6 +3,7 @@ use STS1_EDU_Scheduler::{communication::{CommunicationHandle, ComResult, CSBIPac
 pub enum ComEvent {
     /// EDU shall want to receive the given packet
     COBC(CSBIPacket),
+    COBC_INVALID(Vec<u8>),
     /// EDU shall send the given packet
     EDU(CSBIPacket),
     /// Makes the thread sleep for the given duration. Can be used to wait for execution to complete
@@ -61,6 +62,19 @@ impl CommunicationHandle for TestCom {
                 }
                 else {
                     self.receive_queue.append(&mut p.clone().serialize());
+                    self.receive(n, timeout)
+                }
+            },
+            ComEvent::COBC_INVALID(b) => {
+                if !self.receive_queue.is_empty() {
+                    let res: Vec<u8> = self.receive_queue.drain(0..(n as usize)).collect();
+                    if self.receive_queue.is_empty() {
+                        self.index += 1;
+                    }
+                    Ok(res)
+                }
+                else {
+                    self.receive_queue.append(&mut b.clone());
                     self.receive(n, timeout)
                 }
             },

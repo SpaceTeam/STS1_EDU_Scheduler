@@ -334,3 +334,33 @@ fn execute_missing_program() -> TestResult {
     common::cleanup("12");
     Ok(())
 }
+
+#[test]
+fn invalid_packets_from_cobc() -> TestResult {
+    let packets = vec![
+        COBC(ACK),
+        COBC(STOP),
+        COBC(EOF),
+        COBC(NACK),
+        COBC(DATA(vec![1, 2])),
+        EDU(NACK),
+        COBC(DATA(vec![2,0,1])),
+        EDU(NACK),
+        COBC_INVALID(vec![0x8b, 0, 2, 0, 0, 0, 0]), // Invalid CRC
+        EDU(NACK)
+    ];
+    let (mut com, mut exec) = common::prepare_handles(packets, "13");
+     
+    command::handle_command(&mut com, &mut exec).unwrap_err();
+    command::handle_command(&mut com, &mut exec).unwrap_err();
+    command::handle_command(&mut com, &mut exec).unwrap_err();
+    command::handle_command(&mut com, &mut exec).unwrap_err();
+    command::handle_command(&mut com, &mut exec).unwrap_err();
+    command::handle_command(&mut com, &mut exec).unwrap_err();
+    command::handle_command(&mut com, &mut exec).unwrap_err();
+    
+    assert!(com.is_complete());
+    
+    common::cleanup("13");
+    Ok(())
+}
