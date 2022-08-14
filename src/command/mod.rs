@@ -29,9 +29,7 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut ExecutionC
 
     match data[0] {
         0x01 => { // STORE ARCHIVE
-            if data.len() != 3 {
-                return Err(CommandError::InvalidCommError);
-            }
+            check_length(&data, 3)?;
             com.send_packet(CSBIPacket::ACK)?;
             let id = u16::from_be_bytes([data[1], data[2]]).to_string();
             let bytes = com.receive_multi_packet(&COM_TIMEOUT_DURATION, || {false})?; // !! TODO !!
@@ -39,9 +37,7 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut ExecutionC
             com.send_packet(CSBIPacket::ACK)?;
         },
         0x02 => { // EXECUTE PROGRAM
-            if data.len() != 7 {
-                return Err(CommandError::InvalidCommError);
-            }
+            check_length(&data, 7)?;
             com.send_packet(CSBIPacket::ACK)?;
             let program_id = u16::from_be_bytes([data[1], data[2]]);
             let queue_id = u16::from_be_bytes([data[3], data[4]]);
@@ -50,25 +46,19 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut ExecutionC
             com.send_packet(CSBIPacket::ACK)?;
         },
         0x03 => { // STOP PROGRAM
-            if data.len() != 1 {
-                return Err(CommandError::InvalidCommError);
-            }
+            check_length(&data, 1)?;
             com.send_packet(CSBIPacket::ACK)?;
             stop_program(exec)?;
             com.send_packet(CSBIPacket::ACK)?;
         },
         0x04 => { // GET STATUS
-            if data.len() != 1 {
-                return Err(CommandError::InvalidCommError);
-            }
+            check_length(&data, 1)?;
             com.send_packet(CSBIPacket::ACK)?;
             com.send_packet(get_status(exec)?)?;
             com.receive_packet(&COM_TIMEOUT_DURATION)?; // Throw away ACK
         },
         0x05 => { // RETURN RESULT
-            if data.len() != 1 {
-                return Err(CommandError::InvalidCommError);
-            }
+            check_length(&data, 1)?;
             com.send_packet(CSBIPacket::ACK)?;
             com.send_multi_packet(return_result(exec)?, &COM_TIMEOUT_DURATION)?;
             if let CSBIPacket::ACK = com.receive_packet(&COM_TIMEOUT_DURATION)? {
@@ -76,9 +66,7 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut ExecutionC
             }
         },
         0x06 => { // UPDATE TIME
-            if data.len() != 5 {
-                return Err(CommandError::InvalidCommError);
-            }
+            check_length(&data, 5)?;
             com.send_packet(CSBIPacket::ACK)?;
             let time = i32::from_be_bytes([data[1], data[2], data[3], data[4]]);
             update_time(time)?;
@@ -92,13 +80,24 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut ExecutionC
     return Ok(());
 }
 
+fn check_length(vec: &Vec<u8>, n: usize) -> Result<(), CommandError> {
+    if vec.len() != n {
+        Err(CommandError::InvalidCommError)
+    }
+    else {
+        Ok(())
+    }
+}
 
+
+/// Struct used for storing information about a finished student program
 pub struct ProgramStatus {
     pub program_id: u16,
     pub queue_id: u16,
     pub exit_code: u8,
 }
 
+/// Struct used for storing information of a result, waiting to be sent
 #[derive(Clone, Copy)]
 pub struct ResultId {
     pub program_id: u16,
