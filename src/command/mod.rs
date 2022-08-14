@@ -35,7 +35,7 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut ExecutionC
         data
     }
     else {
-        return Err(CommandError::InvalidCommError); // Did not start with a data packet
+        return Err(CommandError::CommunicationError(CommunicationError::PacketInvalidError)); // Ignore non data packets
     };
 
     if data.len() < 1 {
