@@ -13,7 +13,7 @@ type CommandResult = Result<(), CommandError>;
 const COM_TIMEOUT_DURATION: std::time::Duration = std::time::Duration::new(2, 0);
 
 /// Main routine. Waits for a command to be received from the COBC, then parses and executes it.
-pub fn handle_command(com: &mut impl CommunicationHandle, exec: &mut ExecutionContext) -> CommandResult {
+pub fn handle_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecutionContext) -> CommandResult {
     let ret = process_command(com, exec);
 
     if let Err(ce) = &ret {
@@ -28,7 +28,7 @@ pub fn handle_command(com: &mut impl CommunicationHandle, exec: &mut ExecutionCo
     ret
 }
 
-pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut ExecutionContext) -> CommandResult {
+pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecutionContext) -> CommandResult {
     // Preprocess
     let packet = com.receive_packet(&Duration::MAX)?;
     let data = if let CSBIPacket::DATA(data) = packet {
@@ -110,7 +110,7 @@ pub type SyncExecutionContext = Arc<Mutex<ExecutionContext>>;
 /// This struct is used to store the relevant handles for when a student program is executed
 pub struct ExecutionContext {
     pub thread_handle: Option<thread::JoinHandle<()>>,
-    pub running_flag: Option<Arc<atomic::AtomicBool>>,
+    pub running_flag: Option<bool>,
     pub status_q: FileQueue<ProgramStatus>,
     pub result_q: FileQueue<ResultId>
 }
@@ -126,12 +126,7 @@ impl ExecutionContext {
     }
 
     pub fn is_running(&self) -> bool {
-        if let Some(f) = &self.running_flag {
-            f.load(atomic::Ordering::Relaxed)
-        }
-        else {
-            false
-        }
+        self.running_flag.unwrap_or(false)
     }
 }
 
