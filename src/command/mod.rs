@@ -105,6 +105,36 @@ fn check_length(vec: &Vec<u8>, n: usize) -> Result<(), CommandError> {
 }
 
 
+pub type SyncExecutionContext = Arc<Mutex<ExecutionContext>>;
+
+/// This struct is used to store the relevant handles for when a student program is executed
+pub struct ExecutionContext {
+    pub thread_handle: Option<thread::JoinHandle<()>>,
+    pub running_flag: Option<Arc<atomic::AtomicBool>>,
+    pub status_q: FileQueue<ProgramStatus>,
+    pub result_q: FileQueue<ResultId>
+}
+
+impl ExecutionContext {
+    pub fn new(status_path: PathBuf, result_path: PathBuf) -> Result<Self, std::io::Error> {
+        Ok(ExecutionContext {
+            thread_handle: None,
+            running_flag: None,
+            status_q: FileQueue::<ProgramStatus>::new(status_path)?,
+            result_q: FileQueue::<ResultId>::new(result_path)?
+        })
+    }
+
+    pub fn is_running(&self) -> bool {
+        if let Some(f) = &self.running_flag {
+            f.load(atomic::Ordering::Relaxed)
+        }
+        else {
+            false
+        }
+    }
+}
+
 /// Struct used for storing information about a finished student program
 pub struct ProgramStatus {
     pub program_id: u16,
@@ -153,35 +183,6 @@ impl Serializable for ResultId {
         ResultId { program_id: p_id, queue_id: q_id }
     }
 }
-
-/// This struct is used to store the relevant handles for when a student program is executed
-pub struct ExecutionContext {
-    pub thread_handle: Option<thread::JoinHandle<()>>,
-    pub running_flag: Option<Arc<atomic::AtomicBool>>,
-    pub status_q: Arc<Mutex<FileQueue<ProgramStatus>>>,
-    pub result_q: Arc<Mutex<FileQueue<ResultId>>>
-}
-
-impl ExecutionContext {
-    pub fn new(status_path: PathBuf, result_path: PathBuf) -> Result<Self, std::io::Error> {
-        Ok(ExecutionContext {
-            thread_handle: None,
-            running_flag: None,
-            status_q: Arc::new(Mutex::new(FileQueue::<ProgramStatus>::new(status_path)?)),
-            result_q: Arc::new(Mutex::new(FileQueue::<ResultId>::new(result_path)?))
-        })
-    }
-
-    pub fn is_running(&self) -> bool {
-        if let Some(f) = &self.running_flag {
-            f.load(atomic::Ordering::Relaxed)
-        }
-        else {
-            false
-        }
-    }
-}
-
 
 #[derive(Debug)]
 pub enum CommandError {
