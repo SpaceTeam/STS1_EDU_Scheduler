@@ -227,7 +227,7 @@ fn truncate_result() -> TestResult {
         COBC(DATA(vec![2, 0, 8, 0, 5, 0, 2])), // Execute Program 8, Queue 5, Timeout 1s
         EDU(ACK),
         EDU(ACK),
-        SLEEP(std::time::Duration::from_millis(1000)),
+        SLEEP(std::time::Duration::from_millis(2000)),
         COBC(DATA(vec![4])),
         EDU(ACK),
         EDU(DATA(vec![1, 0, 8, 0, 5, 0])),
@@ -253,7 +253,7 @@ fn stopped_return() -> TestResult {
         COBC(DATA(vec![2, 0, 9, 0, 5, 0, 2])),
         EDU(ACK),
         EDU(ACK),
-        SLEEP(std::time::Duration::from_millis(500)),
+        SLEEP(std::time::Duration::from_millis(2000)),
         COBC(DATA(vec![4])),
         EDU(ACK),
         EDU(DATA(vec![1, 0, 9, 0, 5, 0])),
