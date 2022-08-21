@@ -1,15 +1,13 @@
 use crate::communication::CSBIPacket;
-use crate::persist::FileQueue;
 use std::fs::File;
 use std::io::prelude::*;
-use std::sync::*;
 use std::thread;
 use std::time::Duration;
 use std::process::Command;
 
 use super::ProgramStatus;
 use super::ResultId;
-use super::{CommandResult, CommandError, ExecutionContext};
+use super::{CommandResult, CommandError, SyncExecutionContext, UpdatePin};
 
 /// Stores a received program in the appropriate folder and unzips it
 ///
@@ -58,7 +56,7 @@ pub fn store_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
 /// * `queue_id` The first argument for the student program
 /// * `timeout` The maxmimum time the student program shall execute. Will be rounded up to the nearest second
 pub fn execute_program(
-    context: &mut ExecutionContext,
+    context: &mut SyncExecutionContext,
     program_id: u16,
     queue_id: u16,
     timeout: Duration
@@ -79,10 +77,7 @@ pub fn execute_program(
     let mut student_process = subprocess::Popen::create(&["python", "main.py", &queue_id.to_string()], config)?;
 
     // Interthread communication
-    let wd_flag = Arc::new(atomic::AtomicBool::new(true));
-    let ec_flag = wd_flag.clone(); // clone before original is moved into thread
-    let status_queue = context.status_q.clone();
-    let result_queue = context.result_q.clone();
+    let wd_context = context.clone();
 
     // Watchdog thread
     let wd_handle = thread::spawn(move || {
@@ -99,7 +94,7 @@ pub fn execute_program(
                 should_kill = false;
                 break;
             }
-            if !wd_flag.load(atomic::Ordering::Relaxed) {
+            if !wd_context.lock().unwrap().running_flag.unwrap_or(true) {
                 // check if it should terminate
                 break;
             }
@@ -114,16 +109,17 @@ pub fn execute_program(
         let rid = ResultId { program_id, queue_id };
         build_result_archive(rid).unwrap();
 
-        let mut s_queue = status_queue.lock().unwrap();
-        let mut r_queue = result_queue.lock().unwrap(); 
-        s_queue.push(ProgramStatus { program_id, queue_id, exit_code }).unwrap();
-        r_queue.push(rid).unwrap();
-
-        wd_flag.store(false, atomic::Ordering::Relaxed);
+        let mut context = wd_context.lock().unwrap();
+        context.status_q.push(ProgramStatus { program_id, queue_id, exit_code }).unwrap();
+        context.result_q.push(rid).unwrap();
+        context.running_flag = Some(false);
+        context.set_update_high();
+        drop(context);
     });
 
-    context.thread_handle = Some(wd_handle);
-    context.running_flag = Some(ec_flag);
+    let mut l_context = context.lock().unwrap();
+    l_context.thread_handle = Some(wd_handle);
+    l_context.running_flag = Some(true);
 
     Ok(())
 }
@@ -172,19 +168,17 @@ fn truncate_to_size(path: &str, n_bytes: u64) -> Result<(), std::io::Error> {
 /// Returns Ok after terminating the student program or immediately if it is already stopped
 ///
 /// **Panics if terminating takes too long**
-pub fn stop_program(context: &mut ExecutionContext) -> CommandResult {
-    if context.is_running() {
-        let flag = context.running_flag.as_ref().unwrap();
-        let handle = context.thread_handle.as_ref().unwrap();
-        flag.store(false, atomic::Ordering::Relaxed);
-        for _ in 0..120 {
-            if handle.is_finished() {
-                return Ok(())
-            }
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        panic!("Could not stop student program");
+pub fn stop_program(context: &mut SyncExecutionContext) -> CommandResult {
+    let mut con = context.lock().unwrap();
+    if !con.is_running() {
+        return Ok(());
     }
+    con.running_flag = Some(false); // Signal watchdog thread to terminate
+    drop(con); // Release mutex
+
+    std::thread::sleep(Duration::from_millis(2000)); // Sensible amount?
+
+    assert!(context.lock().unwrap().thread_handle.as_ref().unwrap().is_finished(), "Watchdog thread did not finish in time");
 
     Ok(())
 }
@@ -192,43 +186,48 @@ pub fn stop_program(context: &mut ExecutionContext) -> CommandResult {
 /// The function returns a DATA packet that conforms to the Get Status specification in the PDD.
 /// 
 /// **Panics if no lock can be obtained on the queues.**
-pub fn get_status(context: &mut ExecutionContext) -> Result<CSBIPacket, CommandError> {
-    let mut s_queue = context.status_q.lock().unwrap();
-    let mut r_queue = context.result_q.lock().unwrap();
+pub fn get_status(context: &mut SyncExecutionContext) -> Result<CSBIPacket, CommandError> {
+    let mut con = context.lock().unwrap();
 
-    let s_empty = s_queue.is_empty()?;
-    let r_empty = r_queue.is_empty()?;
+    let s_empty = con.status_q.is_empty()?;
+    let r_empty = con.result_q.is_empty()?;
 
     if s_empty && r_empty {
         Ok(CSBIPacket::DATA(vec![0]))
     }
     else if !s_empty {
         let mut v = vec![1];
-        v.extend(s_queue.raw_pop()?);
+        v.extend(con.status_q.raw_pop()?);
+        if !con.has_data_ready()? {
+            con.set_update_low();
+        }
         Ok(CSBIPacket::DATA(v))
     }
     else {
         let mut v = vec![2];
-        v.extend(r_queue.raw_peek()?);
+        v.extend(con.result_q.raw_peek()?);
         Ok(CSBIPacket::DATA(v))
     }
 }
 
 /// Returns a byte vector containing the tar archive of the next element in the result queue.
 /// It does **not** delete said element, as transmission might have been stopped/failed.
-pub fn return_result(context: &ExecutionContext) -> Result<Vec<u8>, CommandError> {
-    let mut r_queue = context.result_q.lock().unwrap();
-    let res = r_queue.peek()?;
+pub fn return_result(context: &SyncExecutionContext) -> Result<Vec<u8>, CommandError> {
+    let mut con = context.lock().unwrap();
+    let res = con.result_q.peek()?;
     let bytes = std::fs::read(format!("./data/{}_{}.zip", res.program_id, res.queue_id))?;
     Ok(bytes)
 }
 
 /// Deletes the result archive corresponding to the next element in the result queue and removes
 /// that element from the queue.
-pub fn delete_result(context: &mut ExecutionContext) -> CommandResult {
-    let mut r_queue = context.result_q.lock().unwrap();
-    let res = r_queue.pop()?;
-    drop(r_queue); // Unlock Mutex
+pub fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
+    let mut con = context.lock().unwrap();
+    let res = con.result_q.pop()?;
+    if !con.has_data_ready()? {
+        con.set_update_low();
+    }
+    drop(con); // Unlock Mutex
     
     let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
     let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
