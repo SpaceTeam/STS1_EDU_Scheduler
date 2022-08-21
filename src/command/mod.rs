@@ -21,7 +21,10 @@ pub fn handle_command(
 
     if let Err(ce) = &ret {
         match ce {
-            CommandError::SystemError(_) | CommandError::InvalidCommError => {
+            e @ CommandError::SystemError(_)
+            | e @ CommandError::InvalidCommError
+            | e @ CommandError::CommunicationError(CommunicationError::CRCError) => {
+                log::error!("Failed to process command {:?}", e);
                 com.send_packet(CSBIPacket::NACK)?;
             }
             _ => {}
@@ -37,6 +40,7 @@ pub fn process_command(
 ) -> CommandResult {
     // Preprocess
     let packet = com.receive_packet(&Duration::MAX)?;
+    log::info!("{:?}", packet);
     let data = if let CSBIPacket::DATA(data) = packet {
         data
     } else {
@@ -69,7 +73,12 @@ pub fn process_command(
             let program_id = u16::from_be_bytes([data[1], data[2]]);
             let queue_id = u16::from_be_bytes([data[3], data[4]]);
             let timeout = Duration::from_secs(u16::from_be_bytes([data[5], data[6]]).into());
-            log::info!("Executing Program {}:{} for {}s", program_id, queue_id, timeout.as_secs());
+            log::info!(
+                "Executing Program {}:{} for {}s",
+                program_id,
+                queue_id,
+                timeout.as_secs()
+            );
             execute_program(exec, program_id, queue_id, timeout)?;
             com.send_packet(CSBIPacket::ACK)?;
         }
@@ -97,8 +106,7 @@ pub fn process_command(
             com.send_multi_packet(return_result(exec)?, &COM_TIMEOUT_DURATION)?;
             if let CSBIPacket::ACK = com.receive_packet(&COM_TIMEOUT_DURATION)? {
                 delete_result(exec)?;
-            }
-            else {
+            } else {
                 log::error!("COBC did not acknowledge result");
             }
         }
