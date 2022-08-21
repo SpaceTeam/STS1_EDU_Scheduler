@@ -87,24 +87,32 @@ pub trait CommunicationHandle {
         let mut buffer = Vec::new();
 
         loop {
-            let pack = self.receive_packet(&timeout)?;
+            let pack = self.receive_packet(&timeout);
             if stop_fn() {
                 self.send_packet(CSBIPacket::STOP)?;
                 return Err(CommunicationError::STOPCondition);
             }
 
             match pack {
-                CSBIPacket::DATA(b) => {
+                Ok(CSBIPacket::DATA(b)) => {
                     buffer.extend(b);
                     self.send_packet(CSBIPacket::ACK)?;
                 },
-                CSBIPacket::EOF => {
+                Ok(CSBIPacket::EOF) => {
                     break;
                 },
-                CSBIPacket::STOP => {
+                Ok(CSBIPacket::STOP) => {
                     return Err(CommunicationError::STOPCondition);
                 },
-                _ => {
+                Err(CommunicationError::InterfaceError) => {
+                    return Err(CommunicationError::InterfaceError);
+                },
+                Err(CommunicationError::TimeoutError) => {
+                    log::error!("Receive multipacket timed out");
+                    return Err(CommunicationError::TimeoutError);
+                }
+                e @ _ => {
+                    log::error!("Received invalid data {:?}", e);
                     self.send_packet(CSBIPacket::NACK)?;
                 }
             };
