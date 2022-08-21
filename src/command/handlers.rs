@@ -16,8 +16,6 @@ use super::{CommandResult, CommandError, SyncExecutionContext, UpdatePin};
 ///
 /// Returns Ok or passes along a file access/unzip process error
 pub fn store_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
-    log::info!("Storing archive {}", folder);
-
     // Store bytes into temporary file
     let zip_path = format!("./data/{}.zip", folder);
     let mut zip_file = File::create(&zip_path)?;
@@ -63,8 +61,6 @@ pub fn execute_program(
 ) -> CommandResult {
     let _ = stop_program(context); // Ignore return value
 
-    log::info!("Executing program {}:{}", program_id, queue_id);
-
     // TODO config setuid
     let output_file = File::create(format!("./data/{}_{}.log", program_id, queue_id))?;
     let config = subprocess::PopenConfig {
@@ -106,6 +102,7 @@ pub fn execute_program(
             student_process.wait_timeout(Duration::from_millis(200)).unwrap().unwrap(); // Panic if not stopped
         }
 
+        log::info!("Program {}:{} finished with {}", program_id, queue_id, exit_code);
         let rid = ResultId { program_id, queue_id };
         build_result_archive(rid).unwrap();
 
@@ -193,9 +190,11 @@ pub fn get_status(context: &mut SyncExecutionContext) -> Result<CSBIPacket, Comm
     let r_empty = con.result_q.is_empty()?;
 
     if s_empty && r_empty {
+        log::info!("Nothing to report");
         Ok(CSBIPacket::DATA(vec![0]))
     }
     else if !s_empty {
+        log::info!("Sending program exit code");
         let mut v = vec![1];
         v.extend(con.status_q.raw_pop()?);
         if !con.has_data_ready()? {
@@ -204,6 +203,7 @@ pub fn get_status(context: &mut SyncExecutionContext) -> Result<CSBIPacket, Comm
         Ok(CSBIPacket::DATA(v))
     }
     else {
+        log::info!("Sending result-ready");
         let mut v = vec![2];
         v.extend(con.result_q.raw_peek()?);
         Ok(CSBIPacket::DATA(v))
@@ -215,7 +215,10 @@ pub fn get_status(context: &mut SyncExecutionContext) -> Result<CSBIPacket, Comm
 pub fn return_result(context: &SyncExecutionContext) -> Result<Vec<u8>, CommandError> {
     let mut con = context.lock().unwrap();
     let res = con.result_q.peek()?;
+    drop(con);
+
     let bytes = std::fs::read(format!("./data/{}_{}.zip", res.program_id, res.queue_id))?;
+    log::info!("Returning result for {}:{}", res.program_id, res.queue_id);
     Ok(bytes)
 }
 

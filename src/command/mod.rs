@@ -1,13 +1,12 @@
 use crate::communication::{CSBIPacket, CommunicationError, CommunicationHandle};
 use crate::persist::{FileQueue, Serializable};
 use std::path::PathBuf;
-use std::sync::{atomic, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 mod handlers;
 pub use handlers::*;
-use subprocess::Exec;
 
 type CommandResult = Result<(), CommandError>;
 
@@ -41,12 +40,14 @@ pub fn process_command(
     let data = if let CSBIPacket::DATA(data) = packet {
         data
     } else {
+        log::error!("Received {:?} as command start", packet);
         return Err(CommandError::CommunicationError(
             CommunicationError::PacketInvalidError,
         )); // Ignore non data packets
     };
 
     if data.len() < 1 {
+        log::error!("No data received");
         return Err(CommandError::InvalidCommError);
     }
 
@@ -56,6 +57,7 @@ pub fn process_command(
             check_length(&data, 3)?;
             com.send_packet(CSBIPacket::ACK)?;
             let id = u16::from_be_bytes([data[1], data[2]]).to_string();
+            log::info!("Storing Archive {}", id);
             let bytes = com.receive_multi_packet(&COM_TIMEOUT_DURATION, || false)?; // !! TODO !!
             store_archive(id, bytes)?;
             com.send_packet(CSBIPacket::ACK)?;
@@ -67,6 +69,7 @@ pub fn process_command(
             let program_id = u16::from_be_bytes([data[1], data[2]]);
             let queue_id = u16::from_be_bytes([data[3], data[4]]);
             let timeout = Duration::from_secs(u16::from_be_bytes([data[5], data[6]]).into());
+            log::info!("Executing Program {}:{} for {}s", program_id, queue_id, timeout.as_secs());
             execute_program(exec, program_id, queue_id, timeout)?;
             com.send_packet(CSBIPacket::ACK)?;
         }
@@ -74,6 +77,7 @@ pub fn process_command(
             // STOP PROGRAM
             check_length(&data, 1)?;
             com.send_packet(CSBIPacket::ACK)?;
+            log::info!("Stopping Program");
             stop_program(exec)?;
             com.send_packet(CSBIPacket::ACK)?;
         }
@@ -81,6 +85,7 @@ pub fn process_command(
             // GET STATUS
             check_length(&data, 1)?;
             com.send_packet(CSBIPacket::ACK)?;
+            log::info!("Getting Status");
             com.send_packet(get_status(exec)?)?;
             com.receive_packet(&COM_TIMEOUT_DURATION)?; // Throw away ACK
         }
@@ -88,9 +93,13 @@ pub fn process_command(
             // RETURN RESULT
             check_length(&data, 1)?;
             com.send_packet(CSBIPacket::ACK)?;
+            log::info!("Returning Result");
             com.send_multi_packet(return_result(exec)?, &COM_TIMEOUT_DURATION)?;
             if let CSBIPacket::ACK = com.receive_packet(&COM_TIMEOUT_DURATION)? {
                 delete_result(exec)?;
+            }
+            else {
+                log::error!("COBC did not acknowledge result");
             }
         }
         0x06 => {
@@ -98,10 +107,12 @@ pub fn process_command(
             check_length(&data, 5)?;
             com.send_packet(CSBIPacket::ACK)?;
             let time = i32::from_be_bytes([data[1], data[2], data[3], data[4]]);
+            log::info!("Updating Time to {}", time);
             update_time(time)?;
             com.send_packet(CSBIPacket::ACK)?;
         }
-        _ => {
+        b @ _ => {
+            log::error!("Received command {}", b);
             return Err(CommandError::InvalidCommError);
         }
     };
@@ -111,6 +122,7 @@ pub fn process_command(
 
 fn check_length(vec: &Vec<u8>, n: usize) -> Result<(), CommandError> {
     if vec.len() != n {
+        log::error!("Command came with {} bytes, should have {}", vec.len(), n);
         Err(CommandError::InvalidCommError)
     } else {
         Ok(())
