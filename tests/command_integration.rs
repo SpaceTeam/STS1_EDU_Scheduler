@@ -364,3 +364,31 @@ fn invalid_packets_from_cobc() -> TestResult {
     common::cleanup("13");
     Ok(())
 }
+
+#[test]
+fn invalid_crc() -> TestResult {
+    let mut bytes = fs::read("./tests/student_program.zip")?;
+    let packets = vec![
+        COBC(DATA(vec![1, 0, 14])),
+        EDU(ACK),
+        COBC(DATA(bytes.drain(0..20).collect())),
+        EDU(ACK),
+        COBC_INVALID(vec![0x8b, 0, 5, 0, 0, 0, 0, 0, 0, 10]),
+        EDU(NACK),
+        COBC(DATA(bytes)),
+        EDU(ACK),
+        COBC(EOF),
+        EDU(ACK)
+    ];
+    let (mut com, mut exec) = common::prepare_handles(packets, "14");
+     
+    command::handle_command(&mut com, &mut exec)?;
+    assert!(com.is_complete());
+    
+    assert_eq!(0, std::process::Command::new("diff") // check wether the archive was stored correctly
+    .args(["-yq", "--strip-trailing-cr", "tests/test_data", "archives/14"])
+    .status()?.code().unwrap());
+    
+    common::cleanup("14");
+    Ok(())
+}

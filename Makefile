@@ -10,6 +10,7 @@ coverage: build_with_cov
 
 clean:
 	rm -rf *.profraw
+	rm -f ThreadId*
 	rm -f data/*
 	rm -rf archives/*
 	rm -rf tests/tmp
