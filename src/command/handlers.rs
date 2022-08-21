@@ -1,14 +1,13 @@
 use crate::communication::CSBIPacket;
 use std::fs::File;
 use std::io::prelude::*;
-use std::sync::*;
 use std::thread;
 use std::time::Duration;
 use std::process::Command;
 
 use super::ProgramStatus;
 use super::ResultId;
-use super::{CommandResult, CommandError, SyncExecutionContext};
+use super::{CommandResult, CommandError, SyncExecutionContext, UpdatePin};
 
 /// Stores a received program in the appropriate folder and unzips it
 ///
@@ -114,6 +113,7 @@ pub fn execute_program(
         context.status_q.push(ProgramStatus { program_id, queue_id, exit_code }).unwrap();
         context.result_q.push(rid).unwrap();
         context.running_flag = Some(false);
+        context.set_update_high();
         drop(context);
     });
 
@@ -198,6 +198,9 @@ pub fn get_status(context: &mut SyncExecutionContext) -> Result<CSBIPacket, Comm
     else if !s_empty {
         let mut v = vec![1];
         v.extend(con.status_q.raw_pop()?);
+        if !con.has_data_ready()? {
+            con.set_update_low();
+        }
         Ok(CSBIPacket::DATA(v))
     }
     else {
@@ -221,6 +224,9 @@ pub fn return_result(context: &SyncExecutionContext) -> Result<Vec<u8>, CommandE
 pub fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
     let mut con = context.lock().unwrap();
     let res = con.result_q.pop()?;
+    if !con.has_data_ready()? {
+        con.set_update_low();
+    }
     drop(con); // Unlock Mutex
     
     let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);

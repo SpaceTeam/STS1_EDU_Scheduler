@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use STS1_EDU_Scheduler::{communication::{CommunicationHandle, ComResult, CSBIPacket}, command::{ExecutionContext, SyncExecutionContext}};
+use STS1_EDU_Scheduler::{communication::{CommunicationHandle, ComResult, CSBIPacket}, command::{ExecutionContext, SyncExecutionContext, UpdatePin}};
 
 pub enum ComEvent {
     /// EDU shall want to receive the given packet

@@ -1,19 +1,23 @@
-use crate::communication::{CommunicationHandle, CSBIPacket, CommunicationError};
-use crate::persist::{Serializable, FileQueue};
+use crate::communication::{CSBIPacket, CommunicationError, CommunicationHandle};
+use crate::persist::{FileQueue, Serializable};
 use std::path::PathBuf;
-use std::time::Duration;
+use std::sync::{atomic, Arc, Mutex};
 use std::thread;
-use std::sync::{Arc, atomic, Mutex};
+use std::time::Duration;
 
 mod handlers;
 pub use handlers::*;
+use subprocess::Exec;
 
 type CommandResult = Result<(), CommandError>;
 
 const COM_TIMEOUT_DURATION: std::time::Duration = std::time::Duration::new(2, 0);
 
 /// Main routine. Waits for a command to be received from the COBC, then parses and executes it.
-pub fn handle_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecutionContext) -> CommandResult {
+pub fn handle_command(
+    com: &mut impl CommunicationHandle,
+    exec: &mut SyncExecutionContext,
+) -> CommandResult {
     let ret = process_command(com, exec);
 
     if let Err(ce) = &ret {
@@ -28,14 +32,18 @@ pub fn handle_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecuti
     ret
 }
 
-pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecutionContext) -> CommandResult {
+pub fn process_command(
+    com: &mut impl CommunicationHandle,
+    exec: &mut SyncExecutionContext,
+) -> CommandResult {
     // Preprocess
     let packet = com.receive_packet(&Duration::MAX)?;
     let data = if let CSBIPacket::DATA(data) = packet {
         data
-    }
-    else {
-        return Err(CommandError::CommunicationError(CommunicationError::PacketInvalidError)); // Ignore non data packets
+    } else {
+        return Err(CommandError::CommunicationError(
+            CommunicationError::PacketInvalidError,
+        )); // Ignore non data packets
     };
 
     if data.len() < 1 {
@@ -43,15 +51,17 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecut
     }
 
     match data[0] {
-        0x01 => { // STORE ARCHIVE
+        0x01 => {
+            // STORE ARCHIVE
             check_length(&data, 3)?;
             com.send_packet(CSBIPacket::ACK)?;
             let id = u16::from_be_bytes([data[1], data[2]]).to_string();
-            let bytes = com.receive_multi_packet(&COM_TIMEOUT_DURATION, || {false})?; // !! TODO !!
+            let bytes = com.receive_multi_packet(&COM_TIMEOUT_DURATION, || false)?; // !! TODO !!
             store_archive(id, bytes)?;
             com.send_packet(CSBIPacket::ACK)?;
-        },
-        0x02 => { // EXECUTE PROGRAM
+        }
+        0x02 => {
+            // EXECUTE PROGRAM
             check_length(&data, 7)?;
             com.send_packet(CSBIPacket::ACK)?;
             let program_id = u16::from_be_bytes([data[1], data[2]]);
@@ -59,28 +69,32 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecut
             let timeout = Duration::from_secs(u16::from_be_bytes([data[5], data[6]]).into());
             execute_program(exec, program_id, queue_id, timeout)?;
             com.send_packet(CSBIPacket::ACK)?;
-        },
-        0x03 => { // STOP PROGRAM
+        }
+        0x03 => {
+            // STOP PROGRAM
             check_length(&data, 1)?;
             com.send_packet(CSBIPacket::ACK)?;
             stop_program(exec)?;
             com.send_packet(CSBIPacket::ACK)?;
-        },
-        0x04 => { // GET STATUS
+        }
+        0x04 => {
+            // GET STATUS
             check_length(&data, 1)?;
             com.send_packet(CSBIPacket::ACK)?;
             com.send_packet(get_status(exec)?)?;
             com.receive_packet(&COM_TIMEOUT_DURATION)?; // Throw away ACK
-        },
-        0x05 => { // RETURN RESULT
+        }
+        0x05 => {
+            // RETURN RESULT
             check_length(&data, 1)?;
             com.send_packet(CSBIPacket::ACK)?;
             com.send_multi_packet(return_result(exec)?, &COM_TIMEOUT_DURATION)?;
             if let CSBIPacket::ACK = com.receive_packet(&COM_TIMEOUT_DURATION)? {
                 delete_result(exec)?;
             }
-        },
-        0x06 => { // UPDATE TIME
+        }
+        0x06 => {
+            // UPDATE TIME
             check_length(&data, 5)?;
             com.send_packet(CSBIPacket::ACK)?;
             let time = i32::from_be_bytes([data[1], data[2], data[3], data[4]]);
@@ -91,19 +105,17 @@ pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecut
             return Err(CommandError::InvalidCommError);
         }
     };
-    
+
     return Ok(());
 }
 
 fn check_length(vec: &Vec<u8>, n: usize) -> Result<(), CommandError> {
     if vec.len() != n {
         Err(CommandError::InvalidCommError)
-    }
-    else {
+    } else {
         Ok(())
     }
 }
-
 
 pub type SyncExecutionContext = Arc<Mutex<ExecutionContext>>;
 
@@ -117,13 +129,17 @@ pub struct ExecutionContext {
 }
 
 impl ExecutionContext {
-    pub fn new(status_path: PathBuf, result_path: PathBuf, update_pin: u8) -> Result<Self, std::io::Error> {
+    pub fn new(
+        status_path: PathBuf,
+        result_path: PathBuf,
+        update_pin: u8,
+    ) -> Result<Self, std::io::Error> {
         Ok(ExecutionContext {
             thread_handle: None,
             running_flag: None,
             status_q: FileQueue::<ProgramStatus>::new(status_path)?,
             result_q: FileQueue::<ResultId>::new(result_path)?,
-            update_pin: update_pin
+            update_pin: update_pin,
         })
     }
 
@@ -131,18 +147,34 @@ impl ExecutionContext {
         self.running_flag.unwrap_or(false)
     }
 
-    #[inline]
-    pub fn set_low(&mut self) {
-        if cfg!(test) { return; }
-        let mut pin = rppal::gpio::Gpio::new().unwrap().get(self.update_pin).unwrap().into_output();
-        pin.set_low();
+    pub fn has_data_ready(&self) -> Result<bool, std::io::Error> {
+        Ok(!self.status_q.is_empty()? || !self.result_q.is_empty()?)
+    }
+}
+
+pub trait UpdatePin {
+    fn set_update_high(&self);
+    fn set_update_low(&self);
+}
+
+#[cfg(not(feature = "mock"))] // Only compile if for target
+impl UpdatePin for ExecutionContext {
+    fn set_update_high(&self) {
+        let mut pin = rppal::gpio::Gpio::new()
+            .unwrap()
+            .get(self.update_pin)
+            .unwrap()
+            .into_output();
+        pin.set_high();
     }
 
-    #[inline]
-    pub fn set_high(&mut self) {
-        if cfg!(test) { return; }
-        let mut pin = rppal::gpio::Gpio::new().unwrap().get(self.update_pin).unwrap().into_output();
-        pin.set_high();
+    fn set_update_low(&self) {
+        let mut pin = rppal::gpio::Gpio::new()
+            .unwrap()
+            .get(self.update_pin)
+            .unwrap()
+            .into_output();
+        pin.set_low();
     }
 }
 
@@ -157,7 +189,7 @@ pub struct ProgramStatus {
 #[derive(Clone, Copy)]
 pub struct ResultId {
     pub program_id: u16,
-    pub queue_id: u16
+    pub queue_id: u16,
 }
 
 impl Serializable for ProgramStatus {
@@ -174,7 +206,11 @@ impl Serializable for ProgramStatus {
     fn deserialize(bytes: &[u8]) -> Self {
         let p_id = u16::from_be_bytes([bytes[0], bytes[1]]);
         let q_id = u16::from_be_bytes([bytes[2], bytes[3]]);
-        ProgramStatus { program_id: p_id, queue_id: q_id, exit_code: bytes[4] }
+        ProgramStatus {
+            program_id: p_id,
+            queue_id: q_id,
+            exit_code: bytes[4],
+        }
     }
 }
 
@@ -191,7 +227,10 @@ impl Serializable for ResultId {
     fn deserialize(bytes: &[u8]) -> Self {
         let p_id = u16::from_be_bytes([bytes[0], bytes[1]]);
         let q_id = u16::from_be_bytes([bytes[2], bytes[3]]);
-        ResultId { program_id: p_id, queue_id: q_id }
+        ResultId {
+            program_id: p_id,
+            queue_id: q_id,
+        }
     }
 }
 
@@ -202,7 +241,7 @@ pub enum CommandError {
     /// Signals that something has gone wrong while using a system tool (e.g. unzip)
     SystemError(Box<dyn std::error::Error>),
     /// Signals that packets that are not useful right now were received
-    InvalidCommError
+    InvalidCommError,
 }
 
 impl From<std::io::Error> for CommandError {
@@ -230,3 +269,10 @@ impl std::fmt::Display for CommandError {
 }
 
 impl std::error::Error for CommandError {}
+
+#[cfg(feature = "mock")]
+impl UpdatePin for ExecutionContext {
+    fn set_update_high(&self) {}
+
+    fn set_update_low(&self) {}
+}
