@@ -125,7 +125,7 @@ pub fn prepare_program(path: &str) {
 pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, SyncExecutionContext) {
     let _ = std::fs::create_dir("tests/tmp");
     let com = TestCom::new(packets);
-    let ec = ExecutionContext::new(format!("tests/tmp/{}_s", unique).into(), format!("tests/tmp/{}_r", unique).into()).unwrap();
+    let ec = ExecutionContext::new(format!("tests/tmp/{}_s", unique).into(), format!("tests/tmp/{}_r", unique).into(), 12).unwrap();
     let exec = Arc::new(Mutex::new(ec));
 
     return (com, exec);

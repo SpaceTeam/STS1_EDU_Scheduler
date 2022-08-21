@@ -112,21 +112,37 @@ pub struct ExecutionContext {
     pub thread_handle: Option<thread::JoinHandle<()>>,
     pub running_flag: Option<bool>,
     pub status_q: FileQueue<ProgramStatus>,
-    pub result_q: FileQueue<ResultId>
+    pub result_q: FileQueue<ResultId>,
+    pub update_pin: u8,
 }
 
 impl ExecutionContext {
-    pub fn new(status_path: PathBuf, result_path: PathBuf) -> Result<Self, std::io::Error> {
+    pub fn new(status_path: PathBuf, result_path: PathBuf, update_pin: u8) -> Result<Self, std::io::Error> {
         Ok(ExecutionContext {
             thread_handle: None,
             running_flag: None,
             status_q: FileQueue::<ProgramStatus>::new(status_path)?,
-            result_q: FileQueue::<ResultId>::new(result_path)?
+            result_q: FileQueue::<ResultId>::new(result_path)?,
+            update_pin: update_pin
         })
     }
 
     pub fn is_running(&self) -> bool {
         self.running_flag.unwrap_or(false)
+    }
+
+    #[inline]
+    pub fn set_low(&mut self) {
+        if cfg!(test) { return; }
+        let mut pin = rppal::gpio::Gpio::new().unwrap().get(self.update_pin).unwrap().into_output();
+        pin.set_low();
+    }
+
+    #[inline]
+    pub fn set_high(&mut self) {
+        if cfg!(test) { return; }
+        let mut pin = rppal::gpio::Gpio::new().unwrap().get(self.update_pin).unwrap().into_output();
+        pin.set_high();
     }
 }
 
