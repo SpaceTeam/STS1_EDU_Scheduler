@@ -14,7 +14,7 @@ use super::{communication, CommunicationError};
 const DATA_BITS: u8 = 8;
 const STOP_BITS: u8 = 1;
 const ALLOWED_SEND_RETRIES: u8 = 3;
-const MAX_READ_TIMEOUT_MILLIS:u64 = 25000;
+const MAX_READ_TIMEOUT:Duration = Duration::from_secs(25);
 
 pub struct UARTHandle {
     uart_PI: Uart,
@@ -43,17 +43,17 @@ impl UARTHandle {
 }
 
 impl CommunicationHandle for UARTHandle {
-    /// Sends serialized CSBIPackets
+    /// Sends the given bytes via UART
     /// ## Arguments
-    /// * `Bytes` - Serialized CSBIPacket
+    /// * `bytes` - a raw byte vector to send
     /// ## Returns
     /// * `Ok`: Sent correctly
-    /// * `InterfaceError`: UART Peripheral returns an error or a byte wasn't sent
+    /// * `InterfaceError`: UART Peripheral returns an error or failed to send everything
     fn send(&mut self, bytes: Vec<u8>) -> ComResult<()> {
         let mut sent_bytes: usize = 0;
 
-        for _ in 0..(ALLOWED_SEND_RETRIES + 1) {
-            sent_bytes += self.uart_PI.write(&[bytes[sent_bytes]])?;
+        for _ in 0..=ALLOWED_SEND_RETRIES {
+            sent_bytes += self.uart_PI.write(&bytes[sent_bytes..])?;
 
             if sent_bytes == bytes.len() {
                 return Ok(());
@@ -78,24 +78,21 @@ impl CommunicationHandle for UARTHandle {
         //Data buffer
         let mut received_data_buffer: Vec<u8> = Vec::new();
         let mut received_bytes_counter: usize = 0;
-        received_data_buffer.reserve(byte_count as usize);
+        received_data_buffer.reserve_exact(byte_count as usize);
 
         let mut timer = timeout.clone();
         //Time stamp of maximal length of 25 seconds. Used as inter-byte timeout for read_mode
         let mut time_stamp: Duration;
 
         while !timer.is_zero() {
-            time_stamp = std::time::Duration::from_millis(std::cmp::min(
-                timeout.div_f32(byte_count as f32).as_millis() as u64,
-                MAX_READ_TIMEOUT_MILLIS
-            ));
+            time_stamp = std::cmp::min(timer, MAX_READ_TIMEOUT);
             //Set the blocking conditions to expect progressively fewer bytes and decrease timeout
             self.uart_PI.set_read_mode(
                 (byte_count as u8) - (received_bytes_counter as u8), 
                 time_stamp
             )?;
 
-            match self.uart_PI.read(&mut [received_data_buffer[received_bytes_counter]]) {
+            match self.uart_PI.read(&mut received_data_buffer[received_bytes_counter..]) {
                 Ok(new_bytes_count) => {
 
                     received_bytes_counter += new_bytes_count;
