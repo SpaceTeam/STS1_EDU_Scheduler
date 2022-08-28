@@ -43,9 +43,9 @@ pub trait CommunicationHandle {
     /// is sent. By returning a [`CommunicationError::InterfaceError`] it can signal that the underlying driver failed.
     fn send(&mut self, bytes: Vec<u8>) -> ComResult<()>;
 
-    /// Blocks until n bytes are received or the timeout is reached. A [`CommunicationError`] can signal that it failed
+    /// Blocks until byte_count are received or the timeout is reached. A [`CommunicationError`] can signal that it failed
     /// or timed out.
-    fn receive(&mut self, n: u16, timeout: &std::time::Duration) -> ComResult<Vec<u8>>;
+    fn receive(&mut self, byte_count: u16, timeout: &std::time::Duration) -> ComResult<Vec<u8>>;
 
     /// Sends the supplied packet
     fn send_packet(&mut self, p: CSBIPacket) -> ComResult<()> {
@@ -54,7 +54,7 @@ pub trait CommunicationHandle {
 
     /// Blocks until it receives a CSBIPacket
     fn receive_packet(&mut self, timeout: &std::time::Duration) -> ComResult<CSBIPacket> {
-        let p = match self.receive(1, &timeout)?[0] {
+        let pack = match self.receive(1, &timeout)?[0] {
             0xd7 => CSBIPacket::ACK,
             0x27 => CSBIPacket::NACK,
             0xb4 => CSBIPacket::STOP,
@@ -77,7 +77,7 @@ pub trait CommunicationHandle {
             }
         };
 
-        Ok(p)
+        Ok(pack)
     }
 
     /// Attempts to continously receive multidata packets and returns them in a concatenated byte vector
