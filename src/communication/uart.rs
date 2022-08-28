@@ -62,10 +62,8 @@ impl CommunicationHandle for UARTHandle {
         return Err(CommunicationError::InterfaceError);
     }
 
-    ///Receives a given amount of bytes and stores in a buffer
-    /// # POTENTIAL ISSUE?
-    /// Probably needs to be wrapped in a own timeout since rppal's read-timeout will block indefinitely
-    /// until at least one byte as been received.
+    /// # Incomplete
+    /// Does not honor the supplied timeout. Planned for after HAF
     /// 
     /// Receives a byte packet of some exepected length with a timeout (non inter-byte). Function while retry after failed attemps indefinitely during the given timeout
     /// while the whole amount of expected bytes hasn't been received.
@@ -76,37 +74,19 @@ impl CommunicationHandle for UARTHandle {
     /// A vector of bytes
     fn receive(&mut self, byte_count: u16, timeout: &std::time::Duration) -> ComResult<Vec<u8>> {
         //Data buffer
-        let mut received_data_buffer: Vec<u8> = Vec::new();
+        let mut received_data_buffer: Vec<u8> = vec![0; byte_count as usize];
+
         let mut received_bytes_counter: usize = 0;
-        received_data_buffer.reserve_exact(byte_count as usize);
+        let mut read_byte_count: u8;
 
-        let mut timer = timeout.clone();
-        //Time stamp of maximal length of 25 seconds. Used as inter-byte timeout for read_mode
-        let mut time_stamp: Duration;
+        while received_bytes_counter < byte_count as usize {
+            read_byte_count = std::cmp::min(byte_count, 255) as u8;
+            self.uart_PI.set_read_mode(read_byte_count, Duration::ZERO)?;
 
-        while !timer.is_zero() {
-            time_stamp = std::cmp::min(timer, MAX_READ_TIMEOUT);
-            //Set the blocking conditions to expect progressively fewer bytes and decrease timeout
-            self.uart_PI.set_read_mode(
-                (byte_count as u8) - (received_bytes_counter as u8), 
-                time_stamp
-            )?;
-
-            match self.uart_PI.read(&mut received_data_buffer[received_bytes_counter..]) {
-                Ok(new_bytes_count) => {
-
-                    received_bytes_counter += new_bytes_count;
-                    
-                    if received_bytes_counter as u16 == byte_count {
-                        return Ok(received_data_buffer);
-                    }
-                }
-                _ => {}
-            }
-            //Asume fully used time_stamp and subtract used time_stamp from timer
-            timer = timer.saturating_sub(time_stamp);
+            received_bytes_counter += self.uart_PI.read(&mut received_data_buffer[received_bytes_counter..])?;
         }
-        return Err(CommunicationError::TimeoutError);
+
+        Ok(received_data_buffer)
     }
 
 }
