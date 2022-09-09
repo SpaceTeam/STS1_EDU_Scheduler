@@ -76,7 +76,7 @@ fn execute_program_infinite() -> TestResult {
     assert!(com.is_complete());
 
     std::thread::sleep(std::time::Duration::from_millis(1300));
-    assert!(!exec.status_q.lock().unwrap().is_empty()?);
+    assert!(!exec.lock().unwrap().status_q.is_empty()?);
 
     common::cleanup("2");
     Ok(())
@@ -99,7 +99,7 @@ fn stop_program() -> TestResult {
     command::handle_command(&mut com, &mut exec)?;
     command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
-    assert!(!exec.status_q.lock().unwrap().is_empty()?);
+    assert!(!exec.lock().unwrap().status_q.is_empty()?);
 
     common::cleanup("3");
     Ok(())
@@ -227,7 +227,7 @@ fn truncate_result() -> TestResult {
         COBC(DATA(vec![2, 0, 8, 0, 5, 0, 2])), // Execute Program 8, Queue 5, Timeout 1s
         EDU(ACK),
         EDU(ACK),
-        SLEEP(std::time::Duration::from_millis(1000)),
+        SLEEP(std::time::Duration::from_millis(2000)),
         COBC(DATA(vec![4])),
         EDU(ACK),
         EDU(DATA(vec![1, 0, 8, 0, 5, 0])),
@@ -253,7 +253,7 @@ fn stopped_return() -> TestResult {
         COBC(DATA(vec![2, 0, 9, 0, 5, 0, 2])),
         EDU(ACK),
         EDU(ACK),
-        SLEEP(std::time::Duration::from_millis(500)),
+        SLEEP(std::time::Duration::from_millis(2000)),
         COBC(DATA(vec![4])),
         EDU(ACK),
         EDU(DATA(vec![1, 0, 9, 0, 5, 0])),
@@ -346,7 +346,7 @@ fn invalid_packets_from_cobc() -> TestResult {
         EDU(NACK),
         COBC(DATA(vec![2,0,1])),
         EDU(NACK),
-        COBC_INVALID(vec![0x8b, 0, 2, 0, 0, 0, 0]), // Invalid CRC
+        COBC_INVALID(vec![0x8b, 0, 2, 0, 0, 0, 0, 1, 10]), // Invalid CRC
         EDU(NACK)
     ];
     let (mut com, mut exec) = common::prepare_handles(packets, "13");
@@ -362,5 +362,33 @@ fn invalid_packets_from_cobc() -> TestResult {
     assert!(com.is_complete());
     
     common::cleanup("13");
+    Ok(())
+}
+
+#[test]
+fn invalid_crc() -> TestResult {
+    let mut bytes = fs::read("./tests/student_program.zip")?;
+    let packets = vec![
+        COBC(DATA(vec![1, 0, 14])),
+        EDU(ACK),
+        COBC(DATA(bytes.drain(0..20).collect())),
+        EDU(ACK),
+        COBC_INVALID(vec![0x8b, 0, 5, 0, 0, 0, 0, 0, 0, 10, 10, 10]),
+        EDU(NACK),
+        COBC(DATA(bytes)),
+        EDU(ACK),
+        COBC(EOF),
+        EDU(ACK)
+    ];
+    let (mut com, mut exec) = common::prepare_handles(packets, "14");
+     
+    command::handle_command(&mut com, &mut exec)?;
+    assert!(com.is_complete());
+    
+    assert_eq!(0, std::process::Command::new("diff") // check wether the archive was stored correctly
+    .args(["-yq", "--strip-trailing-cr", "tests/test_data", "archives/14"])
+    .status()?.code().unwrap());
+    
+    common::cleanup("14");
     Ok(())
 }

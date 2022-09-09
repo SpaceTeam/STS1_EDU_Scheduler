@@ -1,4 +1,4 @@
-use crc::{Crc, CRC_16_ARC};
+use crc::{Crc, CRC_32_MPEG_2};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CSBIPacket {
@@ -10,7 +10,7 @@ pub enum CSBIPacket {
 }
 
 impl CSBIPacket {
-    const CRC: Crc<u16> = Crc::<u16>::new(&CRC_16_ARC);
+    const CRC: Crc<u32> = Crc::<u32>::new(&CRC_32_MPEG_2);
 
     /// This function constructs a byte array, containing the raw bytes that can be sent
     pub fn serialize(self) -> Vec<u8> {
@@ -21,17 +21,17 @@ impl CSBIPacket {
             CSBIPacket::EOF => vec![0x59],
             CSBIPacket::DATA(bytes) => {
                 let mut v = vec![0x8b];
-                let crc16 = CSBIPacket::CRC.checksum(&bytes);
-                v.reserve_exact(4 + bytes.len());
+                let crc32 = CSBIPacket::CRC.checksum(&bytes);
+                v.reserve_exact(6 + bytes.len());
                 v.extend((bytes.len() as u16).to_be_bytes());
                 v.extend(bytes);
-                v.extend(crc16.to_be_bytes());
+                v.extend(crc32.to_be_bytes());
                 v
             }
         }
     }
 
-    pub fn check(data: &Vec<u8>, checksum: u16) -> bool {
+    pub fn check(data: &Vec<u8>, checksum: u32) -> bool {
         return CSBIPacket::CRC.checksum(data) == checksum;
     }
 }
@@ -63,8 +63,8 @@ pub trait CommunicationHandle {
                 let length_field = self.receive(2, &timeout)?;
                 let length = u16::from_be_bytes([length_field[0], length_field[1]]);
                 let bytes = self.receive(length, &timeout)?;
-                let crc_field = self.receive(2, &timeout)?;
-                let crc = u16::from_be_bytes([crc_field[0], crc_field[1]]);
+                let crc_field = self.receive(4, &timeout)?;
+                let crc = u32::from_be_bytes([crc_field[0], crc_field[1], crc_field[2], crc_field[3]]);
                 if !CSBIPacket::check(&bytes, crc) {
                     return Err(CommunicationError::CRCError);
                 }
@@ -87,24 +87,32 @@ pub trait CommunicationHandle {
         let mut buffer = Vec::new();
 
         loop {
-            let pack = self.receive_packet(&timeout)?;
+            let pack = self.receive_packet(&timeout);
             if stop_fn() {
                 self.send_packet(CSBIPacket::STOP)?;
                 return Err(CommunicationError::STOPCondition);
             }
 
             match pack {
-                CSBIPacket::DATA(b) => {
+                Ok(CSBIPacket::DATA(b)) => {
                     buffer.extend(b);
                     self.send_packet(CSBIPacket::ACK)?;
                 },
-                CSBIPacket::EOF => {
+                Ok(CSBIPacket::EOF) => {
                     break;
                 },
-                CSBIPacket::STOP => {
+                Ok(CSBIPacket::STOP) => {
                     return Err(CommunicationError::STOPCondition);
                 },
-                _ => {
+                Err(CommunicationError::InterfaceError) => {
+                    return Err(CommunicationError::InterfaceError);
+                },
+                Err(CommunicationError::TimeoutError) => {
+                    log::error!("Receive multipacket timed out");
+                    return Err(CommunicationError::TimeoutError);
+                }
+                e @ _ => {
+                    log::error!("Received invalid data {:?}", e);
                     self.send_packet(CSBIPacket::NACK)?;
                 }
             };

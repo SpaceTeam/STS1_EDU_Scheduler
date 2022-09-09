@@ -1,4 +1,7 @@
-use STS1_EDU_Scheduler::{communication::{CommunicationHandle, ComResult, CSBIPacket}, command::ExecutionContext};
+use std::sync::{Arc, Mutex};
+use simplelog as sl;
+
+use STS1_EDU_Scheduler::{communication::{CommunicationHandle, ComResult, CSBIPacket}, command::{ExecutionContext, SyncExecutionContext, UpdatePin}};
 
 pub enum ComEvent {
     /// EDU shall want to receive the given packet
@@ -120,10 +123,13 @@ pub fn prepare_program(path: &str) {
 /// Construct a communication and execution handle for testing.
 /// * `packets` is a vector of expected communication see [ComEvent] for documentation
 /// * `unique` A string that is unique among other tests. Can be a simple incrementing number
-pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, ExecutionContext) {
+pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, SyncExecutionContext) {
     let _ = std::fs::create_dir("tests/tmp");
+    file_per_thread_logger::allow_uninitialized();
+    file_per_thread_logger::initialize("tests/tmp/log-");
     let com = TestCom::new(packets);
-    let exec = ExecutionContext::new(format!("tests/tmp/{}_s", unique).into(), format!("tests/tmp/{}_r", unique).into()).unwrap();
+    let ec = ExecutionContext::new(format!("tests/tmp/{}_s", unique).into(), format!("tests/tmp/{}_r", unique).into(), 12).unwrap();
+    let exec = Arc::new(Mutex::new(ec));
 
     return (com, exec);
 }
