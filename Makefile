@@ -8,12 +8,16 @@ coverage: build_with_cov
 	grcov . -s . --binary-path ./target/debug/ -t html --branch --ignore-not-existing -o ./target/debug/coverage/
 	firefox ./target/debug/coverage/index.html&
 
+packs:
+	cargo test build_pack --features rpi
+
 clean:
 	rm -rf *.profraw
 	rm -f ThreadId*
 	rm -f data/*
 	rm -rf archives/*
 	rm -rf tests/tmp
+	rm -f tests/*.pack
 
 rebuild_student_archive:
 	rm -f tests/student_program.zip
