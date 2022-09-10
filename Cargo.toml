@@ -15,6 +15,7 @@ rppal = "^0.13.1"
 
 [features]
 mock = []
+rpi = []
 
 [dev-dependencies]
 file-per-thread-logger = "*"

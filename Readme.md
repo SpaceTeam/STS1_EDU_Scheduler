@@ -69,8 +69,20 @@ Hook up the blue dev board to a monitor/keyboard/mouse. Use a USB stick to trans
 
 
 ## Sending packets to the EDU
+
+### Creating pack files
+In order to wrap data into the CEP Packets, write stuff in `tests/raspberry_tests.rs` (examples provided).
+
+Then use `make packs` to build them.
+
+### Sending pack files
 In WaveForms `Send & Receive` tab, click on the `send file` icon next to the send button.
 
 Change the File type from `Text File (*.*)` to `Binary File (*.*)`!
 
 Select the appropriate pack file
+
+# Running software tests
+To test the command handling without the UART stuff, use `cargo test --features mock`.
+
+This "mocks" the hardware and uses the testing framework.
