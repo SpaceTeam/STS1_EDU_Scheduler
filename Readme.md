@@ -81,3 +81,8 @@ In WaveForms `Send & Receive` tab, click on the `send file` icon next to the sen
 Change the File type from `Text File (*.*)` to `Binary File (*.*)`!
 
 Select the appropriate pack file
+
+# Running software tests
+To test the command handling without the UART stuff, use `cargo test --features mock`.
+
+This "mocks" the hardware and uses the testing framework.
