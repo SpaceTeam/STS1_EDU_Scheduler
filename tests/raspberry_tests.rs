@@ -21,7 +21,7 @@ fn build_pack_store_archive() {
 #[test]
 fn build_pack_execute_program() {
     // Execute with Program ID 0 & Queue ID 0
-    std::fs::write("tests/execute_program.pack", DATA(vec![2, 0, 0, 0, 0]).serialize());
+    std::fs::write("tests/execute_program.pack", DATA(vec![2, 0, 0, 0, 0, 2, 2]).serialize());
 }
 
 

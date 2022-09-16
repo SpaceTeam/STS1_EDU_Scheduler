@@ -17,7 +17,7 @@ fn main() {
     
     const UPDATE_PIN: u8 = 12;
 
-    let mut com = communication::UARTHandle::new(112500);
+    let mut com = communication::UARTHandle::new(115200);
     let ec = command::ExecutionContext::new("./data/status_queue".into(), "./data/result_queue".into(), UPDATE_PIN).unwrap();
     let mut exec = Arc::new(Mutex::new(ec));
 
