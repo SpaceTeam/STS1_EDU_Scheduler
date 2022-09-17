@@ -11,7 +11,7 @@ pub struct ExecutionContext {
     /// Through this value, the watchdog thread indicates, wether a student program is currently
     /// running. Changing it from true to false, indicates to the watchdog thread, that the 
     /// program should be stopped
-    pub running_flag: Option<bool>,
+    pub running_flag: bool,
     /// This queue contains information about finished student programs, that is to be sent to 
     /// the COBC  
     pub status_q: FileQueue<ProgramStatus>,
@@ -29,7 +29,7 @@ impl ExecutionContext {
     ) -> Result<Self, std::io::Error> {
         Ok(ExecutionContext {
             thread_handle: None,
-            running_flag: None,
+            running_flag: false,
             status_q: FileQueue::<ProgramStatus>::new(status_path)?,
             result_q: FileQueue::<ResultId>::new(result_path)?,
             update_pin: update_pin,
@@ -37,7 +37,7 @@ impl ExecutionContext {
     }
 
     pub fn is_running(&self) -> bool {
-        self.running_flag.unwrap_or(false)
+        self.running_flag
     }
 
     pub fn has_data_ready(&self) -> Result<bool, std::io::Error> {
@@ -45,14 +45,18 @@ impl ExecutionContext {
     }
 }
 
-pub trait UpdatePin {
-    fn set_update_high(&self);
-    fn set_update_low(&self);
+/// This trait outlines a pin that can be set/reset, which corresponds to the functionality needed
+/// for the EDU_UpdatePin
+pub trait TogglePin {
+    /// Set the corresponding pin to high
+    fn set_high(&self);
+    /// Set the corresponding pin to low
+    fn set_low(&self);
 }
 
-#[cfg(not(feature = "mock"))] // Only compile if for target
-impl UpdatePin for ExecutionContext {
-    fn set_update_high(&self) {
+#[cfg(not(feature = "mock"))] // --> this impl is not compiled when hardware is mocked
+impl TogglePin for ExecutionContext {
+    fn set_high(&self) {
         let mut pin = rppal::gpio::Gpio::new()
             .unwrap()
             .get(self.update_pin)
@@ -61,7 +65,7 @@ impl UpdatePin for ExecutionContext {
         pin.set_high();
     }
 
-    fn set_update_low(&self) {
+    fn set_low(&self) {
         let mut pin = rppal::gpio::Gpio::new()
             .unwrap()
             .get(self.update_pin)
@@ -72,7 +76,7 @@ impl UpdatePin for ExecutionContext {
 }
 
 /// Struct used for storing information about a finished student program
-pub struct ProgramStatus {
+pub struct ProgramStatus { 
     pub program_id: u16,
     pub queue_id: u16,
     pub exit_code: u8,
@@ -85,6 +89,7 @@ pub struct ResultId {
     pub queue_id: u16,
 }
 
+/// This impl allows ProgramStatus to be used in a FileQueue
 impl Serializable for ProgramStatus {
     const SIZE: usize = 5;
 
@@ -107,6 +112,7 @@ impl Serializable for ProgramStatus {
     }
 }
 
+/// This impl allows ResultId to be used in a FileQueue
 impl Serializable for ResultId {
     const SIZE: usize = 4;
 
@@ -125,4 +131,12 @@ impl Serializable for ResultId {
             queue_id: q_id,
         }
     }
+}
+
+/// This impl is only used when doing tests without hardware
+#[cfg(feature = "mock")]
+impl TogglePin for ExecutionContext {
+    fn set_high(&self) {}
+
+    fn set_low(&self) {}
 }

@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use simplelog as sl;
 
-use STS1_EDU_Scheduler::{communication::{CommunicationHandle, ComResult, CSBIPacket}, command::{ExecutionContext, SyncExecutionContext, UpdatePin}};
+use STS1_EDU_Scheduler::{communication::{CommunicationHandle, ComResult, CSBIPacket}, command::{ExecutionContext, SyncExecutionContext, TogglePin}};
 
 pub enum ComEvent {
     /// EDU shall want to receive the given packet

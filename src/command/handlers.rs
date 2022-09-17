@@ -7,7 +7,7 @@ use std::process::Command;
 
 use super::ProgramStatus;
 use super::ResultId;
-use super::{CommandResult, CommandError, SyncExecutionContext, UpdatePin};
+use super::{CommandResult, CommandError, SyncExecutionContext, TogglePin};
 
 /// Stores a received program in the appropriate folder and unzips it
 ///
@@ -90,7 +90,7 @@ pub fn execute_program(
                 should_kill = false;
                 break;
             }
-            if !wd_context.lock().unwrap().running_flag.unwrap_or(true) {
+            if !wd_context.lock().unwrap().running_flag {
                 // check if it should terminate
                 break;
             }
@@ -109,14 +109,14 @@ pub fn execute_program(
         let mut context = wd_context.lock().unwrap();
         context.status_q.push(ProgramStatus { program_id, queue_id, exit_code }).unwrap();
         context.result_q.push(rid).unwrap();
-        context.running_flag = Some(false);
-        context.set_update_high();
+        context.running_flag = false;
+        context.set_high();
         drop(context);
     });
 
     let mut l_context = context.lock().unwrap();
     l_context.thread_handle = Some(wd_handle);
-    l_context.running_flag = Some(true);
+    l_context.running_flag = true;
 
     Ok(())
 }
@@ -170,7 +170,7 @@ pub fn stop_program(context: &mut SyncExecutionContext) -> CommandResult {
     if !con.is_running() {
         return Ok(());
     }
-    con.running_flag = Some(false); // Signal watchdog thread to terminate
+    con.running_flag = false; // Signal watchdog thread to terminate
     drop(con); // Release mutex
 
     std::thread::sleep(Duration::from_millis(2000)); // Sensible amount?
@@ -198,7 +198,7 @@ pub fn get_status(context: &mut SyncExecutionContext) -> Result<CSBIPacket, Comm
         let mut v = vec![1];
         v.extend(con.status_q.raw_pop()?);
         if !con.has_data_ready()? {
-            con.set_update_low();
+            con.set_low();
         }
         Ok(CSBIPacket::DATA(v))
     }
@@ -228,7 +228,7 @@ pub fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
     let mut con = context.lock().unwrap();
     let res = con.result_q.pop()?;
     if !con.has_data_ready()? {
-        con.set_update_low();
+        con.set_low();
     }
     drop(con); // Unlock Mutex
     

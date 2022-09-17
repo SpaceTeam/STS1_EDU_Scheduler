@@ -175,10 +175,3 @@ impl std::fmt::Display for CommandError {
 }
 
 impl std::error::Error for CommandError {}
-
-#[cfg(feature = "mock")]
-impl UpdatePin for ExecutionContext {
-    fn set_update_high(&self) {}
-
-    fn set_update_low(&self) {}
-}
