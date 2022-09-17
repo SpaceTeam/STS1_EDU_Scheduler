@@ -48,10 +48,7 @@ impl<T: Serializable> FileQueue<T> {
         if !path.exists() {
             fs::File::create(&path)?;
         }
-        Ok(FileQueue {
-            path: path,
-            value_type: PhantomData,
-        })
+        Ok(FileQueue { path: path, value_type: PhantomData })
     }
 
     /// Similiar to `pop`, but only returns the raw bytes

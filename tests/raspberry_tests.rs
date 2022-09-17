@@ -9,9 +9,9 @@ use STS1_EDU_Scheduler::communication::{CSBIPacket, CSBIPacket::*};
 fn build_pack_store_archive() {
     let packets = vec![
         // Create a list of packets to send
-        DATA(vec![1, 0, 0]),                                       // Store Archive
+        DATA(vec![1, 0, 0]), // Store Archive
         DATA(std::fs::read("tests/student_program.zip").unwrap()), // bytes of the zip
-        EOF,                                                       // End of File
+        EOF,                 // End of File
     ];
 
     std::fs::write("tests/store_archive.pack", combine_packets(packets)); // Save the packets into a .pack file

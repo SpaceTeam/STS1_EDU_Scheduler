@@ -26,9 +26,8 @@ impl UARTHandle {
     /// A `UARTHandle`(r) that uses Raspberry Pi's UART Peripheral
     ///
     pub fn new(baud: u32) -> UARTHandle {
-        let mut uart_handler: UARTHandle = UARTHandle {
-            uart_PI: Uart::new(baud, Parity::None, DATA_BITS, STOP_BITS).unwrap(),
-        };
+        let mut uart_handler: UARTHandle =
+            UARTHandle { uart_PI: Uart::new(baud, Parity::None, DATA_BITS, STOP_BITS).unwrap() };
 
         let _ = uart_handler.uart_PI.set_write_mode(true);
 
@@ -77,7 +76,8 @@ impl CommunicationHandle for UARTHandle {
             read_byte_count = std::cmp::min(byte_count, 255) as u8;
             self.uart_PI.set_read_mode(read_byte_count, Duration::ZERO)?;
 
-            received_bytes_counter += self.uart_PI.read(&mut received_data_buffer[received_bytes_counter..])?;
+            received_bytes_counter +=
+                self.uart_PI.read(&mut received_data_buffer[received_bytes_counter..])?;
         }
 
         Ok(received_data_buffer)

@@ -25,7 +25,11 @@ pub struct ExecutionContext {
 }
 
 impl ExecutionContext {
-    pub fn new(status_path: std::path::PathBuf, result_path: std::path::PathBuf, update_pin: u8) -> Result<Self, std::io::Error> {
+    pub fn new(
+        status_path: std::path::PathBuf,
+        result_path: std::path::PathBuf,
+        update_pin: u8,
+    ) -> Result<Self, std::io::Error> {
         Ok(ExecutionContext {
             thread_handle: None,
             running_flag: false,
@@ -95,11 +99,7 @@ impl Serializable for ProgramStatus {
     fn deserialize(bytes: &[u8]) -> Self {
         let p_id = u16::from_be_bytes([bytes[0], bytes[1]]);
         let q_id = u16::from_be_bytes([bytes[2], bytes[3]]);
-        ProgramStatus {
-            program_id: p_id,
-            queue_id: q_id,
-            exit_code: bytes[4],
-        }
+        ProgramStatus { program_id: p_id, queue_id: q_id, exit_code: bytes[4] }
     }
 }
 
@@ -117,10 +117,7 @@ impl Serializable for ResultId {
     fn deserialize(bytes: &[u8]) -> Self {
         let p_id = u16::from_be_bytes([bytes[0], bytes[1]]);
         let q_id = u16::from_be_bytes([bytes[2], bytes[3]]);
-        ResultId {
-            program_id: p_id,
-            queue_id: q_id,
-        }
+        ResultId { program_id: p_id, queue_id: q_id }
     }
 }
 

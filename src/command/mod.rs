@@ -11,12 +11,17 @@ type CommandResult = Result<(), CommandError>;
 const COM_TIMEOUT_DURATION: std::time::Duration = std::time::Duration::new(2, 0);
 
 /// Main routine. Waits for a command to be received from the COBC, then parses and executes it.
-pub fn handle_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecutionContext) -> CommandResult {
+pub fn handle_command(
+    com: &mut impl CommunicationHandle,
+    exec: &mut SyncExecutionContext,
+) -> CommandResult {
     let ret = process_command(com, exec);
 
     if let Err(ce) = &ret {
         match ce {
-            e @ CommandError::SystemError(_) | e @ CommandError::InvalidCommError | e @ CommandError::CommunicationError(CommunicationError::CRCError) => {
+            e @ CommandError::SystemError(_)
+            | e @ CommandError::InvalidCommError
+            | e @ CommandError::CommunicationError(CommunicationError::CRCError) => {
                 log::error!("Failed to process command {:?}", e);
                 com.send_packet(CSBIPacket::NACK)?;
             }
@@ -27,7 +32,10 @@ pub fn handle_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecuti
     ret
 }
 
-pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecutionContext) -> CommandResult {
+pub fn process_command(
+    com: &mut impl CommunicationHandle,
+    exec: &mut SyncExecutionContext,
+) -> CommandResult {
     // Preprocess
     let packet = com.receive_packet(&Duration::MAX)?;
     log::info!("{:?}", packet);

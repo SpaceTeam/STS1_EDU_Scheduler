@@ -54,7 +54,12 @@ pub fn store_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
 /// * `program_id` The name of the ./archives/ subfolder
 /// * `queue_id` The first argument for the student program
 /// * `timeout` The maxmimum time the student program shall execute. Will be rounded up to the nearest second
-pub fn execute_program(context: &mut SyncExecutionContext, program_id: u16, queue_id: u16, timeout: Duration) -> CommandResult {
+pub fn execute_program(
+    context: &mut SyncExecutionContext,
+    program_id: u16,
+    queue_id: u16,
+    timeout: Duration,
+) -> CommandResult {
     let _ = stop_program(context); // Ignore return value
 
     // TODO config setuid
@@ -66,7 +71,8 @@ pub fn execute_program(context: &mut SyncExecutionContext, program_id: u16, queu
         stderr: subprocess::Redirection::Merge,
         ..Default::default()
     };
-    let mut student_process = subprocess::Popen::create(&["python", "main.py", &queue_id.to_string()], config)?;
+    let mut student_process =
+        subprocess::Popen::create(&["python", "main.py", &queue_id.to_string()], config)?;
 
     // create a reference for the watchdog thread
     let wd_context = context.clone();
@@ -113,10 +119,11 @@ pub fn execute_program(context: &mut SyncExecutionContext, program_id: u16, queu
         context.status_q.push(ProgramStatus { program_id, queue_id, exit_code }).unwrap();
         context.result_q.push(rid).unwrap();
         context.running_flag = false;
-        context.set_high();
+        context.set_high(); // Set EDU_Update pin
         drop(context);
     });
 
+    // After spawning the watchdog thread, store its handle and set flag
     let mut l_context = context.lock().unwrap();
     l_context.thread_handle = Some(wd_handle);
     l_context.running_flag = true;
@@ -124,7 +131,7 @@ pub fn execute_program(context: &mut SyncExecutionContext, program_id: u16, queu
     Ok(())
 }
 
-/// The function uses `tar` to create an uncompressed archive that includes the result file specified, as well as
+/// The function uses `zip` to create an uncompressed archive that includes the result file specified, as well as
 /// the programs stdout/stderr and the schedulers log file. If any of the files is missing, the archive
 /// is created without them.
 fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
@@ -179,6 +186,7 @@ pub fn stop_program(context: &mut SyncExecutionContext) -> CommandResult {
     std::thread::sleep(Duration::from_millis(2000)); // Sensible amount?
 
     assert!(
+        // Panic if the watchdog thread is not finished
         context.lock().unwrap().thread_handle.as_ref().unwrap().is_finished(),
         "Watchdog thread did not finish in time"
     );

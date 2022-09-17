@@ -12,12 +12,12 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 fn store_archive() -> TestResult {
     // Define what should happen during communication. How this should look is defined in the PDD
     let packets = vec![
-        COBC(DATA(vec![0x01, 0x00, 0x00])),                   // COBC sends Store Archive Command (0x01 -> Header, [0x00, 0x00] -> Program Id)
-        EDU(ACK),                                             // EDU acknowledges packet integrity
+        COBC(DATA(vec![0x01, 0x00, 0x00])), // COBC sends Store Archive Command (0x01 -> Header, [0x00, 0x00] -> Program Id)
+        EDU(ACK),                           // EDU acknowledges packet integrity
         COBC(DATA(fs::read("./tests/student_program.zip")?)), // COBC sends the archive
-        EDU(ACK),                                             // EDU acknowledges packet integrity
-        COBC(EOF),                                            // COBC signals end of packets
-        EDU(ACK),                                             // EDU signals successful Store Archive
+        EDU(ACK),                           // EDU acknowledges packet integrity
+        COBC(EOF),                          // COBC signals end of packets
+        EDU(ACK),                           // EDU signals successful Store Archive
     ];
 
     // Setup testing environment
@@ -208,7 +208,11 @@ fn return_result() -> TestResult {
     command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
-    std::process::Command::new("unzip").current_dir("./tests/tmp").arg("-o").arg("7.zip").status()?;
+    std::process::Command::new("unzip")
+        .current_dir("./tests/tmp")
+        .arg("-o")
+        .arg("7.zip")
+        .status()?;
 
     assert_eq!(std::fs::read("tests/tmp/3")?, vec![0xde, 0xad]);
     assert!(std::fs::read("tests/tmp/7_3.log").is_ok());

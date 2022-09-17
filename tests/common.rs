@@ -95,11 +95,7 @@ impl CommunicationHandle for TestCom {
 
 impl TestCom {
     pub fn new(packets: Vec<ComEvent>) -> Self {
-        TestCom {
-            expected_events: packets,
-            receive_queue: vec![],
-            index: 0,
-        }
+        TestCom { expected_events: packets, receive_queue: vec![], index: 0 }
     }
 
     pub fn is_complete(&self) -> bool {
@@ -132,7 +128,12 @@ pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, SyncEx
     file_per_thread_logger::allow_uninitialized();
     file_per_thread_logger::initialize("tests/tmp/log-");
     let com = TestCom::new(packets);
-    let ec = ExecutionContext::new(format!("tests/tmp/{}_s", unique).into(), format!("tests/tmp/{}_r", unique).into(), 12).unwrap();
+    let ec = ExecutionContext::new(
+        format!("tests/tmp/{}_s", unique).into(),
+        format!("tests/tmp/{}_r", unique).into(),
+        12,
+    )
+    .unwrap();
     let exec = Arc::new(Mutex::new(ec));
 
     return (com, exec);
