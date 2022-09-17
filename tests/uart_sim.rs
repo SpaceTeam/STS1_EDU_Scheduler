@@ -13,7 +13,7 @@ use std::{
 
 use {
     STS1_EDU_Scheduler::command::return_result,
-    STS1_EDU_Scheduler::communication::{ComResult, CommunicationHandle, CommunicationError},
+    STS1_EDU_Scheduler::communication::{ComResult, CommunicationHandle, CommunicationError, CSBIPacket},
 };
 
 use log::warn;
@@ -74,8 +74,8 @@ impl CommunicationHandle for UARTSimHandle {
     /// 
     /// Use the `COBC`'s `receive` to actually read its rx_buffer
     fn send(&mut self, bytes: Vec<u8>) -> ComResult<()> {
-    
-        let mut write_buffer: RwLockWriteGuard<Vec<u8>> = self.tx_buffer.write().unwrap();
+
+        let mut write_buffer = self.tx_buffer.write().unwrap();
         *write_buffer = bytes.clone();
         let inter_byte_duration: Duration = Duration::from_nanos(1_000_000 / (self.baudrate * 8) as u64);
 
@@ -98,9 +98,24 @@ impl CommunicationHandle for UARTSimHandle {
         return Ok(());
     }
 
-    ///
     fn receive(&mut self, byte_count: u16, timeout: &std::time::Duration) -> ComResult<Vec<u8>> {
-        todo!()   
+        let (ch_sender, ch_receiver) = mpsc::channel::<ComResult<Vec<u8>>>();
+        let rx_ref = self.rx_buffer.clone(); //clone Arc and give it to Mr. New Thread.
+
+        thread::spawn(move || {
+            match rx_ref.read() { //grabs the Arc
+                Ok(byte_vec) => {ch_sender.send(Ok(byte_vec.clone())).unwrap();},
+                Err(_e) => {ch_sender.send(Err(CommunicationError::InterfaceError)).unwrap();}
+            }
+        });
+
+        thread::sleep(*timeout);
+        if let Ok(read_result) = ch_receiver.try_recv() {
+            let ret = read_result?;
+            return Ok(ret);
+        } else {
+            return Err(CommunicationError::TimeoutError);
+        }
     }
 
 }
@@ -141,8 +156,32 @@ impl COBCSim {
 
 impl CommunicationHandle for COBCSim {
 
+    /// Sends `bytes` via simulated UART. For simplifaction purposes,
+    /// it writes directly into the `Raspi`'s `rx_buffer`.
+    /// 
+    /// Use the `Raspi`'s `receive` to actually read its rx_buffer
     fn send(&mut self, bytes: Vec<u8>) -> ComResult<()> {
-        thread::sleep(SEND_DURATION);
+
+        let mut write_buffer = self.tx_buffer.write().unwrap();
+        *write_buffer = bytes.clone();
+        let inter_byte_duration: Duration = Duration::from_nanos(1_000_000 / (self.baudrate * 8) as u64);
+
+        //Acquire Raspi's rx_buffer;
+        let raspi_rx_ref: Arc<RwLock<Vec<u8>>>;
+        let mut raspi_rx_buffer: RwLockWriteGuard<Vec<u8>>;
+        {
+            let cobc_temp = self.raspi.as_ref().unwrap().read().unwrap(); //dies with the scope
+            raspi_rx_ref = cobc_temp.rx_buffer.clone();
+        }
+        raspi_rx_buffer = raspi_rx_ref.write().unwrap();
+
+        // Start bit
+        thread::sleep(inter_byte_duration);
+
+        for i in 0..write_buffer.len() {
+            raspi_rx_buffer.push(write_buffer[i]);
+            thread::sleep(inter_byte_duration);
+        }
         return Ok(());
     }
 
@@ -169,7 +208,7 @@ impl CommunicationHandle for COBCSim {
 
 
 #[test]
-fn sim_raspi_send_cobc_receive() -> Result<(), Box<dyn std::error::Error>> {
+fn sim_raspi_send_cobc_receive_bytes() -> Result<(), Box<dyn std::error::Error>> {
     
     let raspi = Arc::new(RwLock::new(UARTSimHandle::new(115200)));
     let cobc = Arc::new(RwLock::new(COBCSim::new(115200)));
@@ -183,6 +222,25 @@ fn sim_raspi_send_cobc_receive() -> Result<(), Box<dyn std::error::Error>> {
 
     let _ = raspi.write().unwrap().send(vec![1, 2, 3, 4]);
     let res = cobc.write().unwrap().receive(4, &timeout);
+    assert_eq!(res.unwrap(), vec![1, 2, 3, 4]);
+
+    return Ok(());
+}
+
+#[test]
+fn sim_cobc_send_raspi_receive_bytes() -> Result<(), Box<dyn std::error::Error>> {
+    let raspi = Arc::new(RwLock::new(UARTSimHandle::new(115200)));
+    let cobc = Arc::new(RwLock::new(COBCSim::new(115200)));
+    // Connect them mfs
+    {
+        raspi.write().unwrap().cobc = Some(cobc.clone());
+        cobc.write().unwrap().raspi = Some(raspi.clone());
+    }
+
+    let timeout: Duration = Duration::from_nanos(2);
+
+    let _ = cobc.write().unwrap().send(vec![1, 2, 3, 4]);
+    let res = raspi.write().unwrap().receive(4, &timeout);
 
     assert_eq!(res.unwrap(), vec![1, 2, 3, 4]);
 
