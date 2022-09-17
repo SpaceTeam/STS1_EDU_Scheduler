@@ -1,9 +1,7 @@
 use std::fs;
-use std::io::{Write};
+use std::io::Write;
 use std::marker::PhantomData;
 use std::path;
-use std::sync::Mutex;
-
 /// A trait for serializing and deserializing objects into bytes.
 pub trait Serializable {
     /// The number of bytes the object has when serialized
@@ -13,7 +11,6 @@ pub trait Serializable {
     /// Reconstructs itself from the given bytes
     fn deserialize(bytes: &[u8]) -> Self;
 }
-
 
 /// A Queue data structure, that stores its values on the filesystem.
 ///
@@ -26,7 +23,7 @@ pub trait Serializable {
 /// ```
 /// # Thread Safety
 /// This type is not thread safe on its own! When multiple queues, pointing at the same file,
-/// are created, the behaviour is undefined (dependent on the OS). 
+/// are created, the behaviour is undefined (dependent on the OS).
 /// Wrap them in Mutexes as required.
 /// ```ignore
 /// let q = std::sync::Arc::new(Mutex::new(FileQueue::new("__bytes".into())?));
@@ -40,20 +37,21 @@ pub trait Serializable {
 /// ```
 pub struct FileQueue<T: Serializable> {
     path: path::PathBuf,
-    value_type: PhantomData<T>
+    value_type: PhantomData<T>,
 }
 
-
-
 impl<T: Serializable> FileQueue<T> {
-    /// Creates a new queue, which stores its value in the file at `path`. 
-    /// 
+    /// Creates a new queue, which stores its value in the file at `path`.
+    ///
     /// The file is created if it does not exist yet. An io::Error is returned if this fails.
     pub fn new(path: path::PathBuf) -> Result<Self, std::io::Error> {
         if !path.exists() {
             fs::File::create(&path)?;
         }
-        Ok(FileQueue { path: path, value_type: PhantomData })
+        Ok(FileQueue {
+            path: path,
+            value_type: PhantomData,
+        })
     }
 
     /// Similiar to `pop`, but only returns the raw bytes
@@ -70,7 +68,7 @@ impl<T: Serializable> FileQueue<T> {
     }
 
     /// Pops the next element from the queue. Its bytes are removed from the underlying file.
-    /// 
+    ///
     /// If any operation on the filesystem fails, the queue is unchanged.
     pub fn pop(&mut self) -> Result<T, std::io::Error> {
         Ok(T::deserialize(&self.raw_pop()?))
@@ -93,7 +91,10 @@ impl<T: Serializable> FileQueue<T> {
 
     /// Pushes the given value to the end of the queue. This fails if the underlying file cannot be opened.
     pub fn push(&mut self, val: T) -> Result<(), std::io::Error> {
-        fs::OpenOptions::new().append(true).open(&self.path)?.write_all(&val.serialize())?;
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&self.path)?
+            .write_all(&val.serialize())?;
         Ok(())
     }
 
@@ -101,11 +102,10 @@ impl<T: Serializable> FileQueue<T> {
     pub fn is_empty(&self) -> Result<bool, std::io::Error> {
         return Ok(fs::File::open(&self.path)?.metadata()?.len() == 0);
     }
-
 }
 
-
 mod implementations;
+use std::sync::Mutex;
 
 #[test]
 fn bytes() -> Result<(), Box<dyn std::error::Error>> {
@@ -128,7 +128,6 @@ fn hw() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::remove_file("__hw")?;
     Ok(())
 }
-
 
 #[test]
 fn mthread() -> Result<(), Box<dyn std::error::Error>> {

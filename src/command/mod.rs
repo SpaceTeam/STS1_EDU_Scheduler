@@ -1,8 +1,4 @@
 use crate::communication::{CSBIPacket, CommunicationError, CommunicationHandle};
-use crate::persist::{FileQueue, Serializable};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::Duration;
 
 mod handlers;
@@ -138,7 +134,6 @@ fn check_length(vec: &Vec<u8>, n: usize) -> Result<(), CommandError> {
         Ok(())
     }
 }
-
 
 #[derive(Debug)]
 pub enum CommandError {

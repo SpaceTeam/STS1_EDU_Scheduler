@@ -1,24 +1,35 @@
 use core::time;
-use std::{thread, sync::{Arc, Mutex}};
 use rppal::gpio::Gpio;
+use std::{
+    sync::{Arc, Mutex},
+    thread,
+};
 
 use log;
 use simplelog as sl;
 
-mod communication;
 mod command;
+mod communication;
 mod persist;
 use command::CommandError;
 use communication::CommunicationError;
 
-
 fn main() {
-    let _ = sl::WriteLogger::init(sl::LevelFilter::Info, sl::Config::default(), std::fs::File::create("log").unwrap());
-    
+    let _ = sl::WriteLogger::init(
+        sl::LevelFilter::Info,
+        sl::Config::default(),
+        std::fs::File::create("log").unwrap(),
+    );
+
     const UPDATE_PIN: u8 = 12;
 
     let mut com = communication::UARTHandle::new(115200);
-    let ec = command::ExecutionContext::new("./data/status_queue".into(), "./data/result_queue".into(), UPDATE_PIN).unwrap();
+    let ec = command::ExecutionContext::new(
+        "./data/status_queue".into(),
+        "./data/result_queue".into(),
+        UPDATE_PIN,
+    )
+    .unwrap();
     let mut exec = Arc::new(Mutex::new(ec));
 
     //Heartbeat thread
@@ -40,15 +51,15 @@ fn main() {
 
     loop {
         let ret = command::handle_command(&mut com, &mut exec);
-        
+
         if let Err(e) = ret {
             match e {
                 CommandError::SystemError(ioe) => {
                     log::error!("Command failed with {}", ioe);
-                },
+                }
                 CommandError::CommunicationError(ce) => {
                     handle_communication_error(ce);
-                },
+                }
                 CommandError::InvalidCommError => {
                     log::error!("Received currently invalid command");
                 }
@@ -61,17 +72,17 @@ fn handle_communication_error(ce: CommunicationError) {
     match ce {
         CommunicationError::STOPCondition => {
             log::error!("Multi-packet communication stopped");
-        },
+        }
         CommunicationError::InterfaceError => {
             log::error!("CommunicationHandle failed");
             panic!();
-        },
+        }
         CommunicationError::PacketInvalidError => {
             log::error!("Received unknown packet");
-        },
+        }
         CommunicationError::TimeoutError => {
             log::error!("Communication timed out");
-        },            
+        }
         CommunicationError::CRCError => (),
     }
 }

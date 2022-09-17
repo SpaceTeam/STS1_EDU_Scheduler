@@ -1,5 +1,8 @@
-use std::{sync::{Arc, Mutex}, thread};
-use crate::persist::{Serializable, FileQueue};
+use crate::persist::{FileQueue, Serializable};
+use std::{
+    sync::{Arc, Mutex},
+    thread,
+};
 
 /// This type makes the ExecutionContext thread-safe
 pub type SyncExecutionContext = Arc<Mutex<ExecutionContext>>;
@@ -7,12 +10,12 @@ pub type SyncExecutionContext = Arc<Mutex<ExecutionContext>>;
 /// This struct is used to store the relevant handles for when a student program is executed
 pub struct ExecutionContext {
     /// Contains the JoinHandle of the watchdog thread
-    pub thread_handle: Option<thread::JoinHandle<()>>, 
+    pub thread_handle: Option<thread::JoinHandle<()>>,
     /// Through this value, the watchdog thread indicates, wether a student program is currently
-    /// running. Changing it from true to false, indicates to the watchdog thread, that the 
+    /// running. Changing it from true to false, indicates to the watchdog thread, that the
     /// program should be stopped
     pub running_flag: bool,
-    /// This queue contains information about finished student programs, that is to be sent to 
+    /// This queue contains information about finished student programs, that is to be sent to
     /// the COBC  
     pub status_q: FileQueue<ProgramStatus>,
     /// This queue contains information about results, that should be sent to the COBC
@@ -76,7 +79,7 @@ impl TogglePin for ExecutionContext {
 }
 
 /// Struct used for storing information about a finished student program
-pub struct ProgramStatus { 
+pub struct ProgramStatus {
     pub program_id: u16,
     pub queue_id: u16,
     pub exit_code: u8,

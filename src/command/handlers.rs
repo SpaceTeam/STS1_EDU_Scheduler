@@ -1,13 +1,13 @@
 use crate::communication::CSBIPacket;
 use std::fs::File;
 use std::io::prelude::*;
+use std::process::Command;
 use std::thread;
 use std::time::Duration;
-use std::process::Command;
 
 use super::ProgramStatus;
 use super::ResultId;
-use super::{CommandResult, CommandError, SyncExecutionContext, TogglePin};
+use super::{CommandError, CommandResult, SyncExecutionContext, TogglePin};
 
 /// Stores a received program in the appropriate folder and unzips it
 ///
@@ -57,7 +57,7 @@ pub fn execute_program(
     context: &mut SyncExecutionContext,
     program_id: u16,
     queue_id: u16,
-    timeout: Duration
+    timeout: Duration,
 ) -> CommandResult {
     let _ = stop_program(context); // Ignore return value
 
@@ -70,7 +70,8 @@ pub fn execute_program(
         stderr: subprocess::Redirection::Merge,
         ..Default::default()
     };
-    let mut student_process = subprocess::Popen::create(&["python", "main.py", &queue_id.to_string()], config)?;
+    let mut student_process =
+        subprocess::Popen::create(&["python", "main.py", &queue_id.to_string()], config)?;
 
     // Interthread communication
     let wd_context = context.clone();
@@ -82,7 +83,10 @@ pub fn execute_program(
 
         // Loop over timeout in 1s steps
         for _ in 0..timeout.as_secs() {
-            if let Some(status) = student_process.wait_timeout(Duration::from_secs(1)).unwrap() {
+            if let Some(status) = student_process
+                .wait_timeout(Duration::from_secs(1))
+                .unwrap()
+            {
                 // student program terminated itself
                 if let subprocess::ExitStatus::Exited(n) = status {
                     exit_code = n as u8
@@ -99,15 +103,33 @@ pub fn execute_program(
         if should_kill {
             log::warn!("Student Process timed out or is stopped");
             student_process.kill().unwrap();
-            student_process.wait_timeout(Duration::from_millis(200)).unwrap().unwrap(); // Panic if not stopped
+            student_process
+                .wait_timeout(Duration::from_millis(200))
+                .unwrap()
+                .unwrap(); // Panic if not stopped
         }
 
-        log::info!("Program {}:{} finished with {}", program_id, queue_id, exit_code);
-        let rid = ResultId { program_id, queue_id };
+        log::info!(
+            "Program {}:{} finished with {}",
+            program_id,
+            queue_id,
+            exit_code
+        );
+        let rid = ResultId {
+            program_id,
+            queue_id,
+        };
         build_result_archive(rid).unwrap();
 
         let mut context = wd_context.lock().unwrap();
-        context.status_q.push(ProgramStatus { program_id, queue_id, exit_code }).unwrap();
+        context
+            .status_q
+            .push(ProgramStatus {
+                program_id,
+                queue_id,
+                exit_code,
+            })
+            .unwrap();
         context.result_q.push(rid).unwrap();
         context.running_flag = false;
         context.set_high();
@@ -142,7 +164,7 @@ fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
         .arg(res_path)
         .arg(log_path)
         .status();
-    
+
     Ok(())
 }
 
@@ -175,13 +197,22 @@ pub fn stop_program(context: &mut SyncExecutionContext) -> CommandResult {
 
     std::thread::sleep(Duration::from_millis(2000)); // Sensible amount?
 
-    assert!(context.lock().unwrap().thread_handle.as_ref().unwrap().is_finished(), "Watchdog thread did not finish in time");
+    assert!(
+        context
+            .lock()
+            .unwrap()
+            .thread_handle
+            .as_ref()
+            .unwrap()
+            .is_finished(),
+        "Watchdog thread did not finish in time"
+    );
 
     Ok(())
 }
 
 /// The function returns a DATA packet that conforms to the Get Status specification in the PDD.
-/// 
+///
 /// **Panics if no lock can be obtained on the queues.**
 pub fn get_status(context: &mut SyncExecutionContext) -> Result<CSBIPacket, CommandError> {
     let mut con = context.lock().unwrap();
@@ -192,8 +223,7 @@ pub fn get_status(context: &mut SyncExecutionContext) -> Result<CSBIPacket, Comm
     if s_empty && r_empty {
         log::info!("Nothing to report");
         Ok(CSBIPacket::DATA(vec![0]))
-    }
-    else if !s_empty {
+    } else if !s_empty {
         log::info!("Sending program exit code");
         let mut v = vec![1];
         v.extend(con.status_q.raw_pop()?);
@@ -201,8 +231,7 @@ pub fn get_status(context: &mut SyncExecutionContext) -> Result<CSBIPacket, Comm
             con.set_low();
         }
         Ok(CSBIPacket::DATA(v))
-    }
-    else {
+    } else {
         log::info!("Sending result-ready");
         let mut v = vec![2];
         v.extend(con.result_q.raw_peek()?);
@@ -231,7 +260,7 @@ pub fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
         con.set_low();
     }
     drop(con); // Unlock Mutex
-    
+
     let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
     let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
     let out_path = format!("./data/{}_{}.zip", res.program_id, res.queue_id);
@@ -241,7 +270,6 @@ pub fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
 
     Ok(())
 }
-
 
 /// Updates the system time
 ///
@@ -255,6 +283,6 @@ pub fn update_time(epoch: i32) -> CommandResult {
     if !exit_status.success() {
         return Err(CommandError::SystemError("date utility failed".into()));
     }
-    
+
     Ok(())
 }
