@@ -75,12 +75,9 @@ impl CommunicationHandle for UARTHandle {
 
         while received_bytes_counter < byte_count as usize {
             read_byte_count = std::cmp::min(byte_count, 255) as u8;
-            self.uart_PI
-                .set_read_mode(read_byte_count, Duration::ZERO)?;
+            self.uart_PI.set_read_mode(read_byte_count, Duration::ZERO)?;
 
-            received_bytes_counter += self
-                .uart_PI
-                .read(&mut received_data_buffer[received_bytes_counter..])?;
+            received_bytes_counter += self.uart_PI.read(&mut received_data_buffer[received_bytes_counter..])?;
         }
 
         Ok(received_data_buffer)

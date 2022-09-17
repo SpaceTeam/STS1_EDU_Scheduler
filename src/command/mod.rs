@@ -11,17 +11,12 @@ type CommandResult = Result<(), CommandError>;
 const COM_TIMEOUT_DURATION: std::time::Duration = std::time::Duration::new(2, 0);
 
 /// Main routine. Waits for a command to be received from the COBC, then parses and executes it.
-pub fn handle_command(
-    com: &mut impl CommunicationHandle,
-    exec: &mut SyncExecutionContext,
-) -> CommandResult {
+pub fn handle_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecutionContext) -> CommandResult {
     let ret = process_command(com, exec);
 
     if let Err(ce) = &ret {
         match ce {
-            e @ CommandError::SystemError(_)
-            | e @ CommandError::InvalidCommError
-            | e @ CommandError::CommunicationError(CommunicationError::CRCError) => {
+            e @ CommandError::SystemError(_) | e @ CommandError::InvalidCommError | e @ CommandError::CommunicationError(CommunicationError::CRCError) => {
                 log::error!("Failed to process command {:?}", e);
                 com.send_packet(CSBIPacket::NACK)?;
             }
@@ -32,10 +27,7 @@ pub fn handle_command(
     ret
 }
 
-pub fn process_command(
-    com: &mut impl CommunicationHandle,
-    exec: &mut SyncExecutionContext,
-) -> CommandResult {
+pub fn process_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecutionContext) -> CommandResult {
     // Preprocess
     let packet = com.receive_packet(&Duration::MAX)?;
     log::info!("{:?}", packet);
@@ -43,9 +35,8 @@ pub fn process_command(
         data
     } else {
         log::error!("Received {:?} as command start", packet);
-        return Err(CommandError::CommunicationError(
-            CommunicationError::PacketInvalidError,
-        )); // Ignore non data packets
+        return Err(CommandError::CommunicationError(CommunicationError::PacketInvalidError));
+        // Ignore non data packets
     };
 
     if data.len() < 1 {
@@ -71,12 +62,7 @@ pub fn process_command(
             let program_id = u16::from_be_bytes([data[1], data[2]]);
             let queue_id = u16::from_be_bytes([data[3], data[4]]);
             let timeout = Duration::from_secs(u16::from_be_bytes([data[5], data[6]]).into());
-            log::info!(
-                "Executing Program {}:{} for {}s",
-                program_id,
-                queue_id,
-                timeout.as_secs()
-            );
+            log::info!("Executing Program {}:{} for {}s", program_id, queue_id, timeout.as_secs());
             execute_program(exec, program_id, queue_id, timeout)?;
             com.send_packet(CSBIPacket::ACK)?;
         }

@@ -12,12 +12,12 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 fn store_archive() -> TestResult {
     // Define what should happen during communication. How this should look is defined in the PDD
     let packets = vec![
-        COBC(DATA(vec![0x01, 0x00, 0x00])), // COBC sends Store Archive Command (0x01 -> Header, [0x00, 0x00] -> Program Id)
-        EDU(ACK),                           // EDU acknowledges packet integrity
+        COBC(DATA(vec![0x01, 0x00, 0x00])),                   // COBC sends Store Archive Command (0x01 -> Header, [0x00, 0x00] -> Program Id)
+        EDU(ACK),                                             // EDU acknowledges packet integrity
         COBC(DATA(fs::read("./tests/student_program.zip")?)), // COBC sends the archive
-        EDU(ACK),                           // EDU acknowledges packet integrity
-        COBC(EOF),                          // COBC signals end of packets
-        EDU(ACK),                           // EDU signals successful Store Archive
+        EDU(ACK),                                             // EDU acknowledges packet integrity
+        COBC(EOF),                                            // COBC signals end of packets
+        EDU(ACK),                                             // EDU signals successful Store Archive
     ];
 
     // Setup testing environment
@@ -33,12 +33,7 @@ fn store_archive() -> TestResult {
     assert_eq!(
         0,
         std::process::Command::new("diff") // check wether the archive was stored correctly
-            .args([
-                "-yq",
-                "--strip-trailing-cr",
-                "tests/test_data",
-                "archives/0"
-            ])
+            .args(["-yq", "--strip-trailing-cr", "tests/test_data", "archives/0"])
             .status()?
             .code()
             .unwrap()
@@ -66,10 +61,7 @@ fn execute_program_normal() -> TestResult {
     let mut res = String::new();
     std::fs::File::open("./archives/1/results/0")?.read_to_string(&mut res)?;
 
-    assert_eq!(
-        res.replace("\r", ""),
-        *"Some test results\nWith multiple lines\n".to_string()
-    );
+    assert_eq!(res.replace("\r", ""), *"Some test results\nWith multiple lines\n".to_string());
 
     common::cleanup("1");
     Ok(())
@@ -133,10 +125,7 @@ fn stopped_store() -> TestResult {
     let (mut com, mut exec) = common::prepare_handles(packets, "4");
 
     let err = command::handle_command(&mut com, &mut exec).unwrap_err();
-    assert!(matches!(
-        err,
-        CommandError::CommunicationError(CommunicationError::STOPCondition)
-    ));
+    assert!(matches!(err, CommandError::CommunicationError(CommunicationError::STOPCondition)));
 
     assert!(!std::path::Path::new("./archives/4").exists());
 
@@ -203,10 +192,7 @@ fn return_result() -> TestResult {
         COBC(DATA(vec![5])),
         EDU(ACK),
         ACTION(Box::new(|bytes| {
-            std::fs::File::create("tests/tmp/7.zip")
-                .unwrap()
-                .write(&bytes)
-                .unwrap();
+            std::fs::File::create("tests/tmp/7.zip").unwrap().write(&bytes).unwrap();
         })),
         COBC(ACK),
         EDU(EOF),
@@ -222,11 +208,7 @@ fn return_result() -> TestResult {
     command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
-    std::process::Command::new("unzip")
-        .current_dir("./tests/tmp")
-        .arg("-o")
-        .arg("7.zip")
-        .status()?;
+    std::process::Command::new("unzip").current_dir("./tests/tmp").arg("-o").arg("7.zip").status()?;
 
     assert_eq!(std::fs::read("tests/tmp/3")?, vec![0xde, 0xad]);
     assert!(std::fs::read("tests/tmp/7_3.log").is_ok());
@@ -294,10 +276,7 @@ fn stopped_return() -> TestResult {
     command::handle_command(&mut com, &mut exec)?;
     command::handle_command(&mut com, &mut exec)?;
     let err = command::handle_command(&mut com, &mut exec).unwrap_err();
-    assert!(matches!(
-        err,
-        CommandError::CommunicationError(CommunicationError::STOPCondition)
-    ));
+    assert!(matches!(err, CommandError::CommunicationError(CommunicationError::STOPCondition)));
     command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 
@@ -330,11 +309,7 @@ fn stop_no_running_program() -> TestResult {
 
 #[test]
 fn execute_missing_program() -> TestResult {
-    let packets = vec![
-        COBC(DATA(vec![2, 0, 0x0b, 0, 0, 0, 1])),
-        EDU(ACK),
-        EDU(NACK),
-    ];
+    let packets = vec![COBC(DATA(vec![2, 0, 0x0b, 0, 0, 0, 1])), EDU(ACK), EDU(NACK)];
     let (mut com, mut exec) = common::prepare_handles(packets, "12");
 
     command::handle_command(&mut com, &mut exec).unwrap_err();
@@ -397,12 +372,7 @@ fn invalid_crc() -> TestResult {
     assert_eq!(
         0,
         std::process::Command::new("diff") // check wether the archive was stored correctly
-            .args([
-                "-yq",
-                "--strip-trailing-cr",
-                "tests/test_data",
-                "archives/14"
-            ])
+            .args(["-yq", "--strip-trailing-cr", "tests/test_data", "archives/14"])
             .status()?
             .code()
             .unwrap()

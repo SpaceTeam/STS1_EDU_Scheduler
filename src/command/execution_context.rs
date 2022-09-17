@@ -25,11 +25,7 @@ pub struct ExecutionContext {
 }
 
 impl ExecutionContext {
-    pub fn new(
-        status_path: std::path::PathBuf,
-        result_path: std::path::PathBuf,
-        update_pin: u8,
-    ) -> Result<Self, std::io::Error> {
+    pub fn new(status_path: std::path::PathBuf, result_path: std::path::PathBuf, update_pin: u8) -> Result<Self, std::io::Error> {
         Ok(ExecutionContext {
             thread_handle: None,
             running_flag: false,
@@ -60,20 +56,12 @@ pub trait TogglePin {
 #[cfg(not(feature = "mock"))] // --> this impl is not compiled when hardware is mocked
 impl TogglePin for ExecutionContext {
     fn set_high(&self) {
-        let mut pin = rppal::gpio::Gpio::new()
-            .unwrap()
-            .get(self.update_pin)
-            .unwrap()
-            .into_output();
+        let mut pin = rppal::gpio::Gpio::new().unwrap().get(self.update_pin).unwrap().into_output();
         pin.set_high();
     }
 
     fn set_low(&self) {
-        let mut pin = rppal::gpio::Gpio::new()
-            .unwrap()
-            .get(self.update_pin)
-            .unwrap()
-            .into_output();
+        let mut pin = rppal::gpio::Gpio::new().unwrap().get(self.update_pin).unwrap().into_output();
         pin.set_low();
     }
 }

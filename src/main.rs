@@ -15,21 +15,12 @@ use command::CommandError;
 use communication::CommunicationError;
 
 fn main() {
-    let _ = sl::WriteLogger::init(
-        sl::LevelFilter::Info,
-        sl::Config::default(),
-        std::fs::File::create("log").unwrap(),
-    );
+    let _ = sl::WriteLogger::init(sl::LevelFilter::Info, sl::Config::default(), std::fs::File::create("log").unwrap());
 
     const UPDATE_PIN: u8 = 12;
 
     let mut com = communication::UARTHandle::new(115200);
-    let ec = command::ExecutionContext::new(
-        "./data/status_queue".into(),
-        "./data/result_queue".into(),
-        UPDATE_PIN,
-    )
-    .unwrap();
+    let ec = command::ExecutionContext::new("./data/status_queue".into(), "./data/result_queue".into(), UPDATE_PIN).unwrap();
     let mut exec = Arc::new(Mutex::new(ec));
 
     //Heartbeat thread

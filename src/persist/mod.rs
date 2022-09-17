@@ -91,10 +91,7 @@ impl<T: Serializable> FileQueue<T> {
 
     /// Pushes the given value to the end of the queue. This fails if the underlying file cannot be opened.
     pub fn push(&mut self, val: T) -> Result<(), std::io::Error> {
-        fs::OpenOptions::new()
-            .append(true)
-            .open(&self.path)?
-            .write_all(&val.serialize())?;
+        fs::OpenOptions::new().append(true).open(&self.path)?.write_all(&val.serialize())?;
         Ok(())
     }
 

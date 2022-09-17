@@ -116,10 +116,7 @@ pub fn prepare_program(path: &str) {
             panic!("Setup Error: {}", e);
         }
     }
-    let ret = std::fs::copy(
-        "./tests/test_data/main.py",
-        format!("./archives/{}/main.py", path),
-    );
+    let ret = std::fs::copy("./tests/test_data/main.py", format!("./archives/{}/main.py", path));
     if let Err(e) = ret {
         if e.kind() != std::io::ErrorKind::AlreadyExists {
             panic!("Setup Error: {}", e);
@@ -135,12 +132,7 @@ pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, SyncEx
     file_per_thread_logger::allow_uninitialized();
     file_per_thread_logger::initialize("tests/tmp/log-");
     let com = TestCom::new(packets);
-    let ec = ExecutionContext::new(
-        format!("tests/tmp/{}_s", unique).into(),
-        format!("tests/tmp/{}_r", unique).into(),
-        12,
-    )
-    .unwrap();
+    let ec = ExecutionContext::new(format!("tests/tmp/{}_s", unique).into(), format!("tests/tmp/{}_r", unique).into(), 12).unwrap();
     let exec = Arc::new(Mutex::new(ec));
 
     return (com, exec);

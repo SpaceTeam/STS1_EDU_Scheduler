@@ -29,6 +29,7 @@ pub fn store_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
         .arg(format!("./archives/{}", folder))
         .status();
 
+    // Remove the temporary file, even if unzip failed
     std::fs::remove_file(zip_path)?;
 
     match exit_status {
@@ -53,83 +54,63 @@ pub fn store_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
 /// * `program_id` The name of the ./archives/ subfolder
 /// * `queue_id` The first argument for the student program
 /// * `timeout` The maxmimum time the student program shall execute. Will be rounded up to the nearest second
-pub fn execute_program(
-    context: &mut SyncExecutionContext,
-    program_id: u16,
-    queue_id: u16,
-    timeout: Duration,
-) -> CommandResult {
+pub fn execute_program(context: &mut SyncExecutionContext, program_id: u16, queue_id: u16, timeout: Duration) -> CommandResult {
     let _ = stop_program(context); // Ignore return value
 
     // TODO config setuid
-    let output_file = File::create(format!("./data/{}_{}.log", program_id, queue_id))?;
+    let output_file = File::create(format!("./data/{}_{}.log", program_id, queue_id))?; // will contain the stdout and stderr of the execute program
     let config = subprocess::PopenConfig {
         cwd: Some(format!("./archives/{}", program_id).into()),
-        detached: false,
+        detached: false, // do not spawn as separate process
         stdout: subprocess::Redirection::File(output_file),
         stderr: subprocess::Redirection::Merge,
         ..Default::default()
     };
-    let mut student_process =
-        subprocess::Popen::create(&["python", "main.py", &queue_id.to_string()], config)?;
+    let mut student_process = subprocess::Popen::create(&["python", "main.py", &queue_id.to_string()], config)?;
 
-    // Interthread communication
+    // create a reference for the watchdog thread
     let wd_context = context.clone();
 
     // Watchdog thread
     let wd_handle = thread::spawn(move || {
-        let mut exit_code = 255u8;
-        let mut should_kill = true;
+        let mut exit_code = 255u8; // the programs exit code (overwritten if applicable)
+        let mut should_kill_student_program = true; // set to false if it terminates itself
 
         // Loop over timeout in 1s steps
         for _ in 0..timeout.as_secs() {
-            if let Some(status) = student_process
+            if let Some(status) = student_process // if student program terminates with exit code
                 .wait_timeout(Duration::from_secs(1))
                 .unwrap()
             {
-                // student program terminated itself
                 if let subprocess::ExitStatus::Exited(n) = status {
+                    // if it terminated itself
                     exit_code = n as u8
                 }
-                should_kill = false;
-                break;
+                should_kill_student_program = false;
+                break; // leave timeout loop
             }
+
             if !wd_context.lock().unwrap().running_flag {
-                // check if it should terminate
+                // if student program should be stopped
                 break;
             }
         }
 
-        if should_kill {
+        if should_kill_student_program {
             log::warn!("Student Process timed out or is stopped");
-            student_process.kill().unwrap();
+            student_process.kill().unwrap(); // send SIGKILL
             student_process
-                .wait_timeout(Duration::from_millis(200))
+                .wait_timeout(Duration::from_millis(200)) // wait for it to do its magic
                 .unwrap()
                 .unwrap(); // Panic if not stopped
         }
 
-        log::info!(
-            "Program {}:{} finished with {}",
-            program_id,
-            queue_id,
-            exit_code
-        );
-        let rid = ResultId {
-            program_id,
-            queue_id,
-        };
-        build_result_archive(rid).unwrap();
+        log::info!("Program {}:{} finished with {}", program_id, queue_id, exit_code);
+        let rid = ResultId { program_id, queue_id };
+        build_result_archive(rid).unwrap(); // create the zip file with result and log
 
         let mut context = wd_context.lock().unwrap();
-        context
-            .status_q
-            .push(ProgramStatus {
-                program_id,
-                queue_id,
-                exit_code,
-            })
-            .unwrap();
+        context.status_q.push(ProgramStatus { program_id, queue_id, exit_code }).unwrap();
         context.result_q.push(rid).unwrap();
         context.running_flag = false;
         context.set_high();
@@ -198,13 +179,7 @@ pub fn stop_program(context: &mut SyncExecutionContext) -> CommandResult {
     std::thread::sleep(Duration::from_millis(2000)); // Sensible amount?
 
     assert!(
-        context
-            .lock()
-            .unwrap()
-            .thread_handle
-            .as_ref()
-            .unwrap()
-            .is_finished(),
+        context.lock().unwrap().thread_handle.as_ref().unwrap().is_finished(),
         "Watchdog thread did not finish in time"
     );
 
@@ -275,10 +250,7 @@ pub fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
 ///
 /// * `epoch` Seconds since epoch (i32 works until Jan 2038)
 pub fn update_time(epoch: i32) -> CommandResult {
-    let exit_status = Command::new("date")
-        .arg("-s")
-        .arg(format!("@{}", epoch))
-        .status()?;
+    let exit_status = Command::new("date").arg("-s").arg(format!("@{}", epoch)).status()?;
 
     if !exit_status.success() {
         return Err(CommandError::SystemError("date utility failed".into()));
