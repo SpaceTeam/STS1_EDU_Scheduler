@@ -1,7 +1,7 @@
 mod communication;
-mod uart;
 mod csbi;
+mod uart;
 
 pub use communication::*;
-pub use uart::*;
 pub use csbi::CSBIPacket;
+pub use uart::*;
