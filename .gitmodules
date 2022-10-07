@@ -1,0 +1,3 @@
+[submodule "tests/integration_tests/waveform_tools"]
+	path = tests/integration_tests/waveform_tools
+	url = https://github.com/SpaceTeam/waveform_tools.git
