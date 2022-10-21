@@ -16,14 +16,17 @@ class EDU_Tests:
         self.cobc = COBC(self.device, 0, 1, 2, 3, 4)
 
     def register(self, func: Callable, type: Literal['quick', 'full reset']) -> None:
-        self._tests.append(func)
+        if type == 'quick':
+            self._quick_tests.append(func)
+        else:
+            self._full_tests.append(func)
 
     def run(self, type: Literal['all', 'quick', 'full']) -> None:
         tests = []
         if type == 'all' or type == 'quick':
-            tests.append(self._quick_tests)
+            tests.extend(self._quick_tests)
         if type == 'all' or type == 'full':
-            tests.append(self._full_tests)
+            tests.extend(self._full_tests)
 
         for t in tests:
             print(f"Running test {t.__name__}...")
@@ -31,10 +34,10 @@ class EDU_Tests:
                 t(self.cobc)
             except Exception:
                 traceback.print_exc()
-                print(f"{bcolors.FAIL}Failure{bcolors.ENDC}")
+                print(f"{bcolors.FAIL}Failure{bcolors.ENDC}\n")
                 self._failures.append(t.__name__)
             else:
-                print(f"{bcolors.OKGREEN}Successful{bcolors.ENDC}")
+                print(f"{bcolors.OKGREEN}Successful{bcolors.ENDC}\n")
 
         if len(self._failures) == 0:
             print(f"{bcolors.OKGREEN}All tests passed successfully{bcolors.ENDC}")
@@ -42,6 +45,8 @@ class EDU_Tests:
             print(f"{bcolors.FAIL}The following tests failed:{bcolors.ENDC}")
             for f in self._failures:
                 print(f"\t{f}")
+        return len(self._failures)
+
 
 class bcolors:
     HEADER = '\033[95m'
