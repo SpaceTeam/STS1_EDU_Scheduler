@@ -59,7 +59,7 @@ pub fn process_command(
             // STORE ARCHIVE
             check_length(&data, 3)?;
             com.send_packet(CSBIPacket::ACK)?;
-            let id = u16::from_be_bytes([data[1], data[2]]).to_string();
+            let id = u16::from_le_bytes([data[1], data[2]]).to_string();
             log::info!("Storing Archive {}", id);
             let bytes = com.receive_multi_packet(&COM_TIMEOUT_DURATION, || false)?; // !! TODO !!
             store_archive(id, bytes)?;
@@ -69,9 +69,9 @@ pub fn process_command(
             // EXECUTE PROGRAM
             check_length(&data, 7)?;
             com.send_packet(CSBIPacket::ACK)?;
-            let program_id = u16::from_be_bytes([data[1], data[2]]);
-            let queue_id = u16::from_be_bytes([data[3], data[4]]);
-            let timeout = Duration::from_secs(u16::from_be_bytes([data[5], data[6]]).into());
+            let program_id = u16::from_le_bytes([data[1], data[2]]);
+            let queue_id = u16::from_le_bytes([data[3], data[4]]);
+            let timeout = Duration::from_secs(u16::from_le_bytes([data[5], data[6]]).into());
             log::info!("Executing Program {}:{} for {}s", program_id, queue_id, timeout.as_secs());
             execute_program(exec, program_id, queue_id, timeout)?;
             com.send_packet(CSBIPacket::ACK)?;
@@ -108,7 +108,7 @@ pub fn process_command(
             // UPDATE TIME
             check_length(&data, 5)?;
             com.send_packet(CSBIPacket::ACK)?;
-            let time = i32::from_be_bytes([data[1], data[2], data[3], data[4]]);
+            let time = i32::from_le_bytes([data[1], data[2], data[3], data[4]]);
             log::info!("Updating Time to {}", time);
             update_time(time)?;
             com.send_packet(CSBIPacket::ACK)?;
