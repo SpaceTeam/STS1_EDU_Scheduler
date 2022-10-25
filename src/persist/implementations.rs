@@ -14,10 +14,10 @@ impl Serializable for u8 {
 impl Serializable for u16 {
     const SIZE: usize = 2;
     fn serialize(self) -> Vec<u8> {
-        return self.to_be_bytes().into();
+        return self.to_le_bytes().into();
     }
 
     fn deserialize(bytes: &[u8]) -> Self {
-        u16::from_be_bytes([bytes[0], bytes[1]])
+        u16::from_le_bytes([bytes[0], bytes[1]])
     }
 }
