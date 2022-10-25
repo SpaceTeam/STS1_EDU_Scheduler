@@ -23,9 +23,9 @@ impl CSBIPacket {
                 let mut v = vec![0x8b];
                 let crc32 = CSBIPacket::CRC.checksum(&bytes);
                 v.reserve_exact(6 + bytes.len());
-                v.extend((bytes.len() as u16).to_be_bytes());
+                v.extend((bytes.len() as u16).to_le_bytes());
                 v.extend(bytes);
-                v.extend(crc32.to_be_bytes());
+                v.extend(crc32.to_le_bytes());
                 v
             }
         }
