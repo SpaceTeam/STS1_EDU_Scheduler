@@ -47,7 +47,7 @@ fn store_archive() -> TestResult {
 #[test]
 fn execute_program_normal() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02])), // Execute Program ID 1, Queue ID 0, Timeout 2s
+        COBC(DATA(vec![0x02, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00])), // Execute Program ID 1, Queue ID 0, Timeout 2s
         EDU(ACK),
         EDU(ACK),
     ];
@@ -70,7 +70,7 @@ fn execute_program_normal() -> TestResult {
 #[test]
 fn execute_program_infinite() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![0x02, 0x00, 0x02, 0x00, 0x01, 0x00, 0x01])), // Execute Program ID 2, Queue ID 1, Timeout 1s
+        COBC(DATA(vec![0x02, 0x02, 0x00, 0x01, 0x00, 0x01, 0x00])), // Execute Program ID 2, Queue ID 1, Timeout 1s
         EDU(ACK),
         EDU(ACK),
     ];
@@ -90,7 +90,7 @@ fn execute_program_infinite() -> TestResult {
 #[test]
 fn stop_program() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![0x02, 0x00, 0x03, 0x00, 0x01, 0x00, 0x0a])), // Execute Program 3, Queue 1, Timeout 10s
+        COBC(DATA(vec![0x02, 0x03, 0x00, 0x01, 0x00, 0x0a, 0x00])), // Execute Program 3, Queue 1, Timeout 10s
         EDU(ACK),
         EDU(ACK),
         SLEEP(std::time::Duration::from_secs(1)),
@@ -113,7 +113,7 @@ fn stop_program() -> TestResult {
 #[test]
 fn stopped_store() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![0x01, 0x00, 0x04])), // Store Archive with ID 1
+        COBC(DATA(vec![0x01, 0x04, 0x00])), // Store Archive with ID 0
         EDU(ACK),
         COBC(DATA(fs::read("./tests/student_program.zip")?)),
         EDU(ACK),
@@ -148,17 +148,17 @@ fn get_status_none() -> TestResult {
 #[test]
 fn get_status_finished() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![0x02, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01])), // Execute Program 6, Queue 0, Timeout 1s
+        COBC(DATA(vec![0x02, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00])), // Execute Program 6, Queue 0, Timeout 1s
         EDU(ACK),
         EDU(ACK),
         SLEEP(std::time::Duration::from_millis(500)),
         COBC(DATA(vec![4])), // Get Status
         EDU(ACK),
-        EDU(DATA(vec![1, 0, 6, 0, 0, 0])), // Program Finished
+        EDU(DATA(vec![1, 6, 0, 0, 0, 0])), // Program Finished
         COBC(ACK),
         COBC(DATA(vec![4])), // Get Status
         EDU(ACK),
-        EDU(DATA(vec![2, 0, 6, 0, 0])), // Result Ready
+        EDU(DATA(vec![2, 6, 0, 0, 0])), // Result Ready
         COBC(ACK),
     ];
 
@@ -177,17 +177,17 @@ fn get_status_finished() -> TestResult {
 #[test]
 fn return_result() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![0x02, 0x00, 0x07, 0x00, 0x03, 0x00, 0x01])), // Execute Program 7, Queue 0, Timeout 1s
+        COBC(DATA(vec![0x02, 0x07, 0x00, 0x03, 0x00, 0x01, 0x00])), // Execute Program 7, Queue 0, Timeout 1s
         EDU(ACK),
         EDU(ACK),
         SLEEP(std::time::Duration::from_millis(500)),
         COBC(DATA(vec![4])), // Get Status
         EDU(ACK),
-        EDU(DATA(vec![1, 0, 7, 0, 3, 0])), // Program Finished
+        EDU(DATA(vec![1, 7, 0, 3, 0, 0])), // Program Finished
         COBC(ACK),
         COBC(DATA(vec![4])), // Get Status
         EDU(ACK),
-        EDU(DATA(vec![2, 0, 7, 0, 3])), // Result Ready
+        EDU(DATA(vec![2, 7, 0, 3, 0])), // Result Ready
         COBC(ACK),
         COBC(DATA(vec![5])),
         EDU(ACK),
@@ -224,13 +224,13 @@ fn return_result() -> TestResult {
 #[test]
 fn truncate_result() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![2, 0, 8, 0, 5, 0, 2])), // Execute Program 8, Queue 5, Timeout 1s
+        COBC(DATA(vec![2, 8, 0, 5, 0, 2, 0])), // Execute Program 8, Queue 5, Timeout 2s
         EDU(ACK),
         EDU(ACK),
         SLEEP(std::time::Duration::from_millis(2000)),
         COBC(DATA(vec![4])),
         EDU(ACK),
-        EDU(DATA(vec![1, 0, 8, 0, 5, 0])),
+        EDU(DATA(vec![1, 8, 0, 5, 0, 0])),
         COBC(ACK),
     ];
 
@@ -250,17 +250,17 @@ fn truncate_result() -> TestResult {
 #[test]
 fn stopped_return() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![2, 0, 9, 0, 5, 0, 2])),
+        COBC(DATA(vec![2, 9, 0, 5, 0, 2, 0])),
         EDU(ACK),
         EDU(ACK),
         SLEEP(std::time::Duration::from_millis(2000)),
         COBC(DATA(vec![4])),
         EDU(ACK),
-        EDU(DATA(vec![1, 0, 9, 0, 5, 0])),
+        EDU(DATA(vec![1, 9, 0, 5, 0, 0])),
         COBC(ACK),
         COBC(DATA(vec![4])),
         EDU(ACK),
-        EDU(DATA(vec![2, 0, 9, 0, 5])),
+        EDU(DATA(vec![2, 9, 0, 5, 0])),
         COBC(ACK),
         COBC(DATA(vec![5])),
         EDU(ACK),
@@ -270,7 +270,7 @@ fn stopped_return() -> TestResult {
         COBC(STOP),
         COBC(DATA(vec![4])),
         EDU(ACK),
-        EDU(DATA(vec![2, 0, 9, 0, 5])),
+        EDU(DATA(vec![2, 9, 0, 5, 0])),
         COBC(ACK),
     ];
     common::prepare_program("9");
@@ -313,7 +313,7 @@ fn stop_no_running_program() -> TestResult {
 
 #[test]
 fn execute_missing_program() -> TestResult {
-    let packets = vec![COBC(DATA(vec![2, 0, 0x0b, 0, 0, 0, 1])), EDU(ACK), EDU(NACK)];
+    let packets = vec![COBC(DATA(vec![2, 11, 0, 0, 0, 1, 0])), EDU(ACK), EDU(NACK)];
     let (mut com, mut exec) = common::prepare_handles(packets, "12");
 
     command::handle_command(&mut com, &mut exec).unwrap_err();
@@ -357,7 +357,7 @@ fn invalid_packets_from_cobc() -> TestResult {
 fn invalid_crc() -> TestResult {
     let mut bytes = fs::read("./tests/student_program.zip")?;
     let packets = vec![
-        COBC(DATA(vec![1, 0, 14])),
+        COBC(DATA(vec![1, 14, 0])),
         EDU(ACK),
         COBC(DATA(bytes.drain(0..20).collect())),
         EDU(ACK),
