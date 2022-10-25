@@ -334,7 +334,7 @@ fn invalid_packets_from_cobc() -> TestResult {
         EDU(NACK),
         COBC(DATA(vec![2, 0, 1])),
         EDU(NACK),
-        COBC_INVALID(vec![0x8b, 0, 2, 0, 0, 0, 0, 1, 10]), // Invalid CRC
+        COBC_INVALID(vec![0x8b, 2, 0, 0, 0, 0, 0, 1, 10]), // Invalid CRC
         EDU(NACK),
     ];
     let (mut com, mut exec) = common::prepare_handles(packets, "13");
@@ -361,7 +361,7 @@ fn invalid_crc() -> TestResult {
         EDU(ACK),
         COBC(DATA(bytes.drain(0..20).collect())),
         EDU(ACK),
-        COBC_INVALID(vec![0x8b, 0, 5, 0, 0, 0, 0, 0, 0, 10, 10, 10]),
+        COBC_INVALID(vec![0x8b, 5, 0, 0, 0, 0, 0, 0, 0, 10, 10, 10]),
         EDU(NACK),
         COBC(DATA(bytes)),
         EDU(ACK),
