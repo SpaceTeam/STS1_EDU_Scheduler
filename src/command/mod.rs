@@ -1,12 +1,12 @@
 use crate::communication::{CSBIPacket, CommunicationError, CommunicationHandle};
-use crate::persist::{FileQueue, Serializable};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::Duration;
 
 mod handlers;
 pub use handlers::*;
+mod execution_context;
+pub use execution_context::*;
+mod error;
+pub use error::CommandError;
 
 type CommandResult = Result<(), CommandError>;
 
@@ -45,9 +45,8 @@ pub fn process_command(
         data
     } else {
         log::error!("Received {:?} as command start", packet);
-        return Err(CommandError::CommunicationError(
-            CommunicationError::PacketInvalidError,
-        )); // Ignore non data packets
+        return Err(CommandError::CommunicationError(CommunicationError::PacketInvalidError));
+        // Ignore non data packets
     };
 
     if data.len() < 1 {
@@ -73,12 +72,7 @@ pub fn process_command(
             let program_id = u16::from_be_bytes([data[1], data[2]]);
             let queue_id = u16::from_be_bytes([data[3], data[4]]);
             let timeout = Duration::from_secs(u16::from_be_bytes([data[5], data[6]]).into());
-            log::info!(
-                "Executing Program {}:{} for {}s",
-                program_id,
-                queue_id,
-                timeout.as_secs()
-            );
+            log::info!("Executing Program {}:{} for {}s", program_id, queue_id, timeout.as_secs());
             execute_program(exec, program_id, queue_id, timeout)?;
             com.send_packet(CSBIPacket::ACK)?;
         }
@@ -135,164 +129,4 @@ fn check_length(vec: &Vec<u8>, n: usize) -> Result<(), CommandError> {
     } else {
         Ok(())
     }
-}
-
-pub type SyncExecutionContext = Arc<Mutex<ExecutionContext>>;
-
-/// This struct is used to store the relevant handles for when a student program is executed
-pub struct ExecutionContext {
-    pub thread_handle: Option<thread::JoinHandle<()>>,
-    pub running_flag: Option<bool>,
-    pub status_q: FileQueue<ProgramStatus>,
-    pub result_q: FileQueue<ResultId>,
-    pub update_pin: u8,
-}
-
-impl ExecutionContext {
-    pub fn new(
-        status_path: PathBuf,
-        result_path: PathBuf,
-        update_pin: u8,
-    ) -> Result<Self, std::io::Error> {
-        Ok(ExecutionContext {
-            thread_handle: None,
-            running_flag: None,
-            status_q: FileQueue::<ProgramStatus>::new(status_path)?,
-            result_q: FileQueue::<ResultId>::new(result_path)?,
-            update_pin: update_pin,
-        })
-    }
-
-    pub fn is_running(&self) -> bool {
-        self.running_flag.unwrap_or(false)
-    }
-
-    pub fn has_data_ready(&self) -> Result<bool, std::io::Error> {
-        Ok(!self.status_q.is_empty()? || !self.result_q.is_empty()?)
-    }
-}
-
-pub trait UpdatePin {
-    fn set_update_high(&self);
-    fn set_update_low(&self);
-}
-
-#[cfg(not(feature = "mock"))] // Only compile if for target
-impl UpdatePin for ExecutionContext {
-    fn set_update_high(&self) {
-        let mut pin = rppal::gpio::Gpio::new()
-            .unwrap()
-            .get(self.update_pin)
-            .unwrap()
-            .into_output();
-        pin.set_high();
-    }
-
-    fn set_update_low(&self) {
-        let mut pin = rppal::gpio::Gpio::new()
-            .unwrap()
-            .get(self.update_pin)
-            .unwrap()
-            .into_output();
-        pin.set_low();
-    }
-}
-
-/// Struct used for storing information about a finished student program
-pub struct ProgramStatus {
-    pub program_id: u16,
-    pub queue_id: u16,
-    pub exit_code: u8,
-}
-
-/// Struct used for storing information of a result, waiting to be sent
-#[derive(Clone, Copy)]
-pub struct ResultId {
-    pub program_id: u16,
-    pub queue_id: u16,
-}
-
-impl Serializable for ProgramStatus {
-    const SIZE: usize = 5;
-
-    fn serialize(self) -> Vec<u8> {
-        let mut v = Vec::new();
-        v.extend(self.program_id.serialize());
-        v.extend(self.queue_id.serialize());
-        v.push(self.exit_code);
-        v
-    }
-
-    fn deserialize(bytes: &[u8]) -> Self {
-        let p_id = u16::from_be_bytes([bytes[0], bytes[1]]);
-        let q_id = u16::from_be_bytes([bytes[2], bytes[3]]);
-        ProgramStatus {
-            program_id: p_id,
-            queue_id: q_id,
-            exit_code: bytes[4],
-        }
-    }
-}
-
-impl Serializable for ResultId {
-    const SIZE: usize = 4;
-
-    fn serialize(self) -> Vec<u8> {
-        let mut v = Vec::new();
-        v.extend(self.program_id.serialize());
-        v.extend(self.queue_id.serialize());
-        v
-    }
-
-    fn deserialize(bytes: &[u8]) -> Self {
-        let p_id = u16::from_be_bytes([bytes[0], bytes[1]]);
-        let q_id = u16::from_be_bytes([bytes[2], bytes[3]]);
-        ResultId {
-            program_id: p_id,
-            queue_id: q_id,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum CommandError {
-    /// Propagates an error from the communication module
-    CommunicationError(CommunicationError),
-    /// Signals that something has gone wrong while using a system tool (e.g. unzip)
-    SystemError(Box<dyn std::error::Error>),
-    /// Signals that packets that are not useful right now were received
-    InvalidCommError,
-}
-
-impl From<std::io::Error> for CommandError {
-    fn from(e: std::io::Error) -> Self {
-        CommandError::SystemError(e.into())
-    }
-}
-
-impl From<subprocess::PopenError> for CommandError {
-    fn from(e: subprocess::PopenError) -> Self {
-        CommandError::SystemError(e.into())
-    }
-}
-
-impl From<CommunicationError> for CommandError {
-    fn from(e: CommunicationError) -> Self {
-        CommandError::CommunicationError(e)
-    }
-}
-
-impl std::fmt::Display for CommandError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl std::error::Error for CommandError {}
-
-#[cfg(feature = "mock")]
-impl UpdatePin for ExecutionContext {
-    fn set_update_high(&self) {}
-
-    fn set_update_low(&self) {}
 }

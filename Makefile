@@ -4,9 +4,12 @@ build_with_cov:
 	RUSTFLAGS="-Cinstrument-coverage" cargo build
 
 coverage: build_with_cov
-	RUSTFLAGS="-Cinstrument-coverage" LLVM_PROFILE_FILE="STS1-%p-%m.profraw" cargo test
+	RUSTFLAGS="-Cinstrument-coverage" LLVM_PROFILE_FILE="STS1-%p-%m.profraw" cargo test --features mock
 	grcov . -s . --binary-path ./target/debug/ -t html --branch --ignore-not-existing -o ./target/debug/coverage/
 	firefox ./target/debug/coverage/index.html&
+
+sw_test:
+	cargo test --features mock
 
 packs:
 	cargo test build_pack --features rpi

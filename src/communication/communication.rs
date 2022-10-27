@@ -1,40 +1,4 @@
-use crc::{Crc, CRC_32_MPEG_2};
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum CSBIPacket {
-    ACK,
-    NACK,
-    STOP,
-    EOF,
-    DATA(Vec<u8>),
-}
-
-impl CSBIPacket {
-    const CRC: Crc<u32> = Crc::<u32>::new(&CRC_32_MPEG_2);
-
-    /// This function constructs a byte array, containing the raw bytes that can be sent
-    pub fn serialize(self) -> Vec<u8> {
-        match self {
-            CSBIPacket::ACK => vec![0xd7],
-            CSBIPacket::NACK => vec![0x27],
-            CSBIPacket::STOP => vec![0xb4],
-            CSBIPacket::EOF => vec![0x59],
-            CSBIPacket::DATA(bytes) => {
-                let mut v = vec![0x8b];
-                let crc32 = CSBIPacket::CRC.checksum(&bytes);
-                v.reserve_exact(6 + bytes.len());
-                v.extend((bytes.len() as u16).to_be_bytes());
-                v.extend(bytes);
-                v.extend(crc32.to_be_bytes());
-                v
-            }
-        }
-    }
-
-    pub fn check(data: &Vec<u8>, checksum: u32) -> bool {
-        return CSBIPacket::CRC.checksum(data) == checksum;
-    }
-}
+use super::CSBIPacket;
 
 pub type ComResult<T> = Result<T, CommunicationError>;
 
@@ -64,11 +28,11 @@ pub trait CommunicationHandle {
                 let length = u16::from_be_bytes([length_field[0], length_field[1]]);
                 let bytes = self.receive(length, &timeout)?;
                 let crc_field = self.receive(4, &timeout)?;
-                let crc = u32::from_be_bytes([crc_field[0], crc_field[1], crc_field[2], crc_field[3]]);
+                let crc =
+                    u32::from_be_bytes([crc_field[0], crc_field[1], crc_field[2], crc_field[3]]);
                 if !CSBIPacket::check(&bytes, crc) {
                     return Err(CommunicationError::CRCError);
-                }
-                else {
+                } else {
                     CSBIPacket::DATA(bytes)
                 }
             }
@@ -83,7 +47,11 @@ pub trait CommunicationHandle {
     /// Attempts to continously receive multidata packets and returns them in a concatenated byte vector
     /// `stop_fn` is evaluated after every packet and terminates the communication with a STOP packet if true
     /// An error is returned in this case
-    fn receive_multi_packet(&mut self, timeout: &std::time::Duration, stop_fn: impl Fn() -> bool) -> ComResult<Vec<u8>> {
+    fn receive_multi_packet(
+        &mut self,
+        timeout: &std::time::Duration,
+        stop_fn: impl Fn() -> bool,
+    ) -> ComResult<Vec<u8>> {
         let mut buffer = Vec::new();
 
         loop {
@@ -97,16 +65,16 @@ pub trait CommunicationHandle {
                 Ok(CSBIPacket::DATA(b)) => {
                     buffer.extend(b);
                     self.send_packet(CSBIPacket::ACK)?;
-                },
+                }
                 Ok(CSBIPacket::EOF) => {
                     break;
-                },
+                }
                 Ok(CSBIPacket::STOP) => {
                     return Err(CommunicationError::STOPCondition);
-                },
+                }
                 Err(CommunicationError::InterfaceError) => {
                     return Err(CommunicationError::InterfaceError);
-                },
+                }
                 Err(CommunicationError::TimeoutError) => {
                     log::error!("Receive multipacket timed out");
                     return Err(CommunicationError::TimeoutError);
@@ -121,7 +89,11 @@ pub trait CommunicationHandle {
         return Ok(buffer);
     }
 
-    fn send_multi_packet(&mut self, bytes: Vec<u8>, timeout: &std::time::Duration) -> ComResult<()> {
+    fn send_multi_packet(
+        &mut self,
+        bytes: Vec<u8>,
+        timeout: &std::time::Duration,
+    ) -> ComResult<()> {
         let num_packets = bytes.len() / 32768 + 1;
         let chunks: Vec<&[u8]> = bytes.chunks(32768).collect();
 
@@ -136,17 +108,17 @@ pub trait CommunicationHandle {
             match self.receive_packet(&timeout)? {
                 CSBIPacket::NACK => {
                     log::warn!("NACK on packet. Resending...");
-                },
+                }
                 CSBIPacket::ACK => {
                     i += 1;
-                },
+                }
                 CSBIPacket::STOP => {
                     return Err(CommunicationError::STOPCondition);
-                },
+                }
                 _ => {
                     return Err(CommunicationError::PacketInvalidError);
                 }
-            }   
+            }
         }
 
         self.send_packet(CSBIPacket::EOF)?;
@@ -166,7 +138,7 @@ pub enum CommunicationError {
     /// Signals that a multi packet receive or send was interrupted by a STOP condition
     STOPCondition,
     /// Signals that a receive timed out
-    TimeoutError
+    TimeoutError,
 }
 
 impl std::fmt::Display for CommunicationError {

@@ -1,13 +1,13 @@
 use crate::communication::CSBIPacket;
 use std::fs::File;
 use std::io::prelude::*;
+use std::process::Command;
 use std::thread;
 use std::time::Duration;
-use std::process::Command;
 
 use super::ProgramStatus;
 use super::ResultId;
-use super::{CommandResult, CommandError, SyncExecutionContext, UpdatePin};
+use super::{CommandError, CommandResult, SyncExecutionContext, TogglePin};
 
 /// Stores a received program in the appropriate folder and unzips it
 ///
@@ -29,6 +29,7 @@ pub fn store_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
         .arg(format!("./archives/{}", folder))
         .status();
 
+    // Remove the temporary file, even if unzip failed
     std::fs::remove_file(zip_path)?;
 
     match exit_status {
@@ -57,71 +58,80 @@ pub fn execute_program(
     context: &mut SyncExecutionContext,
     program_id: u16,
     queue_id: u16,
-    timeout: Duration
+    timeout: Duration,
 ) -> CommandResult {
     let _ = stop_program(context); // Ignore return value
 
     // TODO config setuid
-    let output_file = File::create(format!("./data/{}_{}.log", program_id, queue_id))?;
+    let output_file = File::create(format!("./data/{}_{}.log", program_id, queue_id))?; // will contain the stdout and stderr of the execute program
     let config = subprocess::PopenConfig {
         cwd: Some(format!("./archives/{}", program_id).into()),
-        detached: false,
+        detached: false, // do not spawn as separate process
         stdout: subprocess::Redirection::File(output_file),
         stderr: subprocess::Redirection::Merge,
         ..Default::default()
     };
-    let mut student_process = subprocess::Popen::create(&["python", "main.py", &queue_id.to_string()], config)?;
+    let mut student_process =
+        subprocess::Popen::create(&["python", "main.py", &queue_id.to_string()], config)?;
 
-    // Interthread communication
+    // create a reference for the watchdog thread
     let wd_context = context.clone();
 
     // Watchdog thread
     let wd_handle = thread::spawn(move || {
-        let mut exit_code = 255u8;
-        let mut should_kill = true;
+        let mut exit_code = 255u8; // the programs exit code (overwritten if applicable)
+        let mut should_kill_student_program = true; // set to false if it terminates itself
 
         // Loop over timeout in 1s steps
         for _ in 0..timeout.as_secs() {
-            if let Some(status) = student_process.wait_timeout(Duration::from_secs(1)).unwrap() {
-                // student program terminated itself
+            if let Some(status) = student_process // if student program terminates with exit code
+                .wait_timeout(Duration::from_secs(1))
+                .unwrap()
+            {
                 if let subprocess::ExitStatus::Exited(n) = status {
+                    // if it terminated itself
                     exit_code = n as u8
                 }
-                should_kill = false;
-                break;
+                should_kill_student_program = false;
+                break; // leave timeout loop
             }
-            if !wd_context.lock().unwrap().running_flag.unwrap_or(true) {
-                // check if it should terminate
+
+            if !wd_context.lock().unwrap().running_flag {
+                // if student program should be stopped
                 break;
             }
         }
 
-        if should_kill {
+        if should_kill_student_program {
             log::warn!("Student Process timed out or is stopped");
-            student_process.kill().unwrap();
-            student_process.wait_timeout(Duration::from_millis(200)).unwrap().unwrap(); // Panic if not stopped
+            student_process.kill().unwrap(); // send SIGKILL
+            student_process
+                .wait_timeout(Duration::from_millis(200)) // wait for it to do its magic
+                .unwrap()
+                .unwrap(); // Panic if not stopped
         }
 
         log::info!("Program {}:{} finished with {}", program_id, queue_id, exit_code);
         let rid = ResultId { program_id, queue_id };
-        build_result_archive(rid).unwrap();
+        build_result_archive(rid).unwrap(); // create the zip file with result and log
 
         let mut context = wd_context.lock().unwrap();
         context.status_q.push(ProgramStatus { program_id, queue_id, exit_code }).unwrap();
         context.result_q.push(rid).unwrap();
-        context.running_flag = Some(false);
-        context.set_update_high();
+        context.running_flag = false;
+        context.set_high(); // Set EDU_Update pin
         drop(context);
     });
 
+    // After spawning the watchdog thread, store its handle and set flag
     let mut l_context = context.lock().unwrap();
     l_context.thread_handle = Some(wd_handle);
-    l_context.running_flag = Some(true);
+    l_context.running_flag = true;
 
     Ok(())
 }
 
-/// The function uses `tar` to create an uncompressed archive that includes the result file specified, as well as
+/// The function uses `zip` to create an uncompressed archive that includes the result file specified, as well as
 /// the programs stdout/stderr and the schedulers log file. If any of the files is missing, the archive
 /// is created without them.
 fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
@@ -142,7 +152,7 @@ fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
         .arg(res_path)
         .arg(log_path)
         .status();
-    
+
     Ok(())
 }
 
@@ -170,18 +180,22 @@ pub fn stop_program(context: &mut SyncExecutionContext) -> CommandResult {
     if !con.is_running() {
         return Ok(());
     }
-    con.running_flag = Some(false); // Signal watchdog thread to terminate
+    con.running_flag = false; // Signal watchdog thread to terminate
     drop(con); // Release mutex
 
     std::thread::sleep(Duration::from_millis(2000)); // Sensible amount?
 
-    assert!(context.lock().unwrap().thread_handle.as_ref().unwrap().is_finished(), "Watchdog thread did not finish in time");
+    assert!(
+        // Panic if the watchdog thread is not finished
+        context.lock().unwrap().thread_handle.as_ref().unwrap().is_finished(),
+        "Watchdog thread did not finish in time"
+    );
 
     Ok(())
 }
 
 /// The function returns a DATA packet that conforms to the Get Status specification in the PDD.
-/// 
+///
 /// **Panics if no lock can be obtained on the queues.**
 pub fn get_status(context: &mut SyncExecutionContext) -> Result<CSBIPacket, CommandError> {
     let mut con = context.lock().unwrap();
@@ -192,17 +206,15 @@ pub fn get_status(context: &mut SyncExecutionContext) -> Result<CSBIPacket, Comm
     if s_empty && r_empty {
         log::info!("Nothing to report");
         Ok(CSBIPacket::DATA(vec![0]))
-    }
-    else if !s_empty {
+    } else if !s_empty {
         log::info!("Sending program exit code");
         let mut v = vec![1];
         v.extend(con.status_q.raw_pop()?);
         if !con.has_data_ready()? {
-            con.set_update_low();
+            con.set_low();
         }
         Ok(CSBIPacket::DATA(v))
-    }
-    else {
+    } else {
         log::info!("Sending result-ready");
         let mut v = vec![2];
         v.extend(con.result_q.raw_peek()?);
@@ -228,10 +240,10 @@ pub fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
     let mut con = context.lock().unwrap();
     let res = con.result_q.pop()?;
     if !con.has_data_ready()? {
-        con.set_update_low();
+        con.set_low();
     }
     drop(con); // Unlock Mutex
-    
+
     let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
     let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
     let out_path = format!("./data/{}_{}.zip", res.program_id, res.queue_id);
@@ -242,19 +254,15 @@ pub fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
     Ok(())
 }
 
-
 /// Updates the system time
 ///
 /// * `epoch` Seconds since epoch (i32 works until Jan 2038)
 pub fn update_time(epoch: i32) -> CommandResult {
-    let exit_status = Command::new("date")
-        .arg("-s")
-        .arg(format!("@{}", epoch))
-        .status()?;
+    let exit_status = Command::new("date").arg("-s").arg(format!("@{}", epoch)).status()?;
 
     if !exit_status.success() {
         return Err(CommandError::SystemError("date utility failed".into()));
     }
-    
+
     Ok(())
 }

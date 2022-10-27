@@ -1,7 +1,9 @@
 use std::sync::{Arc, Mutex};
-use simplelog as sl;
 
-use STS1_EDU_Scheduler::{communication::{CommunicationHandle, ComResult, CSBIPacket}, command::{ExecutionContext, SyncExecutionContext, UpdatePin}};
+use STS1_EDU_Scheduler::{
+    command::{ExecutionContext, SyncExecutionContext},
+    communication::{CSBIPacket, ComResult, CommunicationHandle},
+};
 
 pub enum ComEvent {
     /// EDU shall want to receive the given packet
@@ -14,7 +16,7 @@ pub enum ComEvent {
     /// Allow the EDU to send any packet
     ANY,
     /// EDU shall send a packet, which is then passed to a given function (e.g. to allow for further checks on data)
-    ACTION(Box<dyn Fn(Vec<u8>)>)
+    ACTION(Box<dyn Fn(Vec<u8>)>),
 }
 
 /// This communciation handle can simulate what is going on between EDU and COBC. Any send or receive call is
@@ -22,7 +24,7 @@ pub enum ComEvent {
 pub struct TestCom {
     expected_events: Vec<ComEvent>,
     receive_queue: Vec<u8>,
-    index: usize
+    index: usize,
 }
 
 impl CommunicationHandle for TestCom {
@@ -31,7 +33,7 @@ impl CommunicationHandle for TestCom {
             ComEvent::EDU(p) => {
                 assert_eq!(bytes, p.clone().serialize(), "Wrong packet {}", self.index);
                 self.index += 1;
-                Ok(())    
+                Ok(())
             }
             ComEvent::SLEEP(d) => {
                 std::thread::sleep(*d);
@@ -41,7 +43,7 @@ impl CommunicationHandle for TestCom {
             ComEvent::ANY => {
                 self.index += 1;
                 Ok(())
-            },
+            }
             ComEvent::ACTION(f) => {
                 f(bytes);
                 self.index += 1;
@@ -62,12 +64,11 @@ impl CommunicationHandle for TestCom {
                         self.index += 1;
                     }
                     Ok(res)
-                }
-                else {
+                } else {
                     self.receive_queue.append(&mut p.clone().serialize());
                     self.receive(n, timeout)
                 }
-            },
+            }
             ComEvent::COBC_INVALID(b) => {
                 if !self.receive_queue.is_empty() {
                     let res: Vec<u8> = self.receive_queue.drain(0..(n as usize)).collect();
@@ -75,17 +76,16 @@ impl CommunicationHandle for TestCom {
                         self.index += 1;
                     }
                     Ok(res)
-                }
-                else {
+                } else {
                     self.receive_queue.append(&mut b.clone());
                     self.receive(n, timeout)
                 }
-            },
+            }
             ComEvent::SLEEP(d) => {
                 std::thread::sleep(*d);
                 self.index += 1;
                 self.receive(n, timeout)
-            },
+            }
             _ => {
                 panic!("EDU should send now, index {}", self.index);
             }
@@ -128,7 +128,12 @@ pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, SyncEx
     file_per_thread_logger::allow_uninitialized();
     file_per_thread_logger::initialize("tests/tmp/log-");
     let com = TestCom::new(packets);
-    let ec = ExecutionContext::new(format!("tests/tmp/{}_s", unique).into(), format!("tests/tmp/{}_r", unique).into(), 12).unwrap();
+    let ec = ExecutionContext::new(
+        format!("tests/tmp/{}_s", unique).into(),
+        format!("tests/tmp/{}_r", unique).into(),
+        12,
+    )
+    .unwrap();
     let exec = Arc::new(Mutex::new(ec));
 
     return (com, exec);
