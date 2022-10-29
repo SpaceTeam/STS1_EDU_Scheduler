@@ -1,35 +1,29 @@
-import logging
 import traceback
-from typing import Callable, Literal
+from typing import Callable
 from waveform_tools import WF_Device, COBC
+from fabric import Connection
 
 
 class EDU_Tests:
     def __init__(self) -> None:
         self.device = WF_Device()
-        self._full_tests = []
-        self._quick_tests = []
+        self._tests = []
         self._failures = []
 
     def prepare(self) -> None:
         self.device.connect()
         self.cobc = COBC(self.device, 0, 1, 2, 3, 4)
+        self.ssh = Connection("edu")
+        self.ssh.open()
 
-    def register(self, func: Callable, type: Literal['quick', 'full reset']) -> None:
-        if type == 'quick':
-            self._quick_tests.append(func)
-        else:
-            self._full_tests.append(func)
+    def register(self, func: Callable) -> None:
+        self._tests.append(func)
 
-    def run(self, type: Literal['all', 'quick', 'full']) -> None:
-        tests = []
-        if type == 'all' or type == 'quick':
-            tests.extend(self._quick_tests)
-        if type == 'all' or type == 'full':
-            tests.extend(self._full_tests)
-
-        for t in tests:
+    def run(self) -> None:
+        for t in self._tests:
+            self._reset()
             print(f"Running test {t.__name__}...")
+
             try:
                 t(self.cobc)
             except Exception:
@@ -46,6 +40,9 @@ class EDU_Tests:
             for f in self._failures:
                 print(f"\t{f}")
         return len(self._failures)
+
+    def _reset(self):
+        raise NotImplementedError()
 
 
 class bcolors:

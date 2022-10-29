@@ -16,14 +16,12 @@ def discover_tests():
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == 'help':
-        help_msg = """Usage: python test.py [all|quick|full]
+        help_msg = """Usage: python test.py
 
 This test runner collects all functions in python files in the working directory, that start with
-'test_*'. It then tries to connect to the logic analyzer and runs either all tests, all tests
-containing 'quick' in their name or all tests not containing 'quick' (full).
+'test_*'. It then tries to connect to the logic analyzer, the EDU itself and runs all tests.
 
-Full tests imply a complete reset of the raspi (power off), while quick tests only clean up
-temporary files and restart the scheduler. 
+Between tests, all files that were created are removed.
 """
         print(help_msg)
         exit(0)
