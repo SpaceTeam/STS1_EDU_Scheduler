@@ -46,7 +46,7 @@ impl CommunicationHandle for UARTHandle {
         let mut sent_bytes: usize = 0;
 
         for _ in 0..=ALLOWED_SEND_RETRIES {
-            sent_bytes += self.uart_PI.write(&bytes[sent_bytes..])?;
+            sent_bytes += self.uart_PI.write(&bytes[sent_bytes..]).unwrap();
 
             if sent_bytes == bytes.len() {
                 return Ok(());
@@ -74,10 +74,10 @@ impl CommunicationHandle for UARTHandle {
 
         while received_bytes_counter < byte_count as usize {
             read_byte_count = std::cmp::min(byte_count, 255) as u8;
-            self.uart_PI.set_read_mode(read_byte_count, Duration::ZERO)?;
+            self.uart_PI.set_read_mode(read_byte_count, Duration::ZERO).unwrap();
 
             received_bytes_counter +=
-                self.uart_PI.read(&mut received_data_buffer[received_bytes_counter..])?;
+                self.uart_PI.read(&mut received_data_buffer[received_bytes_counter..]).unwrap();
         }
 
         Ok(received_data_buffer)
