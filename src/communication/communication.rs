@@ -25,11 +25,11 @@ pub trait CommunicationHandle {
             0x59 => CSBIPacket::EOF,
             0x8b => {
                 let length_field = self.receive(2, &timeout)?;
-                let length = u16::from_be_bytes([length_field[0], length_field[1]]);
+                let length = u16::from_le_bytes([length_field[0], length_field[1]]);
                 let bytes = self.receive(length, &timeout)?;
                 let crc_field = self.receive(4, &timeout)?;
                 let crc =
-                    u32::from_be_bytes([crc_field[0], crc_field[1], crc_field[2], crc_field[3]]);
+                    u32::from_le_bytes([crc_field[0], crc_field[1], crc_field[2], crc_field[3]]);
                 if !CSBIPacket::check(&bytes, crc) {
                     return Err(CommunicationError::CRCError);
                 } else {
