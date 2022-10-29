@@ -61,11 +61,13 @@ pub trait TogglePin {
 impl TogglePin for ExecutionContext {
     fn set_high(&self) {
         let mut pin = rppal::gpio::Gpio::new().unwrap().get(self.update_pin).unwrap().into_output();
+        pin.set_reset_on_drop(false);
         pin.set_high();
     }
 
     fn set_low(&self) {
         let mut pin = rppal::gpio::Gpio::new().unwrap().get(self.update_pin).unwrap().into_output();
+        pin.set_reset_on_drop(false);
         pin.set_low();
     }
 }
