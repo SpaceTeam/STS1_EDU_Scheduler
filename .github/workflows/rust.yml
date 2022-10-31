@@ -1,4 +1,4 @@
-name: Pull Request checks
+name: Software Tests
 
 on:
   push:
@@ -20,5 +20,3 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose --features mock
-    - name: Check format
-      run: cargo fmt --all -- --check
