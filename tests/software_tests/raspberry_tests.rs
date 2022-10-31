@@ -7,13 +7,11 @@ use STS1_EDU_Scheduler::communication::{CSBIPacket, CSBIPacket::*};
 #[cfg(feature = "rpi")]
 #[test]
 fn build_pack_store_archive() {
-    
     let packets = vec![
         // Create a list of packets to send
         DATA(vec![1, 0, 0]), // Store Archive
         DATA(std::fs::read("tests/student_program.zip").unwrap()), // bytes of the zip
         EOF,                 // End of File
-        
     ];
 
     std::fs::write("tests/store_archive.pack", combine_packets(packets)); // Save the packets into a .pack file
@@ -34,11 +32,9 @@ fn build_pack_get_status() {
 
 #[cfg(feature = "rpi")]
 #[test]
-fn build_pack_return_result()
-{
+fn build_pack_return_result() {
     std::fs::write("tests/return_result.pack", DATA(vec![5]).serialize());
 }
-
 
 fn combine_packets(list: Vec<CSBIPacket>) -> Vec<u8> {
     let mut v = Vec::new();
