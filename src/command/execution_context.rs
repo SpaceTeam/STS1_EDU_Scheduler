@@ -21,7 +21,7 @@ pub struct ExecutionContext {
     /// This queue contains information about results, that should be sent to the COBC
     pub result_q: FileQueue<ResultId>,
     /// This integer is the pin number of the EDU_Update pin
-    pub update_pin: u8,
+    pub update_pin: UpdatePin,
 }
 
 impl ExecutionContext {
@@ -35,7 +35,7 @@ impl ExecutionContext {
             running_flag: false,
             status_q: FileQueue::<ProgramStatus>::new(status_path)?,
             result_q: FileQueue::<ResultId>::new(result_path)?,
-            update_pin: update_pin,
+            update_pin: UpdatePin::new(update_pin),
         })
     }
 
@@ -52,23 +52,39 @@ impl ExecutionContext {
 /// for the EDU_UpdatePin
 pub trait TogglePin {
     /// Set the corresponding pin to high
-    fn set_high(&self);
+    fn set_high(&mut self);
     /// Set the corresponding pin to low
-    fn set_low(&self);
+    fn set_low(&mut self);
+}
+
+
+#[cfg(not(feature = "mock"))]
+pub struct UpdatePin {
+    pub pin: rppal::gpio::OutputPin
+}
+
+
+#[cfg(not(feature = "mock"))]
+impl UpdatePin {
+
+    fn new(pin: u8) -> Self
+    {
+        let mut update_pin = UpdatePin {
+            pin: rppal::gpio::Gpio::new().unwrap().get(pin).unwrap().into_output(),
+        };
+        update_pin.pin.set_reset_on_drop(false);
+        return update_pin;
+    }
 }
 
 #[cfg(not(feature = "mock"))] // --> this impl is not compiled when hardware is mocked
 impl TogglePin for ExecutionContext {
-    fn set_high(&self) {
-        let mut pin = rppal::gpio::Gpio::new().unwrap().get(self.update_pin).unwrap().into_output();
-        pin.set_reset_on_drop(false);
-        pin.set_high();
+    fn set_high(&mut self) {
+        self.update_pin.pin.set_high();
     }
 
-    fn set_low(&self) {
-        let mut pin = rppal::gpio::Gpio::new().unwrap().get(self.update_pin).unwrap().into_output();
-        pin.set_reset_on_drop(false);
-        pin.set_low();
+    fn set_low(&mut self) {
+        self.update_pin.pin.set_low();
     }
 }
 
@@ -125,8 +141,30 @@ impl Serializable for ResultId {
 
 /// This impl is only used when doing tests without hardware
 #[cfg(feature = "mock")]
-impl TogglePin for ExecutionContext {
-    fn set_high(&self) {}
+pub struct UpdatePin {
+    pub pin: bool
+}
 
-    fn set_low(&self) {}
+
+#[cfg(feature = "mock")]
+impl UpdatePin {
+
+    fn new(pin: u8) -> Self
+    {
+        let mut update_pin = UpdatePin {
+            pin: false
+        };
+        return update_pin;
+    }
+}
+
+#[cfg(feature = "mock")]
+impl TogglePin for ExecutionContext {
+    fn set_high(&mut self) {
+        self.update_pin.pin = true
+    }
+
+    fn set_low(&mut self) {
+        self.update_pin.pin = false
+    }
 }
