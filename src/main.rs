@@ -21,9 +21,9 @@ fn main() {
         std::fs::File::create("log").unwrap(),
     );
 
-    const UPDATE_PIN: u8 = 12;
+    const UPDATE_PIN: u8 = 35;
 
-    let mut com = communication::UARTHandle::new(115200);
+    let mut com = communication::UARTHandle::new(921600);
     let ec = command::ExecutionContext::new(
         "./data/status_queue".into(),
         "./data/result_queue".into(),
@@ -34,9 +34,9 @@ fn main() {
 
     //Heartbeat thread
     thread::spawn(|| {
-        const HEARTBEAT_FREQ: u64 = 2;
-        const HEARTBEAT_PIN: u8 = 23;
-        const TOGGLE_TIME_MS: time::Duration = time::Duration::from_millis(HEARTBEAT_FREQ * 500);
+        const HEARTBEAT_FREQ: u64 = 10; //Hz
+        const HEARTBEAT_PIN: u8 = 34;
+        const TOGGLE_TIME_MS: time::Duration = time::Duration::from_millis((1000 / HEARTBEAT_FREQ / 2) as u64);
 
         let gpio = Gpio::new().unwrap();
         let mut pin = gpio.get(HEARTBEAT_PIN).unwrap().into_output();
