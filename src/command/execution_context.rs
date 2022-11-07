@@ -57,21 +57,16 @@ pub trait TogglePin {
     fn set_low(&mut self);
 }
 
-
 #[cfg(not(feature = "mock"))]
 pub struct UpdatePin {
-    pub pin: rppal::gpio::OutputPin
+    pub pin: rppal::gpio::OutputPin,
 }
-
 
 #[cfg(not(feature = "mock"))]
 impl UpdatePin {
-
-    fn new(pin: u8) -> Self
-    {
-        let mut update_pin = UpdatePin {
-            pin: rppal::gpio::Gpio::new().unwrap().get(pin).unwrap().into_output(),
-        };
+    fn new(pin: u8) -> Self {
+        let mut update_pin =
+            UpdatePin { pin: rppal::gpio::Gpio::new().unwrap().get(pin).unwrap().into_output() };
         update_pin.pin.set_reset_on_drop(false);
         return update_pin;
     }
@@ -142,18 +137,13 @@ impl Serializable for ResultId {
 /// This impl is only used when doing tests without hardware
 #[cfg(feature = "mock")]
 pub struct UpdatePin {
-    pub pin: bool
+    pub pin: bool,
 }
-
 
 #[cfg(feature = "mock")]
 impl UpdatePin {
-
-    fn new(pin: u8) -> Self
-    {
-        let mut update_pin = UpdatePin {
-            pin: false
-        };
+    fn new(pin: u8) -> Self {
+        let mut update_pin = UpdatePin { pin: false };
         return update_pin;
     }
 }
