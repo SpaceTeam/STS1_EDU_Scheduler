@@ -64,22 +64,19 @@ pub struct UpdatePin {
 
 #[cfg(not(feature = "mock"))]
 impl UpdatePin {
-    fn new(pin: u8) -> Self {
+    pub fn new(pin: u8) -> Self {
         let mut update_pin =
             UpdatePin { pin: rppal::gpio::Gpio::new().unwrap().get(pin).unwrap().into_output() };
         update_pin.pin.set_reset_on_drop(false);
         return update_pin;
     }
-}
 
-#[cfg(not(feature = "mock"))] // --> this impl is not compiled when hardware is mocked
-impl TogglePin for ExecutionContext {
-    fn set_high(&mut self) {
-        self.update_pin.pin.set_high();
+    pub fn set_high(&mut self) {
+        self.pin.set_high();
     }
 
-    fn set_low(&mut self) {
-        self.update_pin.pin.set_low();
+    pub fn set_low(&mut self) {
+        self.pin.set_low();
     }
 }
 
@@ -142,19 +139,16 @@ pub struct UpdatePin {
 
 #[cfg(feature = "mock")]
 impl UpdatePin {
-    fn new(pin: u8) -> Self {
+    pub fn new(pin: u8) -> Self {
         let mut update_pin = UpdatePin { pin: false };
         return update_pin;
     }
-}
 
-#[cfg(feature = "mock")]
-impl TogglePin for ExecutionContext {
-    fn set_high(&mut self) {
-        self.update_pin.pin = true
+    pub fn set_high(&mut self) {
+        self.pin = true
     }
 
-    fn set_low(&mut self) {
-        self.update_pin.pin = false
+    pub fn set_low(&mut self) {
+        self.pin = false
     }
 }
