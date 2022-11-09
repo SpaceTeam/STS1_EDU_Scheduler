@@ -48,15 +48,6 @@ impl ExecutionContext {
     }
 }
 
-/// This trait outlines a pin that can be set/reset, which corresponds to the functionality needed
-/// for the EDU_UpdatePin
-pub trait TogglePin {
-    /// Set the corresponding pin to high
-    fn set_high(&mut self);
-    /// Set the corresponding pin to low
-    fn set_low(&mut self);
-}
-
 #[cfg(not(feature = "mock"))]
 pub struct UpdatePin {
     pub pin: rppal::gpio::OutputPin,
@@ -77,6 +68,28 @@ impl UpdatePin {
 
     pub fn set_low(&mut self) {
         self.pin.set_low();
+    }
+}
+
+/// This impl is only used when doing tests without hardware
+#[cfg(feature = "mock")]
+pub struct UpdatePin {
+    pub pin: bool,
+}
+
+#[cfg(feature = "mock")]
+impl UpdatePin {
+    pub fn new(pin: u8) -> Self {
+        let mut update_pin = UpdatePin { pin: false };
+        return update_pin;
+    }
+
+    pub fn set_high(&mut self) {
+        self.pin = true
+    }
+
+    pub fn set_low(&mut self) {
+        self.pin = false
     }
 }
 
@@ -128,27 +141,5 @@ impl Serializable for ResultId {
         let p_id = u16::from_le_bytes([bytes[0], bytes[1]]);
         let q_id = u16::from_le_bytes([bytes[2], bytes[3]]);
         ResultId { program_id: p_id, queue_id: q_id }
-    }
-}
-
-/// This impl is only used when doing tests without hardware
-#[cfg(feature = "mock")]
-pub struct UpdatePin {
-    pub pin: bool,
-}
-
-#[cfg(feature = "mock")]
-impl UpdatePin {
-    pub fn new(pin: u8) -> Self {
-        let mut update_pin = UpdatePin { pin: false };
-        return update_pin;
-    }
-
-    pub fn set_high(&mut self) {
-        self.pin = true
-    }
-
-    pub fn set_low(&mut self) {
-        self.pin = false
     }
 }

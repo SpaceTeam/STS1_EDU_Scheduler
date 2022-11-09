@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use super::ProgramStatus;
 use super::ResultId;
-use super::{CommandError, CommandResult, SyncExecutionContext, TogglePin};
+use super::{CommandError, CommandResult, SyncExecutionContext};
 
 /// Stores a received program in the appropriate folder and unzips it
 ///
