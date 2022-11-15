@@ -30,13 +30,21 @@ impl ExecutionContext {
         result_path: std::path::PathBuf,
         update_pin: u8,
     ) -> Result<Self, std::io::Error> {
-        Ok(ExecutionContext {
+        let mut ec = ExecutionContext {
             thread_handle: None,
             running_flag: false,
             status_q: FileQueue::<ProgramStatus>::new(status_path)?,
             result_q: FileQueue::<ResultId>::new(result_path)?,
             update_pin: UpdatePin::new(update_pin),
-        })
+        };
+
+        if ec.has_data_ready()? {
+            ec.update_pin.set_high();
+        } else {
+            ec.update_pin.set_low();
+        }
+
+        Ok(ec)
     }
 
     pub fn is_running(&self) -> bool {
