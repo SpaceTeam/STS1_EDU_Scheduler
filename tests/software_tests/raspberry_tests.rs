@@ -21,7 +21,19 @@ fn build_pack_store_archive() {
 #[test]
 fn build_pack_execute_program() {
     // Execute with Program ID 0 & Queue ID 0
-    std::fs::write("tests/execute_program.pack", DATA(vec![2, 0, 0, 0, 0]).serialize());
+    std::fs::write("tests/execute_program.pack", DATA(vec![2, 0, 0, 0, 0, 5, 0]).serialize());
+}
+
+#[cfg(feature = "rpi")]
+#[test]
+fn build_pack_get_status() {
+    std::fs::write("tests/get_status.pack", DATA(vec![4]).serialize());
+}
+
+#[cfg(feature = "rpi")]
+#[test]
+fn build_pack_return_result() {
+    std::fs::write("tests/return_result.pack", DATA(vec![5]).serialize());
 }
 
 fn combine_packets(list: Vec<CSBIPacket>) -> Vec<u8> {

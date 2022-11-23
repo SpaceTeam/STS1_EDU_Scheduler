@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use super::ProgramStatus;
 use super::ResultId;
-use super::{CommandError, CommandResult, SyncExecutionContext, TogglePin};
+use super::{CommandError, CommandResult, SyncExecutionContext};
 
 /// Stores a received program in the appropriate folder and unzips it
 ///
@@ -119,7 +119,7 @@ pub fn execute_program(
         context.status_q.push(ProgramStatus { program_id, queue_id, exit_code }).unwrap();
         context.result_q.push(rid).unwrap();
         context.running_flag = false;
-        context.set_high(); // Set EDU_Update pin
+        context.update_pin.set_high(); // Set EDU_Update pin
         drop(context);
     });
 
@@ -211,7 +211,7 @@ pub fn get_status(context: &mut SyncExecutionContext) -> Result<CSBIPacket, Comm
         let mut v = vec![1];
         v.extend(con.status_q.raw_pop()?);
         if !con.has_data_ready()? {
-            con.set_low();
+            con.update_pin.set_low();
         }
         Ok(CSBIPacket::DATA(v))
     } else {
@@ -240,7 +240,7 @@ pub fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
     let mut con = context.lock().unwrap();
     let res = con.result_q.pop()?;
     if !con.has_data_ready()? {
-        con.set_low();
+        con.update_pin.set_low();
     }
     drop(con); // Unlock Mutex
 
