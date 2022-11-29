@@ -15,11 +15,12 @@ class EDU_Tests:
         self.cobc = COBC(self.device, 0, 1, 2, 3, 4)
         self.ssh = Connection("edu")
         self.ssh.open()
+        self._upload()
 
     def register(self, func: Callable) -> None:
         self._tests.append(func)
 
-    def run(self) -> None:
+    def run(self) -> int:
         for t in self._tests:
             self._reset()
             print(f"Running test {t.__name__}...")
@@ -42,7 +43,19 @@ class EDU_Tests:
         return len(self._failures)
 
     def _reset(self):
-        raise NotImplementedError()
+        self._kill_scheduler()
+        with self.ssh.cd("./scheduler"):
+            self.ssh.run("rm data/* archives/*")
+            self.ssh.sudo("./STS1_EDU_Scheduler", disown=True)            
+
+    def _kill_scheduler(self):
+        if self.ssh.run("ps -C STS1_EDU_Scheduler").exited is 0:
+            self.ssh.sudo("ps -C STS1_EDU_Scheduler -o pid= | xargs kill")
+
+    def _upload(self):
+        self._kill_scheduler()
+        self.ssh.put(local="./edu/STS1_EDU_Scheduler", remote="./scheduler/STS1_EDU_Scheduler")
+        self.ssh.run("chmod +x ./scheduler/STS1_EDU_Scheduler")
 
 
 class bcolors:
