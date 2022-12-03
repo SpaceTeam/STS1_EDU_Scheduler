@@ -99,46 +99,51 @@ impl<T: Serializable> FileQueue<T> {
 }
 
 mod implementations;
-use std::sync::Mutex;
 
-#[test]
-fn bytes() -> Result<(), Box<dyn std::error::Error>> {
-    let mut q = FileQueue::new("__bytes".into())?;
-    q.push(1u8)?;
-    q.push(2u8)?;
-    assert_eq!(q.pop()?, 1);
-    assert_eq!(q.pop()?, 2);
-    std::fs::remove_file("__bytes")?;
-    Ok(())
-}
+#[cfg(test)]
+mod test {
+    use crate::persist::FileQueue;
+    use std::sync::Mutex;
 
-#[test]
-fn hw() -> Result<(), Box<dyn std::error::Error>> {
-    let mut q = FileQueue::new("__hw".into())?;
-    q.push(123u16)?;
-    q.push(393)?;
-    assert_eq!(q.pop()?, 123);
-    assert_eq!(q.pop()?, 393);
-    std::fs::remove_file("__hw")?;
-    Ok(())
-}
+    #[test]
+    fn bytes() -> Result<(), Box<dyn std::error::Error>> {
+        let mut q = FileQueue::new("__bytes".into())?;
+        q.push(1u8)?;
+        q.push(2u8)?;
+        assert_eq!(q.pop()?, 1);
+        assert_eq!(q.pop()?, 2);
+        std::fs::remove_file("__bytes")?;
+        Ok(())
+    }
 
-#[test]
-fn mthread() -> Result<(), Box<dyn std::error::Error>> {
-    let q = std::sync::Arc::new(Mutex::new(FileQueue::new("__mthread".into())?));
-    let q2 = q.clone();
-    std::thread::spawn(move || {
-        let mut qq = q2.lock().unwrap();
-        qq.push(8u8).unwrap();
-    });
+    #[test]
+    fn hw() -> Result<(), Box<dyn std::error::Error>> {
+        let mut q = FileQueue::new("__hw".into())?;
+        q.push(123u16)?;
+        q.push(393)?;
+        assert_eq!(q.pop()?, 123);
+        assert_eq!(q.pop()?, 393);
+        std::fs::remove_file("__hw")?;
+        Ok(())
+    }
 
-    std::thread::sleep(std::time::Duration::from_millis(20));
-    let mut qq = q.lock().unwrap();
-    qq.push(9u8)?;
+    #[test]
+    fn mthread() -> Result<(), Box<dyn std::error::Error>> {
+        let q = std::sync::Arc::new(Mutex::new(FileQueue::new("__mthread".into())?));
+        let q2 = q.clone();
+        std::thread::spawn(move || {
+            let mut qq = q2.lock().unwrap();
+            qq.push(8u8).unwrap();
+        });
 
-    assert_eq!(qq.pop()?, 8u8);
-    assert_eq!(qq.pop()?, 9u8);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let mut qq = q.lock().unwrap();
+        qq.push(9u8)?;
 
-    std::fs::remove_file("__mthread")?;
-    Ok(())
+        assert_eq!(qq.pop()?, 8u8);
+        assert_eq!(qq.pop()?, 9u8);
+
+        std::fs::remove_file("__mthread")?;
+        Ok(())
+    }
 }
