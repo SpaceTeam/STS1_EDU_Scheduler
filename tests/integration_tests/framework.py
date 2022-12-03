@@ -12,7 +12,7 @@ class EDU_Tests:
 
     def prepare(self) -> None:
         self.device.connect()
-        self.cobc = COBC(self.device, 0, 1, 2, 3, 4)
+        self.cobc = COBC(self.device, 2, 3, 4, 5, 6)
         self.ssh = Connection("edu")
         self.ssh.open()
         self._upload()
@@ -49,12 +49,12 @@ class EDU_Tests:
             self.ssh.sudo("./STS1_EDU_Scheduler", disown=True)            
 
     def _kill_scheduler(self):
-        if self.ssh.run("ps -C STS1_EDU_Scheduler").exited is 0:
+        if self.ssh.run("ps -C STS1_EDU_Scheduler").exited == 0:
             self.ssh.sudo("ps -C STS1_EDU_Scheduler -o pid= | xargs kill")
 
     def _upload(self):
         self._kill_scheduler()
-        self.ssh.put(local="./edu/STS1_EDU_Scheduler", remote="./scheduler/STS1_EDU_Scheduler")
+        self.ssh.put(local="~/edu/STS1_EDU_Scheduler", remote="./scheduler/STS1_EDU_Scheduler")
         self.ssh.run("chmod +x ./scheduler/STS1_EDU_Scheduler")
 
 
