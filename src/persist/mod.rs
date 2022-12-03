@@ -48,7 +48,7 @@ impl<T: Serializable> FileQueue<T> {
         if !path.exists() {
             fs::File::create(&path)?;
         }
-        Ok(FileQueue { path: path, value_type: PhantomData })
+        Ok(FileQueue { path, value_type: PhantomData })
     }
 
     /// Similiar to `pop`, but only returns the raw bytes
@@ -94,7 +94,7 @@ impl<T: Serializable> FileQueue<T> {
 
     /// Returns wether the queue is currently empty. Fails if the underlying file cannot be opened.
     pub fn is_empty(&self) -> Result<bool, std::io::Error> {
-        return Ok(fs::File::open(&self.path)?.metadata()?.len() == 0);
+        Ok(fs::File::open(&self.path)?.metadata()?.len() == 0)
     }
 }
 

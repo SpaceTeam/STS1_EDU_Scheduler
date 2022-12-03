@@ -49,7 +49,7 @@ pub fn process_command(
         // Ignore non data packets
     };
 
-    if data.len() < 1 {
+    if data.is_empty() {
         log::error!("No data received");
         return Err(CommandError::InvalidCommError);
     }
@@ -113,13 +113,13 @@ pub fn process_command(
             update_time(time)?;
             com.send_packet(CSBIPacket::ACK)?;
         }
-        b @ _ => {
+        b => {
             log::error!("Received command {}", b);
             return Err(CommandError::InvalidCommError);
         }
     };
 
-    return Ok(());
+    Ok(())
 }
 
 fn check_length(vec: &Vec<u8>, n: usize) -> Result<(), CommandError> {

@@ -5,7 +5,6 @@ use std::{
     thread,
 };
 
-use log;
 use simplelog as sl;
 
 mod command;

@@ -31,7 +31,7 @@ impl UARTHandle {
 
         let _ = uart_handler.uart_PI.set_write_mode(true);
 
-        return uart_handler;
+        uart_handler
     }
 }
 
@@ -52,7 +52,7 @@ impl CommunicationHandle for UARTHandle {
                 return Ok(());
             }
         }
-        return Err(CommunicationError::InterfaceError);
+        Err(CommunicationError::InterfaceError)
     }
 
     /// # Incomplete

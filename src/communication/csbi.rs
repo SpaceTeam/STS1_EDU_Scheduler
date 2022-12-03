@@ -1,6 +1,6 @@
 use crc::{Crc, CRC_32_MPEG_2};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CSBIPacket {
     ACK,
     NACK,
@@ -32,6 +32,6 @@ impl CSBIPacket {
     }
 
     pub fn check(data: &Vec<u8>, checksum: u32) -> bool {
-        return CSBIPacket::CRC.checksum(data) == checksum;
+        CSBIPacket::CRC.checksum(data) == checksum
     }
 }

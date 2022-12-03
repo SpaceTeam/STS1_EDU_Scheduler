@@ -136,7 +136,7 @@ pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, SyncEx
     .unwrap();
     let exec = Arc::new(Mutex::new(ec));
 
-    return (com, exec);
+    (com, exec)
 }
 
 pub fn cleanup(unique: &str) {

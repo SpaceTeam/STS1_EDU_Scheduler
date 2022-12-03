@@ -18,16 +18,16 @@ pub trait CommunicationHandle {
 
     /// Blocks until it receives a CSBIPacket
     fn receive_packet(&mut self, timeout: &std::time::Duration) -> ComResult<CSBIPacket> {
-        let pack = match self.receive(1, &timeout)?[0] {
+        let pack = match self.receive(1, timeout)?[0] {
             0xd7 => CSBIPacket::ACK,
             0x27 => CSBIPacket::NACK,
             0xb4 => CSBIPacket::STOP,
             0x59 => CSBIPacket::EOF,
             0x8b => {
-                let length_field = self.receive(2, &timeout)?;
+                let length_field = self.receive(2, timeout)?;
                 let length = u16::from_le_bytes([length_field[0], length_field[1]]);
-                let bytes = self.receive(length, &timeout)?;
-                let crc_field = self.receive(4, &timeout)?;
+                let bytes = self.receive(length, timeout)?;
+                let crc_field = self.receive(4, timeout)?;
                 let crc =
                     u32::from_le_bytes([crc_field[0], crc_field[1], crc_field[2], crc_field[3]]);
                 if !CSBIPacket::check(&bytes, crc) {
@@ -55,7 +55,7 @@ pub trait CommunicationHandle {
         let mut buffer = Vec::new();
 
         loop {
-            let pack = self.receive_packet(&timeout);
+            let pack = self.receive_packet(timeout);
             if stop_fn() {
                 self.send_packet(CSBIPacket::STOP)?;
                 return Err(CommunicationError::STOPCondition);
@@ -79,14 +79,14 @@ pub trait CommunicationHandle {
                     log::error!("Receive multipacket timed out");
                     return Err(CommunicationError::TimeoutError);
                 }
-                e @ _ => {
+                e => {
                     log::error!("Received invalid data {:?}", e);
                     self.send_packet(CSBIPacket::NACK)?;
                 }
             };
         }
 
-        return Ok(buffer);
+        Ok(buffer)
     }
 
     fn send_multi_packet(
@@ -105,7 +105,7 @@ pub trait CommunicationHandle {
 
             self.send_packet(CSBIPacket::DATA(chunks[i].to_vec()))?;
 
-            match self.receive_packet(&timeout)? {
+            match self.receive_packet(timeout)? {
                 CSBIPacket::NACK => {
                     log::warn!("NACK on packet. Resending...");
                 }

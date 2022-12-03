@@ -61,7 +61,7 @@ fn execute_program_normal() -> TestResult {
     let mut res = String::new();
     std::fs::File::open("./archives/1/results/0")?.read_to_string(&mut res)?;
 
-    assert_eq!(res.replace("\r", ""), *"Some test results\nWith multiple lines\n".to_string());
+    assert_eq!(res.replace('\r', ""), *"Some test results\nWith multiple lines\n".to_string());
 
     common::cleanup("1");
     Ok(())

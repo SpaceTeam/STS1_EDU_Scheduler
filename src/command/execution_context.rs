@@ -67,7 +67,7 @@ impl UpdatePin {
         let mut update_pin =
             UpdatePin { pin: rppal::gpio::Gpio::new().unwrap().get(pin).unwrap().into_output() };
         update_pin.pin.set_reset_on_drop(false);
-        return update_pin;
+        update_pin
     }
 
     pub fn set_high(&mut self) {
