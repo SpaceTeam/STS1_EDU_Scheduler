@@ -1,4 +1,5 @@
 use crate::communication::CSBIPacket;
+use crate::communication::CommunicationHandle;
 use std::fs::File;
 use std::io::prelude::*;
 use std::process::Command;
@@ -9,13 +10,32 @@ use super::ProgramStatus;
 use super::ResultId;
 use super::{CommandError, CommandResult, SyncExecutionContext};
 
+const COM_TIMEOUT_DURATION: std::time::Duration = std::time::Duration::new(2, 0);
+
+pub fn store_archive(
+    data: Vec<u8>,
+    com: &mut impl CommunicationHandle,
+    _exec: &mut SyncExecutionContext,
+) -> CommandResult {
+    check_length(&data, 3)?;
+    com.send_packet(CSBIPacket::ACK)?;
+
+    let id = u16::from_le_bytes([data[1], data[2]]).to_string();
+    log::info!("Storing Archive {}", id);
+
+    let bytes = com.receive_multi_packet(&COM_TIMEOUT_DURATION, || false)?; // !! TODO !!
+    unpack_archive(id, bytes)?;
+
+    com.send_packet(CSBIPacket::ACK)?;
+    Ok(())
+}
 /// Stores a received program in the appropriate folder and unzips it
 ///
 /// * `folder` The folder to unzip into, subsequently the program id
 /// * `bytes` A vector containing the raw bytes of the zip archive
 ///
 /// Returns Ok or passes along a file access/unzip process error
-pub fn store_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
+pub fn unpack_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
     // Store bytes into temporary file
     let zip_path = format!("./data/{}.zip", folder);
     let mut zip_file = File::create(&zip_path)?;
@@ -265,4 +285,13 @@ pub fn update_time(epoch: i32) -> CommandResult {
     }
 
     Ok(())
+}
+
+fn check_length(vec: &Vec<u8>, n: usize) -> Result<(), CommandError> {
+    if vec.len() != n {
+        log::error!("Command came with {} bytes, should have {}", vec.len(), n);
+        Err(CommandError::InvalidCommError)
+    } else {
+        Ok(())
+    }
 }

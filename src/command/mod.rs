@@ -38,15 +38,13 @@ pub fn process_command(
     com: &mut impl CommunicationHandle,
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
-    // Preprocess
     let packet = com.receive_packet(&Duration::MAX)?;
-    log::info!("{:?}", packet);
-    let data = if let CSBIPacket::DATA(data) = packet {
-        data
-    } else {
-        log::error!("Received {:?} as command start", packet);
-        return Err(CommandError::CommunicationError(CommunicationError::PacketInvalidError));
-        // Ignore non data packets
+    let data = match packet {
+        CSBIPacket::DATA(data) => data,
+        _ => {
+            log::error!("Received {:?} as command start, expected DATA", packet);
+            return Err(CommandError::CommunicationError(CommunicationError::PacketInvalidError));
+        }
     };
 
     if data.is_empty() {
@@ -58,12 +56,7 @@ pub fn process_command(
         0x01 => {
             // STORE ARCHIVE
             check_length(&data, 3)?;
-            com.send_packet(CSBIPacket::ACK)?;
-            let id = u16::from_le_bytes([data[1], data[2]]).to_string();
-            log::info!("Storing Archive {}", id);
-            let bytes = com.receive_multi_packet(&COM_TIMEOUT_DURATION, || false)?; // !! TODO !!
-            store_archive(id, bytes)?;
-            com.send_packet(CSBIPacket::ACK)?;
+            store_archive(data, com, exec)?;
         }
         0x02 => {
             // EXECUTE PROGRAM
