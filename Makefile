@@ -1,7 +1,7 @@
 upload:
 	cargo build --release --target=armv7-unknown-linux-gnueabihf
-	rsync -avzh ./target/armv7-unknown-linux-gnueabihf/release/STS1_EDU_Scheduler flatsat:edu/STS1_EDU_Scheduler
-	rsync -avzh ./tests/integration_tests flatsat:edu/tests
+	rsync -avzh ./target/armv7-unknown-linux-gnueabihf/release/STS1_EDU_Scheduler flatsat:edu/STS1_EDU_Scheduler --rsync-path='wsl rsync'
+	rsync -avzh ./tests/integration_tests flatsat:edu/ --rsync-path='wsl rsync'
 
 sw_test:
 	cargo test --features mock
