@@ -54,8 +54,6 @@ pub fn process_command(
 
     match data[0] {
         0x01 => {
-            // STORE ARCHIVE
-            check_length(&data, 3)?;
             store_archive(data, com, exec)?;
         }
         0x02 => {

@@ -12,6 +12,7 @@ use super::{CommandError, CommandResult, SyncExecutionContext};
 
 const COM_TIMEOUT_DURATION: std::time::Duration = std::time::Duration::new(2, 0);
 
+/// This function implements the Store Archive command, including the reception of the archive itself
 pub fn store_archive(
     data: Vec<u8>,
     com: &mut impl CommunicationHandle,
@@ -29,6 +30,7 @@ pub fn store_archive(
     com.send_packet(CSBIPacket::ACK)?;
     Ok(())
 }
+
 /// Stores a received program in the appropriate folder and unzips it
 ///
 /// * `folder` The folder to unzip into, subsequently the program id
