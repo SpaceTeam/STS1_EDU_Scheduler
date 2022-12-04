@@ -57,15 +57,7 @@ pub fn process_command(
             store_archive(data, com, exec)?;
         }
         0x02 => {
-            // EXECUTE PROGRAM
-            check_length(&data, 7)?;
-            com.send_packet(CSBIPacket::ACK)?;
-            let program_id = u16::from_le_bytes([data[1], data[2]]);
-            let queue_id = u16::from_le_bytes([data[3], data[4]]);
-            let timeout = Duration::from_secs(u16::from_le_bytes([data[5], data[6]]).into());
-            log::info!("Executing Program {}:{} for {}s", program_id, queue_id, timeout.as_secs());
-            execute_program(exec, program_id, queue_id, timeout)?;
-            com.send_packet(CSBIPacket::ACK)?;
+            execute_program(data, com, exec)?;
         }
         0x03 => {
             // STOP PROGRAM

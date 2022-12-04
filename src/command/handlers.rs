@@ -1,3 +1,5 @@
+use subprocess::Popen;
+
 use crate::communication::CSBIPacket;
 use crate::communication::CommunicationHandle;
 use std::fs::File;
@@ -77,61 +79,29 @@ pub fn unpack_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
 /// * `queue_id` The first argument for the student program
 /// * `timeout` The maxmimum time the student program shall execute. Will be rounded up to the nearest second
 pub fn execute_program(
-    context: &mut SyncExecutionContext,
-    program_id: u16,
-    queue_id: u16,
-    timeout: Duration,
+    data: Vec<u8>,
+    com: &mut impl CommunicationHandle,
+    exec: &mut SyncExecutionContext,
 ) -> CommandResult {
-    let _ = stop_program(context); // Ignore return value
+    check_length(&data, 7)?;
+    com.send_packet(CSBIPacket::ACK)?;
 
-    // TODO config setuid
-    let output_file = File::create(format!("./data/{}_{}.log", program_id, queue_id))?; // will contain the stdout and stderr of the execute program
-    let config = subprocess::PopenConfig {
-        cwd: Some(format!("./archives/{}", program_id).into()),
-        detached: false, // do not spawn as separate process
-        stdout: subprocess::Redirection::File(output_file),
-        stderr: subprocess::Redirection::Merge,
-        ..Default::default()
-    };
-    let mut student_process =
-        subprocess::Popen::create(&["python", "main.py", &queue_id.to_string()], config)?;
+    let program_id = u16::from_le_bytes([data[1], data[2]]);
+    let queue_id = u16::from_le_bytes([data[3], data[4]]);
+    let timeout = Duration::from_secs(u16::from_le_bytes([data[5], data[6]]).into());
+    log::info!("Executing Program {}:{} for {}s", program_id, queue_id, timeout.as_secs());
 
-    // create a reference for the watchdog thread
-    let wd_context = context.clone();
+    let _ = stop_program(exec); // Ignore return value
 
-    // Watchdog thread
+    let mut student_process = create_student_process(program_id, queue_id)?;
+
+    // WATCHDOG THREAD
+    let mut wd_context = exec.clone();
     let wd_handle = thread::spawn(move || {
-        let mut exit_code = 255u8; // the programs exit code (overwritten if applicable)
-        let mut should_kill_student_program = true; // set to false if it terminates itself
-
-        // Loop over timeout in 1s steps
-        for _ in 0..timeout.as_secs() {
-            if let Some(status) = student_process // if student program terminates with exit code
-                .wait_timeout(Duration::from_secs(1))
-                .unwrap()
-            {
-                if let subprocess::ExitStatus::Exited(n) = status {
-                    // if it terminated itself
-                    exit_code = n as u8
-                }
-                should_kill_student_program = false;
-                break; // leave timeout loop
-            }
-
-            if !wd_context.lock().unwrap().running_flag {
-                // if student program should be stopped
-                break;
-            }
-        }
-
-        if should_kill_student_program {
-            log::warn!("Student Process timed out or is stopped");
-            student_process.kill().unwrap(); // send SIGKILL
-            student_process
-                .wait_timeout(Duration::from_millis(200)) // wait for it to do its magic
-                .unwrap()
-                .unwrap(); // Panic if not stopped
-        }
+        let exit_code = match supervise_process(student_process, timeout, &mut wd_context) {
+            Ok(code) => code,
+            Err(()) => 255,
+        };
 
         log::info!("Program {}:{} finished with {}", program_id, queue_id, exit_code);
         let rid = ResultId { program_id, queue_id };
@@ -146,11 +116,77 @@ pub fn execute_program(
     });
 
     // After spawning the watchdog thread, store its handle and set flag
-    let mut l_context = context.lock().unwrap();
+    let mut l_context = exec.lock().unwrap();
     l_context.thread_handle = Some(wd_handle);
     l_context.running_flag = true;
+    drop(l_context);
 
+    com.send_packet(CSBIPacket::ACK)?;
     Ok(())
+}
+
+fn create_student_process(program_id: u16, queue_id: u16) -> Result<Popen, CommandError> {
+    // TODO run the program from a student user (setuid)
+    let output_file = File::create(format!("./data/{}_{}.log", program_id, queue_id))?; // will contain the stdout and stderr of the execute program
+    let config = subprocess::PopenConfig {
+        cwd: Some(format!("./archives/{}", program_id).into()),
+        detached: false, // do not spawn as separate process
+        stdout: subprocess::Redirection::File(output_file),
+        stderr: subprocess::Redirection::Merge,
+        ..Default::default()
+    };
+
+    let process = Popen::create(&["python", "main.py", &queue_id.to_string()], config)?;
+    Ok(process)
+}
+
+fn supervise_process(
+    mut process: Popen,
+    timeout: Duration,
+    exec: &mut SyncExecutionContext,
+) -> Result<u8, ()> {
+    match run_until_timeout(&mut process, timeout, exec) {
+        Ok(code) => Ok(code),
+        Err(()) => {
+            log::warn!("Student Process timed out or is stopped");
+            process.kill().unwrap(); // send SIGKILL
+            process
+                .wait_timeout(Duration::from_millis(200)) // wait for it to do its magic
+                .unwrap()
+                .unwrap(); // Panic if not stopped
+            Err(())
+        }
+    }
+}
+
+/// This function allows the program to run for timeout (rounded to seconds)
+/// If the program terminates, it exit code is returned
+/// If it times out or the running flag is reset, an Err is returned instead
+fn run_until_timeout(
+    process: &mut Popen,
+    timeout: Duration,
+    exec: &mut SyncExecutionContext,
+) -> Result<u8, ()> {
+    // Loop over timeout in 1s steps
+    for _ in 0..timeout.as_secs() {
+        if let Some(status) = process // if student program terminates with exit code
+            .wait_timeout(Duration::from_secs(1))
+            .unwrap()
+        {
+            if let subprocess::ExitStatus::Exited(n) = status {
+                return Ok(n as u8);
+            } else {
+                return Ok(0);
+            }
+        }
+
+        if !exec.lock().unwrap().running_flag {
+            // if student program should be stopped
+            break;
+        }
+    }
+
+    Err(())
 }
 
 /// The function uses `zip` to create an uncompressed archive that includes the result file specified, as well as
@@ -164,7 +200,7 @@ fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
     const MAXIMUM_FILE_SIZE: u64 = 1_000_000;
     let _ = truncate_to_size(&log_path, MAXIMUM_FILE_SIZE);
     let _ = truncate_to_size(&res_path, MAXIMUM_FILE_SIZE);
-    let _ = truncate_to_size("lpog", MAXIMUM_FILE_SIZE);
+    let _ = truncate_to_size("log", MAXIMUM_FILE_SIZE);
 
     let _ = Command::new("zip")
         .arg("-0")
