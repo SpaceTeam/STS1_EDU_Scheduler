@@ -91,7 +91,7 @@ pub fn execute_program(
     let timeout = Duration::from_secs(u16::from_le_bytes([data[5], data[6]]).into());
     log::info!("Executing Program {}:{} for {}s", program_id, queue_id, timeout.as_secs());
 
-    let _ = stop_program(exec); // Ignore return value
+    terminate_student_program(exec).expect("to terminate a running program");
 
     let mut student_process = create_student_process(program_id, queue_id)?;
 
@@ -233,23 +233,37 @@ fn truncate_to_size(path: &str, n_bytes: u64) -> Result<(), std::io::Error> {
 /// Returns Ok after terminating the student program or immediately if it is already stopped
 ///
 /// **Panics if terminating takes too long**
-pub fn stop_program(context: &mut SyncExecutionContext) -> CommandResult {
-    let mut con = context.lock().unwrap();
+pub fn stop_program(
+    data: Vec<u8>,
+    com: &mut impl CommunicationHandle,
+    exec: &mut SyncExecutionContext,
+) -> CommandResult {
+    check_length(&data, 1)?;
+    com.send_packet(CSBIPacket::ACK)?;
+
+    terminate_student_program(exec).expect("to terminate student program");
+
+    com.send_packet(CSBIPacket::ACK)?;
+    Ok(())
+}
+
+fn terminate_student_program(exec: &mut SyncExecutionContext) -> CommandResult {
+    let mut con = exec.lock().unwrap();
     if !con.is_running() {
         return Ok(());
     }
     con.running_flag = false; // Signal watchdog thread to terminate
     drop(con); // Release mutex
 
-    std::thread::sleep(Duration::from_millis(2000)); // Sensible amount?
+    for _ in 0..20 {
+        std::thread::sleep(Duration::from_millis(100)); // Sensible amount?
+        let mut con = exec.lock().unwrap();
+        if con.thread_handle.as_ref().unwrap().is_finished() {
+            return Ok(());
+        }
+    }
 
-    assert!(
-        // Panic if the watchdog thread is not finished
-        context.lock().unwrap().thread_handle.as_ref().unwrap().is_finished(),
-        "Watchdog thread did not finish in time"
-    );
-
-    Ok(())
+    Err(CommandError::SystemError("Supervisor thread did not finish".into()))
 }
 
 /// The function returns a DATA packet that conforms to the Get Status specification in the PDD.

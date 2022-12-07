@@ -60,12 +60,7 @@ pub fn process_command(
             execute_program(data, com, exec)?;
         }
         0x03 => {
-            // STOP PROGRAM
-            check_length(&data, 1)?;
-            com.send_packet(CSBIPacket::ACK)?;
-            log::info!("Stopping Program");
-            stop_program(exec)?;
-            com.send_packet(CSBIPacket::ACK)?;
+            stop_program(data, com, exec)?;
         }
         0x04 => {
             // GET STATUS
