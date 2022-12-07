@@ -9,7 +9,7 @@ coverage: build_with_cov
 	firefox ./target/debug/coverage/index.html&
 
 sw_test:
-	cargo test --features mock
+	cargo test --release --features mock
 
 packs:
 	cargo test build_pack --features rpi
