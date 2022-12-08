@@ -66,16 +66,7 @@ pub fn process_command(
             get_status(data, com, exec)?;
         }
         0x05 => {
-            // RETURN RESULT
-            check_length(&data, 1)?;
-            com.send_packet(CSBIPacket::ACK)?;
-            log::info!("Returning Result");
-            com.send_multi_packet(return_result(exec)?, &COM_TIMEOUT_DURATION)?;
-            if let CSBIPacket::ACK = com.receive_packet(&COM_TIMEOUT_DURATION)? {
-                delete_result(exec)?;
-            } else {
-                log::error!("COBC did not acknowledge result");
-            }
+            return_result(data, com, exec)?;
         }
         0x06 => {
             // UPDATE TIME

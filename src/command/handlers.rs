@@ -310,14 +310,30 @@ pub fn get_status(
 
 /// Returns a byte vector containing the tar archive of the next element in the result queue.
 /// It does **not** delete said element, as transmission might have been stopped/failed.
-pub fn return_result(context: &SyncExecutionContext) -> Result<Vec<u8>, CommandError> {
-    let mut con = context.lock().unwrap();
+pub fn return_result(
+    data: Vec<u8>,
+    com: &mut impl CommunicationHandle,
+    exec: &mut SyncExecutionContext,
+) -> CommandResult {
+    check_length(&data, 1)?;
+    com.send_packet(CSBIPacket::ACK)?;
+
+    let mut con = exec.lock().unwrap();
     let res = con.result_q.peek()?;
     drop(con);
 
     let bytes = std::fs::read(format!("./data/{}_{}.zip", res.program_id, res.queue_id))?;
     log::info!("Returning result for {}:{}", res.program_id, res.queue_id);
-    Ok(bytes)
+    com.send_multi_packet(bytes, &COM_TIMEOUT_DURATION)?;
+
+    let response = com.receive_packet(&COM_TIMEOUT_DURATION)?;
+    if response == CSBIPacket::ACK {
+        delete_result(exec)?;
+    } else {
+        log::error!("COBC did not acknowledge result");
+    }
+
+    Ok(())
 }
 
 /// Deletes the result archive corresponding to the next element in the result queue and removes
