@@ -269,29 +269,43 @@ fn terminate_student_program(exec: &mut SyncExecutionContext) -> CommandResult {
 /// The function returns a DATA packet that conforms to the Get Status specification in the PDD.
 ///
 /// **Panics if no lock can be obtained on the queues.**
-pub fn get_status(context: &mut SyncExecutionContext) -> Result<CSBIPacket, CommandError> {
-    let mut con = context.lock().unwrap();
+pub fn get_status(
+    data: Vec<u8>,
+    com: &mut impl CommunicationHandle,
+    exec: &mut SyncExecutionContext,
+) -> CommandResult {
+    check_length(&data, 1)?;
+    com.send_packet(CSBIPacket::ACK)?;
+
+    let mut con = exec.lock().unwrap();
 
     let s_empty = con.status_q.is_empty()?;
     let r_empty = con.result_q.is_empty()?;
 
-    if s_empty && r_empty {
-        log::info!("Nothing to report");
-        Ok(CSBIPacket::DATA(vec![0]))
-    } else if !s_empty {
-        log::info!("Sending program exit code");
-        let mut v = vec![1];
-        v.extend(con.status_q.raw_pop()?);
-        if !con.has_data_ready()? {
-            con.update_pin.set_low();
+    match (s_empty, r_empty) {
+        (false, _) => {
+            log::info!("Sending program exit code");
+            let mut v = vec![1];
+            v.extend(con.status_q.raw_pop()?);
+            if !con.has_data_ready()? {
+                con.update_pin.set_low();
+            }
+            com.send_packet(CSBIPacket::DATA(v))?;
         }
-        Ok(CSBIPacket::DATA(v))
-    } else {
-        log::info!("Sending result-ready");
-        let mut v = vec![2];
-        v.extend(con.result_q.raw_peek()?);
-        Ok(CSBIPacket::DATA(v))
-    }
+        (true, false) => {
+            log::info!("Sending result-ready");
+            let mut v = vec![2];
+            v.extend(con.result_q.raw_peek()?);
+            com.send_packet(CSBIPacket::DATA(v))?;
+        }
+        _ => {
+            log::info!("Nothing to report");
+            com.send_packet(CSBIPacket::DATA(vec![0]))?;
+        }
+    };
+
+    com.receive_packet(&COM_TIMEOUT_DURATION)?; // throw away ACK
+    Ok(())
 }
 
 /// Returns a byte vector containing the tar archive of the next element in the result queue.

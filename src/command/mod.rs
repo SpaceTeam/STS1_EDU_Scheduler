@@ -63,12 +63,7 @@ pub fn process_command(
             stop_program(data, com, exec)?;
         }
         0x04 => {
-            // GET STATUS
-            check_length(&data, 1)?;
-            com.send_packet(CSBIPacket::ACK)?;
-            log::info!("Getting Status");
-            com.send_packet(get_status(exec)?)?;
-            com.receive_packet(&COM_TIMEOUT_DURATION)?; // Throw away ACK
+            get_status(data, com, exec)?;
         }
         0x05 => {
             // RETURN RESULT
