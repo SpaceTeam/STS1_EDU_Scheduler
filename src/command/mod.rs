@@ -10,8 +10,6 @@ pub use error::CommandError;
 
 type CommandResult = Result<(), CommandError>;
 
-const COM_TIMEOUT_DURATION: std::time::Duration = std::time::Duration::new(2, 0);
-
 /// Main routine. Waits for a command to be received from the COBC, then parses and executes it.
 pub fn handle_command(
     com: &mut impl CommunicationHandle,
@@ -53,44 +51,17 @@ pub fn process_command(
     }
 
     match data[0] {
-        0x01 => {
-            store_archive(data, com, exec)?;
-        }
-        0x02 => {
-            execute_program(data, com, exec)?;
-        }
-        0x03 => {
-            stop_program(data, com, exec)?;
-        }
-        0x04 => {
-            get_status(data, com, exec)?;
-        }
-        0x05 => {
-            return_result(data, com, exec)?;
-        }
-        0x06 => {
-            // UPDATE TIME
-            check_length(&data, 5)?;
-            com.send_packet(CSBIPacket::ACK)?;
-            let time = i32::from_le_bytes([data[1], data[2], data[3], data[4]]);
-            log::info!("Updating Time to {}", time);
-            update_time(time)?;
-            com.send_packet(CSBIPacket::ACK)?;
-        }
+        0x01 => store_archive(data, com, exec)?,
+        0x02 => execute_program(data, com, exec)?,
+        0x03 => stop_program(data, com, exec)?,
+        0x04 => get_status(data, com, exec)?,
+        0x05 => return_result(data, com, exec)?,
+        0x06 => update_time(data, com, exec)?,
         b => {
-            log::error!("Received command {}", b);
+            log::error!("Received command byte {}", b);
             return Err(CommandError::InvalidCommError);
         }
     };
 
     Ok(())
-}
-
-fn check_length(vec: &Vec<u8>, n: usize) -> Result<(), CommandError> {
-    if vec.len() != n {
-        log::error!("Command came with {} bytes, should have {}", vec.len(), n);
-        Err(CommandError::InvalidCommError)
-    } else {
-        Ok(())
-    }
 }

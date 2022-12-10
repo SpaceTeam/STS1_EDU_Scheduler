@@ -359,9 +359,23 @@ pub fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
 /// Updates the system time
 ///
 /// * `epoch` Seconds since epoch (i32 works until Jan 2038)
-pub fn update_time(epoch: i32) -> CommandResult {
-    let exit_status = Command::new("date").arg("-s").arg(format!("@{}", epoch)).status()?;
+pub fn update_time(
+    data: Vec<u8>,
+    com: &mut impl CommunicationHandle,
+    exec: &mut SyncExecutionContext,
+) -> CommandResult {
+    check_length(&data, 5)?;
+    com.send_packet(CSBIPacket::ACK)?;
 
+    let time = i32::from_le_bytes([data[1], data[2], data[3], data[4]]);
+    set_system_time(time)?;
+
+    com.send_packet(CSBIPacket::ACK)?;
+    Ok(())
+}
+
+fn set_system_time(s_since_epoch: i32) -> CommandResult {
+    let exit_status = Command::new("date").arg("-s").arg(format!("@{}", s_since_epoch)).status()?;
     if !exit_status.success() {
         return Err(CommandError::SystemError("date utility failed".into()));
     }
