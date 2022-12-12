@@ -93,7 +93,7 @@ pub fn execute_program(
 
     terminate_student_program(exec).expect("to terminate a running program");
 
-    let mut student_process = create_student_process(program_id, queue_id)?;
+    let student_process = create_student_process(program_id, queue_id)?;
 
     // WATCHDOG THREAD
     let mut wd_context = exec.clone();
@@ -257,7 +257,7 @@ fn terminate_student_program(exec: &mut SyncExecutionContext) -> CommandResult {
 
     for _ in 0..20 {
         std::thread::sleep(Duration::from_millis(100)); // Sensible amount?
-        let mut con = exec.lock().unwrap();
+        let con = exec.lock().unwrap();
         if con.thread_handle.as_ref().unwrap().is_finished() {
             return Ok(());
         }
@@ -362,7 +362,7 @@ pub fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
 pub fn update_time(
     data: Vec<u8>,
     com: &mut impl CommunicationHandle,
-    exec: &mut SyncExecutionContext,
+    _exec: &mut SyncExecutionContext,
 ) -> CommandResult {
     check_length(&data, 5)?;
     com.send_packet(CSBIPacket::ACK)?;

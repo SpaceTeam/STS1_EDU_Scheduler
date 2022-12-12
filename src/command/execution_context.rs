@@ -88,7 +88,7 @@ pub struct UpdatePin {
 #[cfg(feature = "mock")]
 impl UpdatePin {
     pub fn new(pin: u8) -> Self {
-        let mut update_pin = UpdatePin { pin: false };
+        let update_pin = UpdatePin { pin: false };
         return update_pin;
     }
 
