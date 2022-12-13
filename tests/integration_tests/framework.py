@@ -1,4 +1,5 @@
 import traceback
+import logging
 from typing import Callable
 from waveform_tools import WF_Device, COBC
 from fabric import Connection
@@ -11,8 +12,10 @@ class EDU_Tests:
         self._failures = []
 
     def prepare(self) -> None:
+        logging.info("Connecting to logic analyzer...")
         self.device.connect()
-        self.cobc = COBC(self.device, 2, 3, 5, 12, 4)
+        self.cobc = COBC(self.device, 3, 2, 5, 12, 4)
+        logging.info("Connecting to EDU...")
         self.ssh = Connection("edu")
         self.ssh.open()
         self._upload()
@@ -50,9 +53,11 @@ class EDU_Tests:
 
     def _kill_scheduler(self):
         if self.ssh.run("ps -C STS1_EDU_Scheduler", warn=True).exited == 0:
+            logging.info("Scheduler is already running, killing...")
             self.ssh.run("ps -C STS1_EDU_Scheduler -o pid= | xargs kill")
 
     def _upload(self):
+        logging.info("Uploading scheduler from flatsat...")
         self._kill_scheduler()
         self.ssh.put(local="C:/Users/ssh/edu/STS1_EDU_Scheduler", remote="./scheduler/STS1_EDU_Scheduler")
         self.ssh.run("chmod +x ./scheduler/STS1_EDU_Scheduler")
