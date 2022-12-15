@@ -14,6 +14,7 @@ class EDU_Tests:
     def prepare(self) -> None:
         logging.info("Connecting to logic analyzer...")
         self.device.connect()
+        self.device.reset()
         self.cobc = COBC(self.device, 3, 2, 5, 12, 4)
         logging.info("Connecting to EDU...")
         self.ssh = Connection("edu")
@@ -26,7 +27,7 @@ class EDU_Tests:
     def run(self) -> int:
         for t in self._tests:
             self._reset()
-            print(f"Running test {t.__name__}...")
+            print(f"{bcolors.BOLD}Running test {t.__name__}...{bcolors.ENDC}")
 
             try:
                 t(self.cobc)
@@ -48,7 +49,7 @@ class EDU_Tests:
     def _reset(self):
         self._kill_scheduler()
         with self.ssh.cd("./scheduler"):
-            self.ssh.run("rm data/* archives/*", warn=True)
+            self.ssh.run("rm -rf data/* archives/*", warn=True)
             self.ssh.run("./STS1_EDU_Scheduler", disown=True)            
 
     def _kill_scheduler(self):
