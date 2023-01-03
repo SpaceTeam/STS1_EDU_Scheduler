@@ -39,7 +39,7 @@ pub fn store_archive(
 /// * `bytes` A vector containing the raw bytes of the zip archive
 ///
 /// Returns Ok or passes along a file access/unzip process error
-pub fn unpack_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
+fn unpack_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
     // Store bytes into temporary file
     let zip_path = format!("./data/{}.zip", folder);
     let mut zip_file = File::create(&zip_path)?;
@@ -338,7 +338,7 @@ pub fn return_result(
 
 /// Deletes the result archive corresponding to the next element in the result queue and removes
 /// that element from the queue.
-pub fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
+fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
     let mut con = context.lock().unwrap();
     let res = con.result_q.pop()?;
     if !con.has_data_ready()? {
