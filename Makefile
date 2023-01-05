@@ -8,7 +8,7 @@ upload_test:
 	rsync -avzh ./tests/integration_tests cm3:~/
 
 remote_test: upload_test
-	ssh flatsat 'cd integration_tests && python test.py'
+	ssh cm3 'cd integration_tests && python test.py'
 
 sw_test:
 	cargo test --features mock
