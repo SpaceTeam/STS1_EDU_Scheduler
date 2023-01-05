@@ -1,8 +1,8 @@
 import traceback
 import logging
+import subprocess
 from typing import Callable
 from waveform_tools import WF_Device, COBC
-from fabric import Connection
 
 
 class EDU_Tests:
@@ -16,10 +16,6 @@ class EDU_Tests:
         self.device.connect()
         self.device.reset()
         self.cobc = COBC(self.device, 3, 2, 5, 12, 4)
-        logging.info("Connecting to EDU...")
-        self.ssh = Connection("edu")
-        self.ssh.open()
-        self._upload()
 
     def register(self, func: Callable) -> None:
         self._tests.append(func)
@@ -48,14 +44,13 @@ class EDU_Tests:
 
     def _reset(self):
         self._kill_scheduler()
-        with self.ssh.cd("./scheduler"):
-            self.ssh.run("rm -rf data/* archives/*", warn=True)
-            self.ssh.run("./STS1_EDU_Scheduler", disown=True)            
+        subprocess.run("rm -rf ./data/* ./archives/*", shell=True)
+        subprocess.Popen("../STS1_EDU_Scheduler", start_new_session=True, shell=True)            
 
     def _kill_scheduler(self):
-        if self.ssh.run("ps -C STS1_EDU_Scheduler", warn=True).exited == 0:
+        if subprocess.run("ps -C STS1_EDU_Scheduler", shell=True).returncode == 0:
             logging.info("Scheduler is already running, killing...")
-            self.ssh.run("ps -C STS1_EDU_Scheduler -o pid= | xargs kill")
+            subprocess.run("ps -C STS1_EDU_Scheduler -o pid= | xargs kill", shell=True)
 
     def _upload(self):
         logging.info("Uploading scheduler from flatsat...")
