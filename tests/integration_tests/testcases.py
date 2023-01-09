@@ -12,13 +12,13 @@ def wait_for_heartbeats(cobc: COBC, n=5, timeout=0.2):
 
 def store_archive(cobc: COBC):
     print("Storing Archive")
-    file = open("../student_program.zip", "rb").read()
+    file = open("./student_program.zip", "rb").read()
     cobc.uart.send(CEP.with_data(b'\x01\x00\x00'))
-    cobc.uart.wait_for(CEP.ACK, 1)
+    cobc.uart.expect(CEP.ACK, 1)
     cobc.uart.send(CEP.with_data(file))
-    cobc.uart.wait_for(CEP.ACK, 1)
+    cobc.uart.expect(CEP.ACK, 1)
     cobc.uart.send(CEP.EOF)
-    cobc.uart.wait_for(CEP.ACK, 1)
+    cobc.uart.expect(CEP.ACK, 1)
     
 
 def test_get_status_none(cobc: COBC):
@@ -38,16 +38,16 @@ def test_store_execute_and_return(cobc: COBC):
     store_archive(cobc)
     print("Executing Program")
     cobc.uart.send(CEP.with_data(b'\x02\x00\x00\x03\x00\x02\x00'))
-    cobc.uart.wait_for([CEP.ACK, CEP.ACK], 1)
+    cobc.uart.expect([CEP.ACK, CEP.ACK], 1)
     cobc.update_pin.wait_for('high', 1)
     print("Update Pin is high")
     cobc.uart.send(CEP.with_data(b'\x04'))
-    cobc.uart.wait_for([CEP.ACK, CEP.with_data(b'\x01\x00\x00\x03\x00\x00')], 1)
+    cobc.uart.expect([CEP.ACK, CEP.with_data(b'\x01\x00\x00\x03\x00\x00')], 1)
     cobc.uart.send(CEP.ACK)
     cobc.update_pin.expect_to_be('high')
     print("Got exit status")
     cobc.uart.send(CEP.with_data(b'\x04'))
-    cobc.uart.wait_for([CEP.ACK, CEP.with_data(b'\x02\x00\x00\x03\x00')], 1)
+    cobc.uart.expect([CEP.ACK, CEP.with_data(b'\x02\x00\x00\x03\x00')], 1)
     cobc.uart.send(CEP.ACK)
     print("Got Result ready")
     cobc.uart.send(CEP.with_data(b'\x05'))
