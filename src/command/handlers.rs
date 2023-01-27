@@ -73,11 +73,6 @@ fn unpack_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
 /// Executes a students program and starts a watchdog for it. The watchdog also creates entries in the
 /// status and result queue found in `context`. The result, including logs, is packed into
 /// `./data/{program_id}_{queue_id}`
-///
-/// * `context` The object containing the execution state
-/// * `program_id` The name of the ./archives/ subfolder
-/// * `queue_id` The first argument for the student program
-/// * `timeout` The maxmimum time the student program shall execute. Will be rounded up to the nearest second
 pub fn execute_program(
     data: Vec<u8>,
     com: &mut impl CommunicationHandle,
@@ -125,6 +120,8 @@ pub fn execute_program(
     Ok(())
 }
 
+/// This function creates and executes a student process. Its stdout/stderr is written into
+/// `./data/[program_id]_[queue_id].log`
 fn create_student_process(program_id: u16, queue_id: u16) -> Result<Popen, CommandError> {
     // TODO run the program from a student user (setuid)
     let output_file = File::create(format!("./data/{}_{}.log", program_id, queue_id))?; // will contain the stdout and stderr of the execute program
@@ -140,6 +137,8 @@ fn create_student_process(program_id: u16, queue_id: u16) -> Result<Popen, Comma
     Ok(process)
 }
 
+/// A function intended to be run in a separate process, which checks every seconds if the given
+/// timeout has passed or the process terminated itself. If it didnt, the process is killed.
 fn supervise_process(
     mut process: Popen,
     timeout: Duration,
@@ -227,12 +226,6 @@ fn truncate_to_size(path: &str, n_bytes: u64) -> Result<(), std::io::Error> {
 }
 
 /// Stops the currently running student program
-///
-/// * `context` The execution context of the student program (returns Err if context is None)
-///
-/// Returns Ok after terminating the student program or immediately if it is already stopped
-///
-/// **Panics if terminating takes too long**
 pub fn stop_program(
     data: Vec<u8>,
     com: &mut impl CommunicationHandle,
@@ -247,6 +240,9 @@ pub fn stop_program(
     Ok(())
 }
 
+/// If no program is currently running, this function simply returns. Otherwise it signals the
+/// supervisor thread to kill the student program and waits for a maximum of 2s before returning
+/// and error
 fn terminate_student_program(exec: &mut SyncExecutionContext) -> CommandResult {
     let mut con = exec.lock().unwrap();
     if !con.is_running() {
@@ -266,9 +262,8 @@ fn terminate_student_program(exec: &mut SyncExecutionContext) -> CommandResult {
     Err(CommandError::SystemError("Supervisor thread did not finish".into()))
 }
 
-/// The function returns a DATA packet that conforms to the Get Status specification in the PDD.
-///
-/// **Panics if no lock can be obtained on the queues.**
+/// The function handles the get status command, by checking if either a status or result is enqueued.
+/// A status always has priority over a result.
 pub fn get_status(
     data: Vec<u8>,
     com: &mut impl CommunicationHandle,
@@ -308,8 +303,8 @@ pub fn get_status(
     Ok(())
 }
 
-/// Returns a byte vector containing the tar archive of the next element in the result queue.
-/// It does **not** delete said element, as transmission might have been stopped/failed.
+/// Handles a complete return result command. The result zip file is only deleted if a final ACK is
+/// received.
 pub fn return_result(
     data: Vec<u8>,
     com: &mut impl CommunicationHandle,
@@ -337,7 +332,7 @@ pub fn return_result(
 }
 
 /// Deletes the result archive corresponding to the next element in the result queue and removes
-/// that element from the queue.
+/// that element from the queue. The update pin is updated accordingly
 fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
     let mut con = context.lock().unwrap();
     let res = con.result_q.pop()?;
@@ -356,9 +351,7 @@ fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
     Ok(())
 }
 
-/// Updates the system time
-///
-/// * `epoch` Seconds since epoch (i32 works until Jan 2038)
+/// Handles the update time command
 pub fn update_time(
     data: Vec<u8>,
     com: &mut impl CommunicationHandle,
