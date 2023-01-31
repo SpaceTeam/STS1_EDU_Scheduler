@@ -103,10 +103,10 @@ pub fn execute_program(
         build_result_archive(rid).unwrap(); // create the zip file with result and log
 
         let mut context = wd_context.lock().unwrap();
-        context.status_q.push(ProgramStatus { program_id, queue_id, exit_code }).unwrap();
-        context.result_q.push(rid).unwrap();
+        context.status_queue.push(ProgramStatus { program_id, queue_id, exit_code }).unwrap();
+        context.result_queue.push(rid).unwrap();
         context.running_flag = false;
-        context.update_pin.set_high(); // Set EDU_Update pin
+        context.update_pin.set_high();
         drop(context);
     });
 
@@ -245,7 +245,7 @@ pub fn stop_program(
 /// and error
 fn terminate_student_program(exec: &mut SyncExecutionContext) -> CommandResult {
     let mut con = exec.lock().unwrap();
-    if !con.is_running() {
+    if !con.is_student_program_running() {
         return Ok(());
     }
     con.running_flag = false; // Signal watchdog thread to terminate
@@ -274,14 +274,14 @@ pub fn get_status(
 
     let mut con = exec.lock().unwrap();
 
-    let s_empty = con.status_q.is_empty()?;
-    let r_empty = con.result_q.is_empty()?;
+    let s_empty = con.status_queue.is_empty()?;
+    let r_empty = con.result_queue.is_empty()?;
 
     match (s_empty, r_empty) {
         (false, _) => {
             log::info!("Sending program exit code");
             let mut v = vec![1];
-            v.extend(con.status_q.raw_pop()?);
+            v.extend(con.status_queue.raw_pop()?);
             if !con.has_data_ready()? {
                 con.update_pin.set_low();
             }
@@ -290,7 +290,7 @@ pub fn get_status(
         (true, false) => {
             log::info!("Sending result-ready");
             let mut v = vec![2];
-            v.extend(con.result_q.raw_peek()?);
+            v.extend(con.result_queue.raw_peek()?);
             com.send_packet(CSBIPacket::DATA(v))?;
         }
         _ => {
@@ -314,7 +314,7 @@ pub fn return_result(
     com.send_packet(CSBIPacket::ACK)?;
 
     let mut con = exec.lock().unwrap();
-    let res = con.result_q.peek()?;
+    let res = con.result_queue.peek()?;
     drop(con);
 
     let bytes = std::fs::read(format!("./data/{}_{}.zip", res.program_id, res.queue_id))?;
@@ -335,7 +335,7 @@ pub fn return_result(
 /// that element from the queue. The update pin is updated accordingly
 fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
     let mut con = context.lock().unwrap();
-    let res = con.result_q.pop()?;
+    let res = con.result_queue.pop()?;
     if !con.has_data_ready()? {
         con.update_pin.set_low();
     }

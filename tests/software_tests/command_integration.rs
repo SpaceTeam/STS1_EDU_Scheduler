@@ -141,7 +141,7 @@ fn execute_program_infinite() -> TestResult {
     assert!(com.is_complete());
 
     std::thread::sleep(std::time::Duration::from_millis(1300));
-    assert!(!exec.lock().unwrap().status_q.is_empty()?);
+    assert!(!exec.lock().unwrap().status_queue.is_empty()?);
 
     common::cleanup("2");
     Ok(())
@@ -178,7 +178,7 @@ fn stop_program() -> TestResult {
     command::handle_command(&mut com, &mut exec)?;
     command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
-    assert!(!exec.lock().unwrap().status_q.is_empty()?);
+    assert!(!exec.lock().unwrap().status_queue.is_empty()?);
 
     common::cleanup("3");
     Ok(())
