@@ -1,36 +1,45 @@
 use crate::communication::CommunicationError;
 
+type BoxedError = Box<dyn std::error::Error>;
+
 #[derive(Debug)]
 pub enum CommandError {
-    /// Propagates an error from the communication module
-    CommunicationError(CommunicationError),
-    /// Signals that something has gone wrong while using a system tool (e.g. unzip)
-    SystemError(Box<dyn std::error::Error>),
-    /// Signals that packets that are not useful right now were received
-    InvalidCommError,
+    NonRecoverable(BoxedError),
+    External(BoxedError),
+    ProtocolViolation(BoxedError),
 }
 
 impl From<std::io::Error> for CommandError {
     fn from(e: std::io::Error) -> Self {
-        CommandError::SystemError(e.into())
+        CommandError::NonRecoverable(e.into())
     }
 }
 
 impl From<subprocess::PopenError> for CommandError {
     fn from(e: subprocess::PopenError) -> Self {
-        CommandError::SystemError(e.into())
+        CommandError::NonRecoverable(e.into())
     }
 }
 
 impl From<CommunicationError> for CommandError {
     fn from(e: CommunicationError) -> Self {
-        CommandError::CommunicationError(e)
+        match e {
+            CommunicationError::PacketInvalidError => CommandError::External(Box::new(e)),
+            CommunicationError::CRCError => CommandError::ProtocolViolation(Box::new(e)),
+            CommunicationError::InterfaceError => CommandError::NonRecoverable(Box::new(e)),
+            CommunicationError::STOPCondition => CommandError::External(Box::new(e)),
+            CommunicationError::TimeoutError => todo!("Timeout not yet specified"),
+        }
     }
 }
 
 impl std::fmt::Display for CommandError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            CommandError::NonRecoverable(e) => write!(f, "CommandError::{:?} ({})", self, e),
+            CommandError::External(e) => write!(f, "CommandError::{:?} ({})", self, e),
+            CommandError::ProtocolViolation(e) => write!(f, "CommandError::{:?} ({})", self, e),
+        }
     }
 }
 
