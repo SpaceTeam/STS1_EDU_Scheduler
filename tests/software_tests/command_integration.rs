@@ -61,7 +61,7 @@ fn stopped_store() -> TestResult {
     let (mut com, mut exec) = common::prepare_handles(packets, "4");
 
     let err = command::handle_command(&mut com, &mut exec).unwrap_err();
-    assert!(matches!(err, CommandError::CommunicationError(CommunicationError::STOPCondition)));
+    assert_eq!(err.to_string(), "CommandError::External(STOPCondition)");
 
     assert!(!std::path::Path::new("./archives/4").exists());
 
@@ -377,7 +377,7 @@ fn stopped_return() -> TestResult {
     command::handle_command(&mut com, &mut exec)?;
     command::handle_command(&mut com, &mut exec)?;
     let err = command::handle_command(&mut com, &mut exec).unwrap_err();
-    assert!(matches!(err, CommandError::CommunicationError(CommunicationError::STOPCondition)));
+    assert_eq!(err.to_string(), "CommandError::External(STOPCondition)");
     command::handle_command(&mut com, &mut exec)?;
     assert!(com.is_complete());
 

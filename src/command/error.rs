@@ -35,11 +35,7 @@ impl From<CommunicationError> for CommandError {
 
 impl std::fmt::Display for CommandError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CommandError::NonRecoverable(e) => write!(f, "CommandError::{:?} ({})", self, e),
-            CommandError::External(e) => write!(f, "CommandError::{:?} ({})", self, e),
-            CommandError::ProtocolViolation(e) => write!(f, "CommandError::{:?} ({})", self, e),
-        }
+        write!(f, "CommandError::{:?}", self)
     }
 }
 

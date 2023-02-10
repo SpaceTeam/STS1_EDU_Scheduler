@@ -43,16 +43,7 @@ fn main() {
     // main loop
     loop {
         match command::handle_command(&mut com, &mut exec) {
-            Ok(_) => (),
-            Err(CommandError::SystemError(ioe)) => {
-                log::error!("Command failed with {}", ioe);
-            }
-            Err(CommandError::CommunicationError(ce)) => {
-                handle_communication_error(ce);
-            }
-            Err(CommandError::InvalidCommError) => {
-                log::error!("Received currently invalid command");
-            }
+            _ => todo!(),
         }
     }
 }

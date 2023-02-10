@@ -17,18 +17,6 @@ pub fn handle_command(
 ) -> CommandResult {
     let ret = process_command(com, exec);
 
-    if let Err(ce) = &ret {
-        match ce {
-            e @ CommandError::SystemError(_)
-            | e @ CommandError::InvalidCommError
-            | e @ CommandError::CommunicationError(CommunicationError::CRCError) => {
-                log::error!("Failed to process command {:?}", e);
-                com.send_packet(CSBIPacket::NACK)?;
-            }
-            _ => {}
-        }
-    }
-
     ret
 }
 
@@ -40,14 +28,14 @@ pub fn process_command(
     let data = match packet {
         CSBIPacket::DATA(data) => data,
         _ => {
-            log::error!("Received {:?} as command start, expected DATA", packet);
-            return Err(CommandError::CommunicationError(CommunicationError::PacketInvalidError));
+            return Err(CommandError::ProtocolViolation(
+                format!("Received {:?} as command start, expected DATA", packet).into(),
+            ));
         }
     };
 
     if data.is_empty() {
-        log::error!("No data received");
-        return Err(CommandError::InvalidCommError);
+        return Err(CommandError::ProtocolViolation("No data sent with data packet".into()));
     }
 
     match data[0] {
@@ -58,8 +46,9 @@ pub fn process_command(
         0x05 => return_result(data, com, exec)?,
         0x06 => update_time(data, com, exec)?,
         b => {
-            log::error!("Received command byte {}", b);
-            return Err(CommandError::InvalidCommError);
+            return Err(CommandError::ProtocolViolation(
+                format!("Unknown command {:#x}", b).into(),
+            ));
         }
     };
 

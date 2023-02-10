@@ -59,7 +59,7 @@ fn unpack_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
     match exit_status {
         Ok(status) => {
             if !status.success() {
-                return Err(CommandError::SystemError("unzip failed".into()));
+                return Err(CommandError::NonRecoverable("unzip failed".into()));
             }
         }
         Err(err) => {
@@ -259,7 +259,7 @@ fn terminate_student_program(exec: &mut SyncExecutionContext) -> CommandResult {
         }
     }
 
-    Err(CommandError::SystemError("Supervisor thread did not finish".into()))
+    Err(CommandError::NonRecoverable("Supervisor thread did not finish in time".into()))
 }
 
 /// The function handles the get status command, by checking if either a status or result is enqueued.
@@ -370,16 +370,19 @@ pub fn update_time(
 fn set_system_time(s_since_epoch: i32) -> CommandResult {
     let exit_status = Command::new("date").arg("-s").arg(format!("@{}", s_since_epoch)).status()?;
     if !exit_status.success() {
-        return Err(CommandError::SystemError("date utility failed".into()));
+        return Err(CommandError::NonRecoverable("date utility failed".into()));
     }
 
     Ok(())
 }
 
 fn check_length(vec: &Vec<u8>, n: usize) -> Result<(), CommandError> {
-    if vec.len() != n {
-        log::error!("Command came with {} bytes, should have {}", vec.len(), n);
-        Err(CommandError::InvalidCommError)
+    let actual_len = vec.len();
+    if actual_len != n {
+        log::error!("Command came with {actual_len} bytes, should have {n}");
+        Err(CommandError::ProtocolViolation(
+            format!("Received command with {actual_len} bytes, expected {n}").into(),
+        ))
     } else {
         Ok(())
     }
