@@ -4,6 +4,7 @@ use crate::communication::CSBIPacket;
 use crate::communication::CommunicationHandle;
 use std::fs::File;
 use std::io::prelude::*;
+use std::path::Path;
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
@@ -123,6 +124,11 @@ pub fn execute_program(
 /// This function creates and executes a student process. Its stdout/stderr is written into
 /// `./data/[program_id]_[queue_id].log`
 fn create_student_process(program_id: u16, queue_id: u16) -> Result<Popen, CommandError> {
+    let program_path = format!("./archives/{}/main.py", program_id);
+    if !Path::new(&program_path).exists() {
+        return Err(CommandError::ProtocolViolation("Could not find matching program".into()));
+    }
+
     // TODO run the program from a student user (setuid)
     let output_file = File::create(format!("./data/{}_{}.log", program_id, queue_id))?; // will contain the stdout and stderr of the execute program
     let config = subprocess::PopenConfig {
@@ -314,6 +320,11 @@ pub fn return_result(
     com.send_packet(CSBIPacket::ACK)?;
 
     let mut con = exec.lock().unwrap();
+    if con.result_queue.is_empty()? {
+        return Err(CommandError::ProtocolViolation(
+            "Received return_result, but not result ready".into(),
+        ));
+    }
     let res = con.result_queue.peek()?;
     drop(con);
 

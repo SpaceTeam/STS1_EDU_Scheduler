@@ -1,4 +1,4 @@
-use crate::communication::{CSBIPacket, CommunicationError, CommunicationHandle};
+use crate::communication::{CSBIPacket, CommunicationHandle};
 use std::time::Duration;
 
 mod handlers;
@@ -17,6 +17,10 @@ pub fn handle_command(
 ) -> CommandResult {
     let ret = process_command(com, exec);
 
+    if matches!(ret, Err(CommandError::ProtocolViolation(_))) {
+        com.send_packet(CSBIPacket::NACK)?;
+    }
+
     ret
 }
 
@@ -28,7 +32,7 @@ pub fn process_command(
     let data = match packet {
         CSBIPacket::DATA(data) => data,
         _ => {
-            return Err(CommandError::ProtocolViolation(
+            return Err(CommandError::NonRecoverable(
                 format!("Received {:?} as command start, expected DATA", packet).into(),
             ));
         }
