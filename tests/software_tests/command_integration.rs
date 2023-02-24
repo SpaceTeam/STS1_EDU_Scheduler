@@ -6,6 +6,8 @@ use STS1_EDU_Scheduler::communication::{CSBIPacket::*, CommunicationError};
 mod common;
 use common::ComEvent::*;
 
+use self::common::ComEvent;
+
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 ///// STORE ARCHIVE
@@ -417,4 +419,32 @@ fn invalid_packets_from_cobc() -> TestResult {
 
     common::cleanup("13");
     Ok(())
+}
+
+#[test]
+#[should_panic]
+fn ack_on_start_panic() {
+    let (mut com, mut exec) = common::prepare_handles(vec![COBC(ACK)], "99");
+    command::handle_command(&mut com, &mut exec);
+}
+
+#[test]
+#[should_panic]
+fn nack_on_start_panic() {
+    let (mut com, mut exec) = common::prepare_handles(vec![COBC(NACK)], "99");
+    command::handle_command(&mut com, &mut exec);
+}
+
+#[test]
+#[should_panic]
+fn eof_on_start_panic() {
+    let (mut com, mut exec) = common::prepare_handles(vec![COBC(EOF)], "99");
+    command::handle_command(&mut com, &mut exec);
+}
+
+#[test]
+#[should_panic]
+fn stop_on_start_panic() {
+    let (mut com, mut exec) = common::prepare_handles(vec![COBC(STOP)], "99");
+    command::handle_command(&mut com, &mut exec);
 }
