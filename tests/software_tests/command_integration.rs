@@ -321,7 +321,7 @@ fn return_result() -> TestResult {
 #[test]
 fn truncate_result() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![2, 8, 0, 5, 0, 2, 0])), // Execute Program 8, Queue 5, Timeout 2s
+        COBC(DATA(vec![2, 8, 0, 5, 0, 5, 0])), // Execute Program 8, Queue 5, Timeout 2s
         EDU(ACK),
         EDU(ACK),
         SLEEP(std::time::Duration::from_millis(3000)),
@@ -392,7 +392,10 @@ fn no_result_ready() -> TestResult {
     let packets = vec![COBC(DATA(vec![5])), EDU(ACK), EDU(NACK)];
     let (mut com, mut exec) = common::prepare_handles(packets, "10");
 
-    command::handle_command(&mut com, &mut exec).unwrap_err();
+    assert!(matches!(
+        command::handle_command(&mut com, &mut exec).unwrap_err(),
+        CommandError::ProtocolViolation(_)
+    ));
     assert!(com.is_complete());
 
     common::cleanup("10");
@@ -415,13 +418,31 @@ fn invalid_packets_from_cobc() -> TestResult {
     ];
     let (mut com, mut exec) = common::prepare_handles(packets, "13");
 
-    command::handle_command(&mut com, &mut exec).unwrap_err();
-    command::handle_command(&mut com, &mut exec).unwrap_err();
-    command::handle_command(&mut com, &mut exec).unwrap_err();
-    command::handle_command(&mut com, &mut exec).unwrap_err();
-    command::handle_command(&mut com, &mut exec).unwrap_err();
-    command::handle_command(&mut com, &mut exec).unwrap_err();
-    command::handle_command(&mut com, &mut exec).unwrap_err();
+    matches!(
+        command::handle_command(&mut com, &mut exec).unwrap_err(),
+        CommandError::NonRecoverable(_)
+    );
+    matches!(
+        command::handle_command(&mut com, &mut exec).unwrap_err(),
+        CommandError::NonRecoverable(_)
+    );
+    matches!(
+        command::handle_command(&mut com, &mut exec).unwrap_err(),
+        CommandError::NonRecoverable(_)
+    );
+    matches!(
+        command::handle_command(&mut com, &mut exec).unwrap_err(),
+        CommandError::NonRecoverable(_)
+    );
+    matches!(
+        command::handle_command(&mut com, &mut exec).unwrap_err(),
+        CommandError::ProtocolViolation(_)
+    );
+    matches!(
+        command::handle_command(&mut com, &mut exec).unwrap_err(),
+        CommandError::ProtocolViolation(_)
+    );
+    matches!(command::handle_command(&mut com, &mut exec).unwrap_err(), CommandError::External(_));
 
     assert!(com.is_complete());
 
