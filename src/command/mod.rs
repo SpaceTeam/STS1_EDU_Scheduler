@@ -11,17 +11,24 @@ pub use error::CommandError;
 type CommandResult = Result<(), CommandError>;
 
 /// Main routine. Waits for a command to be received from the COBC, then parses and executes it.
-pub fn handle_command(
-    com: &mut impl CommunicationHandle,
-    exec: &mut SyncExecutionContext,
-) -> CommandResult {
+pub fn handle_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecutionContext) {
     let ret = process_command(com, exec);
 
-    if matches!(ret, Err(CommandError::ProtocolViolation(_))) {
-        com.send_packet(CSBIPacket::NACK)?;
-    }
+    match ret {
+        Ok(_) => log::info!("Command executed successfully"),
 
-    ret
+        Err(CommandError::NonRecoverable(e)) => {
+            log::error!("Non-Recoverable error: {e}");
+            panic!("Aborting now");
+        }
+        Err(CommandError::ProtocolViolation(e)) => {
+            log::error!("Protocol Violation: {e}");
+            com.send_packet(CSBIPacket::NACK).unwrap();
+        }
+        Err(CommandError::External(e)) => {
+            log::error!("External error: {e}");
+        }
+    };
 }
 
 pub fn process_command(

@@ -10,14 +10,12 @@ use simplelog as sl;
 mod command;
 mod communication;
 mod persist;
-use command::CommandError;
-use communication::CommunicationError;
 
 const HEARTBEAT_PIN: u8 = 34;
 const HEARTBEAT_FREQ: u64 = 10; //Hz
 const UPDATE_PIN: u8 = 35;
 
-fn main() {
+fn main() -> ! {
     // write all logging into a file
     let _ = sl::WriteLogger::init(
         sl::LevelFilter::Info,
@@ -42,28 +40,7 @@ fn main() {
 
     // main loop
     loop {
-        match command::handle_command(&mut com, &mut exec) {
-            _ => todo!(),
-        }
-    }
-}
-
-fn handle_communication_error(ce: CommunicationError) {
-    match ce {
-        CommunicationError::STOPCondition => {
-            log::error!("Multi-packet communication stopped");
-        }
-        CommunicationError::InterfaceError => {
-            log::error!("CommunicationHandle failed");
-            panic!();
-        }
-        CommunicationError::PacketInvalidError => {
-            log::error!("Received unknown packet");
-        }
-        CommunicationError::TimeoutError => {
-            log::error!("Communication timed out");
-        }
-        CommunicationError::CRCError => (),
+        command::handle_command(&mut com, &mut exec);
     }
 }
 
