@@ -1,4 +1,4 @@
-use STS1_EDU_Scheduler::communication::{CSBIPacket, CSBIPacket::*};
+use STS1_EDU_Scheduler::communication::CSBIPacket;
 
 /// These tests are for use with the actual raspberry hardware
 ///

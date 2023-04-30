@@ -31,7 +31,7 @@ impl UARTHandle {
 
         let _ = uart_handler.uart_PI.set_write_mode(true);
 
-        return uart_handler;
+        uart_handler
     }
 }
 
@@ -52,7 +52,7 @@ impl CommunicationHandle for UARTHandle {
                 return Ok(());
             }
         }
-        return Err(CommunicationError::InterfaceError);
+        Err(CommunicationError::InterfaceError)
     }
 
     /// # Incomplete
@@ -65,7 +65,7 @@ impl CommunicationHandle for UARTHandle {
     /// * `timeout`: timeout for the set_read_mode from rppal. Global time of the function. Not inter-byte
     /// ## Returns
     /// A vector of bytes
-    fn receive(&mut self, byte_count: u16, timeout: &std::time::Duration) -> ComResult<Vec<u8>> {
+    fn receive(&mut self, byte_count: u16, _timeout: &std::time::Duration) -> ComResult<Vec<u8>> {
         //Data buffer
         let mut received_data_buffer: Vec<u8> = vec![0; byte_count as usize];
 

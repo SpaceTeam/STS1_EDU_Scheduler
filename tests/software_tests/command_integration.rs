@@ -8,6 +8,8 @@ use common::ComEvent::*;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+///// STORE ARCHIVE
+
 #[test]
 fn store_archive() -> TestResult {
     // Define what should happen during communication. How this should look is defined in the PDD
@@ -45,72 +47,6 @@ fn store_archive() -> TestResult {
 }
 
 #[test]
-fn execute_program_normal() -> TestResult {
-    let packets = vec![
-        COBC(DATA(vec![0x02, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00])), // Execute Program ID 1, Queue ID 0, Timeout 2s
-        EDU(ACK),
-        EDU(ACK),
-    ];
-    common::prepare_program("1");
-    let (mut com, mut exec) = common::prepare_handles(packets, "1");
-
-    command::handle_command(&mut com, &mut exec)?;
-    assert!(com.is_complete());
-
-    std::thread::sleep(std::time::Duration::from_millis(500));
-    let mut res = String::new();
-    std::fs::File::open("./archives/1/results/0")?.read_to_string(&mut res)?;
-
-    assert_eq!(res.replace("\r", ""), *"Some test results\nWith multiple lines\n".to_string());
-
-    common::cleanup("1");
-    Ok(())
-}
-
-#[test]
-fn execute_program_infinite() -> TestResult {
-    let packets = vec![
-        COBC(DATA(vec![0x02, 0x02, 0x00, 0x01, 0x00, 0x01, 0x00])), // Execute Program ID 2, Queue ID 1, Timeout 1s
-        EDU(ACK),
-        EDU(ACK),
-    ];
-    common::prepare_program("2");
-    let (mut com, mut exec) = common::prepare_handles(packets, "2");
-
-    command::handle_command(&mut com, &mut exec)?;
-    assert!(com.is_complete());
-
-    std::thread::sleep(std::time::Duration::from_millis(1300));
-    assert!(!exec.lock().unwrap().status_q.is_empty()?);
-
-    common::cleanup("2");
-    Ok(())
-}
-
-#[test]
-fn stop_program() -> TestResult {
-    let packets = vec![
-        COBC(DATA(vec![0x02, 0x03, 0x00, 0x01, 0x00, 0x0a, 0x00])), // Execute Program 3, Queue 1, Timeout 10s
-        EDU(ACK),
-        EDU(ACK),
-        SLEEP(std::time::Duration::from_secs(1)),
-        COBC(DATA(vec![0x03])),
-        EDU(ACK),
-        EDU(ACK),
-    ];
-    common::prepare_program("3");
-    let (mut com, mut exec) = common::prepare_handles(packets, "3");
-
-    command::handle_command(&mut com, &mut exec)?;
-    command::handle_command(&mut com, &mut exec)?;
-    assert!(com.is_complete());
-    assert!(!exec.lock().unwrap().status_q.is_empty()?);
-
-    common::cleanup("3");
-    Ok(())
-}
-
-#[test]
 fn stopped_store() -> TestResult {
     let packets = vec![
         COBC(DATA(vec![0x01, 0x04, 0x00])), // Store Archive with ID 0
@@ -132,6 +68,132 @@ fn stopped_store() -> TestResult {
     common::cleanup("4");
     Ok(())
 }
+
+#[test]
+fn invalid_crc() -> TestResult {
+    let mut bytes = fs::read("./tests/student_program.zip")?;
+    let packets = vec![
+        COBC(DATA(vec![1, 14, 0])),
+        EDU(ACK),
+        COBC(DATA(bytes.drain(0..20).collect())),
+        EDU(ACK),
+        COBC_INVALID(vec![0x8b, 5, 0, 0, 0, 0, 0, 0, 0, 10, 10, 10]),
+        EDU(NACK),
+        COBC(DATA(bytes)),
+        EDU(ACK),
+        COBC(EOF),
+        EDU(ACK),
+    ];
+    let (mut com, mut exec) = common::prepare_handles(packets, "14");
+
+    command::handle_command(&mut com, &mut exec)?;
+    assert!(com.is_complete());
+
+    assert_eq!(
+        0,
+        std::process::Command::new("diff") // check wether the archive was stored correctly
+            .args(["-yq", "--strip-trailing-cr", "tests/test_data", "archives/14"])
+            .status()?
+            .code()
+            .unwrap()
+    );
+
+    common::cleanup("14");
+    Ok(())
+}
+
+///// EXECUTE ROGRAM
+
+#[test]
+fn execute_program_normal() -> TestResult {
+    let packets = vec![
+        COBC(DATA(vec![0x02, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00])), // Execute Program ID 1, Queue ID 0, Timeout 2s
+        EDU(ACK),
+        EDU(ACK),
+    ];
+    common::prepare_program("1");
+    let (mut com, mut exec) = common::prepare_handles(packets, "1");
+
+    command::handle_command(&mut com, &mut exec)?;
+    assert!(com.is_complete());
+
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    let mut res = String::new();
+    std::fs::File::open("./archives/1/results/0")?.read_to_string(&mut res)?;
+
+    assert_eq!(res.replace('\r', ""), *"Some test results\nWith multiple lines\n".to_string());
+
+    common::cleanup("1");
+    Ok(())
+}
+
+#[test]
+fn execute_program_infinite() -> TestResult {
+    let packets = vec![
+        COBC(DATA(vec![0x02, 0x02, 0x00, 0x01, 0x00, 0x01, 0x00])), // Execute Program ID 2, Queue ID 1, Timeout 1s
+        EDU(ACK),
+        EDU(ACK),
+    ];
+    common::prepare_program("2");
+    let (mut com, mut exec) = common::prepare_handles(packets, "2");
+
+    command::handle_command(&mut com, &mut exec)?;
+    assert!(com.is_complete());
+
+    std::thread::sleep(std::time::Duration::from_millis(1300));
+    assert!(!exec.lock().unwrap().status_queue.is_empty()?);
+
+    common::cleanup("2");
+    Ok(())
+}
+
+#[test]
+fn execute_missing_program() -> TestResult {
+    let packets = vec![COBC(DATA(vec![2, 11, 0, 0, 0, 1, 0])), EDU(ACK), EDU(NACK)];
+    let (mut com, mut exec) = common::prepare_handles(packets, "12");
+
+    command::handle_command(&mut com, &mut exec).unwrap_err();
+    assert!(com.is_complete());
+
+    common::cleanup("12");
+    Ok(())
+}
+
+///// STOP PROGRAM
+
+#[test]
+fn stop_program() -> TestResult {
+    let packets = vec![
+        COBC(DATA(vec![0x02, 0x03, 0x00, 0x01, 0x00, 0x0a, 0x00])), // Execute Program 3, Queue 1, Timeout 10s
+        EDU(ACK),
+        EDU(ACK),
+        SLEEP(std::time::Duration::from_secs(1)),
+        COBC(DATA(vec![0x03])),
+        EDU(ACK),
+        EDU(ACK),
+    ];
+    common::prepare_program("3");
+    let (mut com, mut exec) = common::prepare_handles(packets, "3");
+
+    command::handle_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
+    assert!(com.is_complete());
+    assert!(!exec.lock().unwrap().status_queue.is_empty()?);
+
+    common::cleanup("3");
+    Ok(())
+}
+
+#[test]
+fn stop_no_running_program() -> TestResult {
+    let packets = vec![COBC(DATA(vec![3])), EDU(ACK), EDU(ACK)];
+    let (mut com, mut exec) = common::prepare_handles(packets, "11");
+    command::handle_command(&mut com, &mut exec)?;
+    assert!(com.is_complete());
+    Ok(())
+}
+
+///// GET STATUS
 
 #[test]
 fn get_status_none() -> TestResult {
@@ -173,6 +235,41 @@ fn get_status_finished() -> TestResult {
     common::cleanup("6");
     Ok(())
 }
+
+#[test]
+fn get_status_priority_for_status() -> TestResult {
+    let packets = vec![
+        COBC(DATA(vec![2, 15, 0, 0, 0, 2, 0])),
+        EDU(ACK),
+        EDU(ACK),
+        SLEEP(std::time::Duration::from_millis(500)),
+        COBC(DATA(vec![4])),
+        EDU(ACK),
+        EDU(DATA(vec![1, 15, 0, 0, 0, 0])),
+        COBC(ACK),
+        COBC(DATA(vec![2, 15, 0, 0, 0, 2, 0])),
+        EDU(ACK),
+        EDU(ACK),
+        SLEEP(std::time::Duration::from_millis(500)),
+        COBC(DATA(vec![4])),
+        EDU(ACK),
+        EDU(DATA(vec![1, 15, 0, 0, 0, 0])),
+        COBC(ACK),
+    ];
+    common::prepare_program("15");
+    let (mut com, mut exec) = common::prepare_handles(packets, "15");
+
+    command::handle_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
+    command::handle_command(&mut com, &mut exec)?;
+    assert!(com.is_complete());
+
+    common::cleanup("15");
+    Ok(())
+}
+
+///// RETURN RESULT
 
 #[test]
 fn return_result() -> TestResult {
@@ -303,27 +400,6 @@ fn no_result_ready() -> TestResult {
 }
 
 #[test]
-fn stop_no_running_program() -> TestResult {
-    let packets = vec![COBC(DATA(vec![3])), EDU(ACK), EDU(ACK)];
-    let (mut com, mut exec) = common::prepare_handles(packets, "11");
-    command::handle_command(&mut com, &mut exec)?;
-    assert!(com.is_complete());
-    Ok(())
-}
-
-#[test]
-fn execute_missing_program() -> TestResult {
-    let packets = vec![COBC(DATA(vec![2, 11, 0, 0, 0, 1, 0])), EDU(ACK), EDU(NACK)];
-    let (mut com, mut exec) = common::prepare_handles(packets, "12");
-
-    command::handle_command(&mut com, &mut exec).unwrap_err();
-    assert!(com.is_complete());
-
-    common::cleanup("12");
-    Ok(())
-}
-
-#[test]
 fn invalid_packets_from_cobc() -> TestResult {
     let packets = vec![
         COBC(ACK),
@@ -350,38 +426,5 @@ fn invalid_packets_from_cobc() -> TestResult {
     assert!(com.is_complete());
 
     common::cleanup("13");
-    Ok(())
-}
-
-#[test]
-fn invalid_crc() -> TestResult {
-    let mut bytes = fs::read("./tests/student_program.zip")?;
-    let packets = vec![
-        COBC(DATA(vec![1, 14, 0])),
-        EDU(ACK),
-        COBC(DATA(bytes.drain(0..20).collect())),
-        EDU(ACK),
-        COBC_INVALID(vec![0x8b, 5, 0, 0, 0, 0, 0, 0, 0, 10, 10, 10]),
-        EDU(NACK),
-        COBC(DATA(bytes)),
-        EDU(ACK),
-        COBC(EOF),
-        EDU(ACK),
-    ];
-    let (mut com, mut exec) = common::prepare_handles(packets, "14");
-
-    command::handle_command(&mut com, &mut exec)?;
-    assert!(com.is_complete());
-
-    assert_eq!(
-        0,
-        std::process::Command::new("diff") // check wether the archive was stored correctly
-            .args(["-yq", "--strip-trailing-cr", "tests/test_data", "archives/14"])
-            .status()?
-            .code()
-            .unwrap()
-    );
-
-    common::cleanup("14");
     Ok(())
 }

@@ -17,9 +17,9 @@ pub struct ExecutionContext {
     pub running_flag: bool,
     /// This queue contains information about finished student programs, that is to be sent to
     /// the COBC  
-    pub status_q: FileQueue<ProgramStatus>,
+    pub status_queue: FileQueue<ProgramStatus>,
     /// This queue contains information about results, that should be sent to the COBC
-    pub result_q: FileQueue<ResultId>,
+    pub result_queue: FileQueue<ResultId>,
     /// This integer is the pin number of the EDU_Update pin
     pub update_pin: UpdatePin,
 }
@@ -33,8 +33,8 @@ impl ExecutionContext {
         let mut ec = ExecutionContext {
             thread_handle: None,
             running_flag: false,
-            status_q: FileQueue::<ProgramStatus>::new(status_path)?,
-            result_q: FileQueue::<ResultId>::new(result_path)?,
+            status_queue: FileQueue::<ProgramStatus>::new(status_path)?,
+            result_queue: FileQueue::<ResultId>::new(result_path)?,
             update_pin: UpdatePin::new(update_pin),
         };
 
@@ -47,12 +47,12 @@ impl ExecutionContext {
         Ok(ec)
     }
 
-    pub fn is_running(&self) -> bool {
+    pub fn is_student_program_running(&self) -> bool {
         self.running_flag
     }
 
     pub fn has_data_ready(&self) -> Result<bool, std::io::Error> {
-        Ok(!self.status_q.is_empty()? || !self.result_q.is_empty()?)
+        Ok(!self.status_queue.is_empty()? || !self.result_queue.is_empty()?)
     }
 }
 
@@ -67,7 +67,7 @@ impl UpdatePin {
         let mut update_pin =
             UpdatePin { pin: rppal::gpio::Gpio::new().unwrap().get(pin).unwrap().into_output() };
         update_pin.pin.set_reset_on_drop(false);
-        return update_pin;
+        update_pin
     }
 
     pub fn set_high(&mut self) {
@@ -88,7 +88,7 @@ pub struct UpdatePin {
 #[cfg(feature = "mock")]
 impl UpdatePin {
     pub fn new(pin: u8) -> Self {
-        let mut update_pin = UpdatePin { pin: false };
+        let update_pin = UpdatePin { pin: false };
         return update_pin;
     }
 
