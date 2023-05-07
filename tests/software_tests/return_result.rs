@@ -4,31 +4,33 @@ use STS1_EDU_Scheduler::command::{self};
 use STS1_EDU_Scheduler::communication::CEPPacket::*;
 mod common;
 use common::ComEvent::*;
+use common::*;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
-fn return_result() -> TestResult {
+fn returns_result_correctly() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![0x02, 0x07, 0x00, 0x03, 0x00, 0x01, 0x00])), // Execute Program 7, Queue 0, Timeout 1s
+        COBC(DATA(execute_program(7, 3, 1))), // Execute Program 7, Queue 0, Timeout 1s
         EDU(ACK),
         EDU(ACK),
         SLEEP(std::time::Duration::from_millis(500)),
-        COBC(DATA(vec![4])), // Get Status
+        COBC(DATA(get_status())), // Get Status
         EDU(ACK),
-        EDU(DATA(vec![1, 7, 0, 3, 0, 0])), // Program Finished
+        EDU(DATA(vec![1, 7, 0, 3, 0, 0, 0, 0])), // Program Finished
         COBC(ACK),
-        COBC(DATA(vec![4])), // Get Status
+        COBC(DATA(get_status())), // Get Status
         EDU(ACK),
-        EDU(DATA(vec![2, 7, 0, 3, 0])), // Result Ready
+        EDU(DATA(vec![2, 7, 0, 3, 0, 0, 0])), // Result Ready
         COBC(ACK),
-        COBC(DATA(vec![5])),
+        COBC(DATA(return_result(7, 3))),
         EDU(ACK),
         ACTION(Box::new(|bytes| {
             std::fs::File::create("tests/tmp/7.zip").unwrap().write(&bytes).unwrap();
         })),
         COBC(ACK),
         EDU(EOF),
+        COBC(ACK),
         COBC(ACK),
     ];
 
@@ -54,16 +56,17 @@ fn return_result() -> TestResult {
     Ok(())
 }
 
+/// Checks wether result files that are to large are truncated
 #[test]
 fn truncate_result() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![2, 8, 0, 5, 0, 5, 0])), // Execute Program 8, Queue 5, Timeout 2s
+        COBC(DATA(execute_program(8, 5, 5))), // Execute Program 8, Queue 5, Timeout 2s
         EDU(ACK),
         EDU(ACK),
         SLEEP(std::time::Duration::from_millis(3000)),
-        COBC(DATA(vec![4])),
+        COBC(DATA(get_status())),
         EDU(ACK),
-        EDU(DATA(vec![1, 8, 0, 5, 0, 0])),
+        EDU(DATA(vec![1, 8, 0, 5, 0, 0, 0, 0])),
         COBC(ACK),
     ];
 
@@ -83,27 +86,27 @@ fn truncate_result() -> TestResult {
 #[test]
 fn stopped_return() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![2, 9, 0, 5, 0, 3, 0])),
+        COBC(DATA(execute_program(9, 5, 3))),
         EDU(ACK),
         EDU(ACK),
         SLEEP(std::time::Duration::from_millis(3000)),
-        COBC(DATA(vec![4])),
+        COBC(DATA(get_status())),
         EDU(ACK),
-        EDU(DATA(vec![1, 9, 0, 5, 0, 0])),
+        EDU(DATA(vec![1, 9, 0, 5, 0, 0, 0, 0])),
         COBC(ACK),
-        COBC(DATA(vec![4])),
+        COBC(DATA(get_status())),
         EDU(ACK),
-        EDU(DATA(vec![2, 9, 0, 5, 0])),
+        EDU(DATA(vec![2, 9, 0, 5, 0, 0, 0])),
         COBC(ACK),
-        COBC(DATA(vec![5])),
+        COBC(DATA(return_result(9, 5))),
         EDU(ACK),
         ANY,
         COBC(ACK),
         ANY,
         COBC(STOP),
-        COBC(DATA(vec![4])),
+        COBC(DATA(get_status())),
         EDU(ACK),
-        EDU(DATA(vec![2, 9, 0, 5, 0])),
+        EDU(DATA(vec![2, 9, 0, 5, 0, 0, 0])),
         COBC(ACK),
     ];
     common::prepare_program("9");
@@ -131,5 +134,32 @@ fn no_result_ready() -> TestResult {
     assert!(com.is_complete());
 
     common::cleanup("10");
+    Ok(())
+}
+
+#[test]
+fn result_is_not_deleted_after_corrupted_transfer() -> TestResult {
+    let packets = vec![
+        COBC(DATA(execute_program(50, 0, 3))),
+        EDU(ACK),
+        EDU(ACK),
+        SLEEP(std::time::Duration::from_millis(2000)),
+        COBC(DATA(return_result(50, 0))),
+        EDU(ACK),
+        ANY,
+        COBC(ACK),
+        EDU(EOF),
+        COBC(ACK),
+        COBC(NACK)
+    ];
+    let (mut com, mut exec) = common::prepare_handles(packets, "50");
+
+    command::handle_command(&mut com, &mut exec);
+    command::handle_command(&mut com, &mut exec);
+    assert!(com.is_complete());
+
+    assert!(std::fs::File::open("./data/50_0.zip").is_ok());
+
+    common::cleanup("50");
     Ok(())
 }

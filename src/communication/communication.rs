@@ -86,6 +86,7 @@ pub trait CommunicationHandle {
             };
         }
 
+        self.send_packet(CEPPacket::ACK)?;
         Ok(buffer)
     }
 

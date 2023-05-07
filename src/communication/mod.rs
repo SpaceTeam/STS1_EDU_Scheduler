@@ -1,7 +1,7 @@
 mod communication;
-mod csbi;
+mod cep;
 mod uart;
 
 pub use communication::*;
-pub use csbi::CEPPacket;
+pub use cep::CEPPacket;
 pub use uart::*;

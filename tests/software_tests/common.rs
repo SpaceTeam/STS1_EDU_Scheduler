@@ -144,3 +144,32 @@ pub fn cleanup(unique: &str) {
     let _ = std::fs::remove_file(format!("tests/tmp/{}_s", unique));
     let _ = std::fs::remove_file(format!("tests/tmp/{}_r", unique));
 }
+
+pub fn store_archive(program_id: u16) -> Vec<u8> {
+    let mut vec = vec![1u8];
+    vec.extend(program_id.to_le_bytes());
+    vec
+}
+
+pub fn execute_program(program_id: u16, timestamp: u32, timeout: u16) -> Vec<u8> {
+    let mut vec = vec![1u8];
+    vec.extend(program_id.to_le_bytes());
+    vec.extend(timestamp.to_le_bytes());
+    vec.extend(timeout.to_le_bytes());
+    vec
+}
+
+pub fn stop_program() -> Vec<u8> {
+    vec![3u8]
+}
+
+pub fn get_status() -> Vec<u8> {
+    vec![4u8]
+}
+
+pub fn return_result(program_id: u16, timestamp: u32) -> Vec<u8> {
+    let mut vec = vec![5u8];
+    vec.extend(program_id.to_le_bytes());
+    vec.extend(timestamp.to_le_bytes());
+    vec
+}

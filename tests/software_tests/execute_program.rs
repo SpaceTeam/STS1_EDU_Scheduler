@@ -4,13 +4,14 @@ use STS1_EDU_Scheduler::command::{self};
 use STS1_EDU_Scheduler::communication::CEPPacket::*;
 mod common;
 use common::ComEvent::*;
+use common::*;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn execute_program_normal() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![0x02, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00])), // Execute Program ID 1, Queue ID 0, Timeout 2s
+        COBC(DATA(execute_program(1, 0, 2))), // Execute Program ID 1, Timestamp 0, Timeout 2s
         EDU(ACK),
         EDU(ACK),
     ];
@@ -33,7 +34,7 @@ fn execute_program_normal() -> TestResult {
 #[test]
 fn execute_program_infinite() -> TestResult {
     let packets = vec![
-        COBC(DATA(vec![0x02, 0x02, 0x00, 0x01, 0x00, 0x01, 0x00])), // Execute Program ID 2, Queue ID 1, Timeout 1s
+        COBC(DATA(execute_program(2, 1, 1))), // Execute Program ID 2, Timestamp 1, Timeout 1s
         EDU(ACK),
         EDU(ACK),
     ];
@@ -52,7 +53,7 @@ fn execute_program_infinite() -> TestResult {
 
 #[test]
 fn execute_missing_program() -> TestResult {
-    let packets = vec![COBC(DATA(vec![2, 11, 0, 0, 0, 1, 0])), EDU(ACK), EDU(NACK)];
+    let packets = vec![COBC(DATA(execute_program(11, 0, 2))), EDU(ACK), EDU(NACK)];
     let (mut com, mut exec) = common::prepare_handles(packets, "12");
 
     command::handle_command(&mut com, &mut exec);
