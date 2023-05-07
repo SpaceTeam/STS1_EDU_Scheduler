@@ -150,7 +150,7 @@ fn result_is_not_deleted_after_corrupted_transfer() -> TestResult {
         COBC(ACK),
         EDU(EOF),
         COBC(ACK),
-        COBC(NACK)
+        COBC(NACK),
     ];
     common::prepare_program("50");
     let (mut com, mut exec) = common::prepare_handles(packets, "50");

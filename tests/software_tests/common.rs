@@ -31,7 +31,14 @@ impl CommunicationHandle for TestCom {
     fn send(&mut self, bytes: Vec<u8>) -> ComResult<()> {
         match &self.expected_events[self.index] {
             ComEvent::EDU(p) => {
-                assert_eq!(bytes, p.clone().serialize(), "Wrong packet #{}, EDU: {:?}, should be {:?}", self.index, bytes, p);
+                assert_eq!(
+                    bytes,
+                    p.clone().serialize(),
+                    "Wrong packet #{}, EDU: {:?}, should be {:?}",
+                    self.index,
+                    bytes,
+                    p
+                );
                 self.index += 1;
                 Ok(())
             }

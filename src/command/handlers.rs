@@ -325,8 +325,8 @@ pub fn return_result(
 
     if !std::path::Path::new(&result_path).exists() {
         return Err(CommandError::ProtocolViolation(
-            format!("Result {}:{} does not exist", program_id, timestamp).into())
-        );
+            format!("Result {}:{} does not exist", program_id, timestamp).into(),
+        ));
     }
 
     let bytes = std::fs::read(result_path)?;
