@@ -4,6 +4,7 @@ use crate::communication::CSBIPacket;
 use crate::communication::CommunicationHandle;
 use std::fs::File;
 use std::io::prelude::*;
+use std::path::Path;
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
@@ -59,7 +60,7 @@ fn unpack_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
     match exit_status {
         Ok(status) => {
             if !status.success() {
-                return Err(CommandError::SystemError("unzip failed".into()));
+                return Err(CommandError::NonRecoverable("unzip failed".into()));
             }
         }
         Err(err) => {
@@ -123,6 +124,11 @@ pub fn execute_program(
 /// This function creates and executes a student process. Its stdout/stderr is written into
 /// `./data/[program_id]_[queue_id].log`
 fn create_student_process(program_id: u16, queue_id: u16) -> Result<Popen, CommandError> {
+    let program_path = format!("./archives/{}/main.py", program_id);
+    if !Path::new(&program_path).exists() {
+        return Err(CommandError::ProtocolViolation("Could not find matching program".into()));
+    }
+
     // TODO run the program from a student user (setuid)
     let output_file = File::create(format!("./data/{}_{}.log", program_id, queue_id))?; // will contain the stdout and stderr of the execute program
     let config = subprocess::PopenConfig {
@@ -259,7 +265,7 @@ fn terminate_student_program(exec: &mut SyncExecutionContext) -> CommandResult {
         }
     }
 
-    Err(CommandError::SystemError("Supervisor thread did not finish".into()))
+    Err(CommandError::NonRecoverable("Supervisor thread did not finish in time".into()))
 }
 
 /// The function handles the get status command, by checking if either a status or result is enqueued.
@@ -314,6 +320,11 @@ pub fn return_result(
     com.send_packet(CSBIPacket::ACK)?;
 
     let mut con = exec.lock().unwrap();
+    if con.result_queue.is_empty()? {
+        return Err(CommandError::ProtocolViolation(
+            "Received return_result, but not result ready".into(),
+        ));
+    }
     let res = con.result_queue.peek()?;
     drop(con);
 
@@ -370,16 +381,19 @@ pub fn update_time(
 fn set_system_time(s_since_epoch: i32) -> CommandResult {
     let exit_status = Command::new("date").arg("-s").arg(format!("@{}", s_since_epoch)).status()?;
     if !exit_status.success() {
-        return Err(CommandError::SystemError("date utility failed".into()));
+        return Err(CommandError::NonRecoverable("date utility failed".into()));
     }
 
     Ok(())
 }
 
 fn check_length(vec: &Vec<u8>, n: usize) -> Result<(), CommandError> {
-    if vec.len() != n {
-        log::error!("Command came with {} bytes, should have {}", vec.len(), n);
-        Err(CommandError::InvalidCommError)
+    let actual_len = vec.len();
+    if actual_len != n {
+        log::error!("Command came with {actual_len} bytes, should have {n}");
+        Err(CommandError::ProtocolViolation(
+            format!("Received command with {actual_len} bytes, expected {n}").into(),
+        ))
     } else {
         Ok(())
     }

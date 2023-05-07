@@ -1,4 +1,4 @@
-use crate::communication::{CSBIPacket, CommunicationError, CommunicationHandle};
+use crate::communication::{CSBIPacket, CommunicationHandle};
 use std::time::Duration;
 
 mod handlers;
@@ -11,25 +11,24 @@ pub use error::CommandError;
 type CommandResult = Result<(), CommandError>;
 
 /// Main routine. Waits for a command to be received from the COBC, then parses and executes it.
-pub fn handle_command(
-    com: &mut impl CommunicationHandle,
-    exec: &mut SyncExecutionContext,
-) -> CommandResult {
+pub fn handle_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecutionContext) {
     let ret = process_command(com, exec);
 
-    if let Err(ce) = &ret {
-        match ce {
-            e @ CommandError::SystemError(_)
-            | e @ CommandError::InvalidCommError
-            | e @ CommandError::CommunicationError(CommunicationError::CRCError) => {
-                log::error!("Failed to process command {:?}", e);
-                com.send_packet(CSBIPacket::NACK)?;
-            }
-            _ => {}
-        }
-    }
+    match ret {
+        Ok(_) => log::info!("Command executed successfully"),
 
-    ret
+        Err(CommandError::NonRecoverable(e)) => {
+            log::error!("Non-Recoverable error: {e}");
+            panic!("Aborting now");
+        }
+        Err(CommandError::ProtocolViolation(e)) => {
+            log::error!("Protocol Violation: {e}");
+            com.send_packet(CSBIPacket::NACK).unwrap();
+        }
+        Err(CommandError::External(e)) => {
+            log::error!("External error: {e}");
+        }
+    };
 }
 
 pub fn process_command(
@@ -40,14 +39,14 @@ pub fn process_command(
     let data = match packet {
         CSBIPacket::DATA(data) => data,
         _ => {
-            log::error!("Received {:?} as command start, expected DATA", packet);
-            return Err(CommandError::CommunicationError(CommunicationError::PacketInvalidError));
+            return Err(CommandError::NonRecoverable(
+                format!("Received {:?} as command start, expected DATA", packet).into(),
+            ));
         }
     };
 
     if data.is_empty() {
-        log::error!("No data received");
-        return Err(CommandError::InvalidCommError);
+        return Err(CommandError::ProtocolViolation("No data sent with data packet".into()));
     }
 
     match data[0] {
@@ -58,8 +57,9 @@ pub fn process_command(
         0x05 => return_result(data, com, exec)?,
         0x06 => update_time(data, com, exec)?,
         b => {
-            log::error!("Received command byte {}", b);
-            return Err(CommandError::InvalidCommError);
+            return Err(CommandError::ProtocolViolation(
+                format!("Unknown command {:#x}", b).into(),
+            ));
         }
     };
 
