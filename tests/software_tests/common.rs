@@ -2,15 +2,15 @@ use std::sync::{Arc, Mutex};
 
 use STS1_EDU_Scheduler::{
     command::{ExecutionContext, SyncExecutionContext},
-    communication::{CSBIPacket, ComResult, CommunicationHandle},
+    communication::{CEPPacket, ComResult, CommunicationHandle},
 };
 
 pub enum ComEvent {
     /// EDU shall want to receive the given packet
-    COBC(CSBIPacket),
+    COBC(CEPPacket),
     COBC_INVALID(Vec<u8>),
     /// EDU shall send the given packet
-    EDU(CSBIPacket),
+    EDU(CEPPacket),
     /// Makes the thread sleep for the given duration. Can be used to wait for execution to complete
     SLEEP(std::time::Duration),
     /// Allow the EDU to send any packet

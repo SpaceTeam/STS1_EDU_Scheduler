@@ -1,4 +1,4 @@
-use super::CSBIPacket;
+use super::CEPPacket;
 
 pub type ComResult<T> = Result<T, CommunicationError>;
 
@@ -12,17 +12,17 @@ pub trait CommunicationHandle {
     fn receive(&mut self, byte_count: u16, timeout: &std::time::Duration) -> ComResult<Vec<u8>>;
 
     /// Sends the supplied packet
-    fn send_packet(&mut self, p: CSBIPacket) -> ComResult<()> {
+    fn send_packet(&mut self, p: CEPPacket) -> ComResult<()> {
         self.send(p.serialize())
     }
 
     /// Blocks until it receives a CSBIPacket
-    fn receive_packet(&mut self, timeout: &std::time::Duration) -> ComResult<CSBIPacket> {
+    fn receive_packet(&mut self, timeout: &std::time::Duration) -> ComResult<CEPPacket> {
         let pack = match self.receive(1, timeout)?[0] {
-            0xd7 => CSBIPacket::ACK,
-            0x27 => CSBIPacket::NACK,
-            0xb4 => CSBIPacket::STOP,
-            0x59 => CSBIPacket::EOF,
+            0xd7 => CEPPacket::ACK,
+            0x27 => CEPPacket::NACK,
+            0xb4 => CEPPacket::STOP,
+            0x59 => CEPPacket::EOF,
             0x8b => {
                 let length_field = self.receive(2, timeout)?;
                 let length = u16::from_le_bytes([length_field[0], length_field[1]]);
@@ -30,10 +30,10 @@ pub trait CommunicationHandle {
                 let crc_field = self.receive(4, timeout)?;
                 let crc =
                     u32::from_le_bytes([crc_field[0], crc_field[1], crc_field[2], crc_field[3]]);
-                if !CSBIPacket::check(&bytes, crc) {
+                if !CEPPacket::check(&bytes, crc) {
                     return Err(CommunicationError::CRCError);
                 } else {
-                    CSBIPacket::DATA(bytes)
+                    CEPPacket::DATA(bytes)
                 }
             }
             _ => {
@@ -57,19 +57,19 @@ pub trait CommunicationHandle {
         loop {
             let pack = self.receive_packet(timeout);
             if stop_fn() {
-                self.send_packet(CSBIPacket::STOP)?;
+                self.send_packet(CEPPacket::STOP)?;
                 return Err(CommunicationError::STOPCondition);
             }
 
             match pack {
-                Ok(CSBIPacket::DATA(b)) => {
+                Ok(CEPPacket::DATA(b)) => {
                     buffer.extend(b);
-                    self.send_packet(CSBIPacket::ACK)?;
+                    self.send_packet(CEPPacket::ACK)?;
                 }
-                Ok(CSBIPacket::EOF) => {
+                Ok(CEPPacket::EOF) => {
                     break;
                 }
-                Ok(CSBIPacket::STOP) => {
+                Ok(CEPPacket::STOP) => {
                     return Err(CommunicationError::STOPCondition);
                 }
                 Err(CommunicationError::InterfaceError) => {
@@ -81,7 +81,7 @@ pub trait CommunicationHandle {
                 }
                 e => {
                     log::error!("Received invalid data {:?}", e);
-                    self.send_packet(CSBIPacket::NACK)?;
+                    self.send_packet(CEPPacket::NACK)?;
                 }
             };
         }
@@ -103,16 +103,16 @@ pub trait CommunicationHandle {
                 break;
             }
 
-            self.send_packet(CSBIPacket::DATA(chunks[i].to_vec()))?;
+            self.send_packet(CEPPacket::DATA(chunks[i].to_vec()))?;
 
             match self.receive_packet(timeout)? {
-                CSBIPacket::NACK => {
+                CEPPacket::NACK => {
                     log::warn!("NACK on packet. Resending...");
                 }
-                CSBIPacket::ACK => {
+                CEPPacket::ACK => {
                     i += 1;
                 }
-                CSBIPacket::STOP => {
+                CEPPacket::STOP => {
                     return Err(CommunicationError::STOPCondition);
                 }
                 _ => {
@@ -121,7 +121,7 @@ pub trait CommunicationHandle {
             }
         }
 
-        self.send_packet(CSBIPacket::EOF)?;
+        self.send_packet(CEPPacket::EOF)?;
 
         Ok(())
     }

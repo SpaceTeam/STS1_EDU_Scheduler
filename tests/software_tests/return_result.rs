@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use STS1_EDU_Scheduler::command::{self};
-use STS1_EDU_Scheduler::communication::CSBIPacket::*;
+use STS1_EDU_Scheduler::communication::CEPPacket::*;
 mod common;
 use common::ComEvent::*;
 

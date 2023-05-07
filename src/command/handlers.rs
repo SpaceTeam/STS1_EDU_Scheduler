@@ -1,6 +1,6 @@
 use subprocess::Popen;
 
-use crate::communication::CSBIPacket;
+use crate::communication::CEPPacket;
 use crate::communication::CommunicationHandle;
 use std::fs::File;
 use std::io::prelude::*;
@@ -22,7 +22,7 @@ pub fn store_archive(
     _exec: &mut SyncExecutionContext,
 ) -> CommandResult {
     check_length(&data, 3)?;
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
 
     let id = u16::from_le_bytes([data[1], data[2]]).to_string();
     log::info!("Storing Archive {}", id);
@@ -30,7 +30,7 @@ pub fn store_archive(
     let bytes = com.receive_multi_packet(&COM_TIMEOUT_DURATION, || false)?; // !! TODO !!
     unpack_archive(id, bytes)?;
 
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
     Ok(())
 }
 
@@ -80,7 +80,7 @@ pub fn execute_program(
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
     check_length(&data, 7)?;
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
 
     let program_id = u16::from_le_bytes([data[1], data[2]]);
     let queue_id = u16::from_le_bytes([data[3], data[4]]);
@@ -117,7 +117,7 @@ pub fn execute_program(
     l_context.running_flag = true;
     drop(l_context);
 
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
     Ok(())
 }
 
@@ -238,11 +238,11 @@ pub fn stop_program(
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
     check_length(&data, 1)?;
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
 
     terminate_student_program(exec).expect("to terminate student program");
 
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
     Ok(())
 }
 
@@ -276,7 +276,7 @@ pub fn get_status(
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
     check_length(&data, 1)?;
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
 
     let mut con = exec.lock().unwrap();
 
@@ -291,17 +291,17 @@ pub fn get_status(
             if !con.has_data_ready()? {
                 con.update_pin.set_low();
             }
-            com.send_packet(CSBIPacket::DATA(v))?;
+            com.send_packet(CEPPacket::DATA(v))?;
         }
         (true, false) => {
             log::info!("Sending result-ready");
             let mut v = vec![2];
             v.extend(con.result_queue.raw_peek()?);
-            com.send_packet(CSBIPacket::DATA(v))?;
+            com.send_packet(CEPPacket::DATA(v))?;
         }
         _ => {
             log::info!("Nothing to report");
-            com.send_packet(CSBIPacket::DATA(vec![0]))?;
+            com.send_packet(CEPPacket::DATA(vec![0]))?;
         }
     };
 
@@ -317,7 +317,7 @@ pub fn return_result(
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
     check_length(&data, 1)?;
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
 
     let mut con = exec.lock().unwrap();
     if con.result_queue.is_empty()? {
@@ -333,7 +333,7 @@ pub fn return_result(
     com.send_multi_packet(bytes, &COM_TIMEOUT_DURATION)?;
 
     let response = com.receive_packet(&COM_TIMEOUT_DURATION)?;
-    if response == CSBIPacket::ACK {
+    if response == CEPPacket::ACK {
         delete_result(exec)?;
     } else {
         log::error!("COBC did not acknowledge result");
@@ -369,12 +369,12 @@ pub fn update_time(
     _exec: &mut SyncExecutionContext,
 ) -> CommandResult {
     check_length(&data, 5)?;
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
 
     let time = i32::from_le_bytes([data[1], data[2], data[3], data[4]]);
     set_system_time(time)?;
 
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
     Ok(())
 }
 

@@ -3,5 +3,5 @@ mod csbi;
 mod uart;
 
 pub use communication::*;
-pub use csbi::CSBIPacket;
+pub use csbi::CEPPacket;
 pub use uart::*;
