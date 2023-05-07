@@ -73,23 +73,23 @@ fn unpack_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
 
 /// Executes a students program and starts a watchdog for it. The watchdog also creates entries in the
 /// status and result queue found in `context`. The result, including logs, is packed into
-/// `./data/{program_id}_{queue_id}`
+/// `./data/{program_id}_{timestamp}`
 pub fn execute_program(
     data: Vec<u8>,
     com: &mut impl CommunicationHandle,
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
-    check_length(&data, 7)?;
+    check_length(&data, 9)?;
     com.send_packet(CEPPacket::ACK)?;
 
     let program_id = u16::from_le_bytes([data[1], data[2]]);
-    let queue_id = u16::from_le_bytes([data[3], data[4]]);
-    let timeout = Duration::from_secs(u16::from_le_bytes([data[5], data[6]]).into());
-    log::info!("Executing Program {}:{} for {}s", program_id, queue_id, timeout.as_secs());
+    let timestamp = u32::from_le_bytes([data[3], data[4], data[5], data[6]]);
+    let timeout = Duration::from_secs(u16::from_le_bytes([data[7], data[8]]).into());
+    log::info!("Executing Program {}:{} for {}s", program_id, timestamp, timeout.as_secs());
 
     terminate_student_program(exec).expect("to terminate a running program");
 
-    let student_process = create_student_process(program_id, queue_id)?;
+    let student_process = create_student_process(program_id, timestamp)?;
 
     // WATCHDOG THREAD
     let mut wd_context = exec.clone();
@@ -99,12 +99,12 @@ pub fn execute_program(
             Err(()) => 255,
         };
 
-        log::info!("Program {}:{} finished with {}", program_id, queue_id, exit_code);
-        let rid = ResultId { program_id, queue_id };
+        log::info!("Program {}:{} finished with {}", program_id, timestamp, exit_code);
+        let rid = ResultId { program_id, timestamp };
         build_result_archive(rid).unwrap(); // create the zip file with result and log
 
         let mut context = wd_context.lock().unwrap();
-        context.status_queue.push(ProgramStatus { program_id, queue_id, exit_code }).unwrap();
+        context.status_queue.push(ProgramStatus { program_id, timestamp, exit_code }).unwrap();
         context.result_queue.push(rid).unwrap();
         context.running_flag = false;
         context.update_pin.set_high();
@@ -122,15 +122,15 @@ pub fn execute_program(
 }
 
 /// This function creates and executes a student process. Its stdout/stderr is written into
-/// `./data/[program_id]_[queue_id].log`
-fn create_student_process(program_id: u16, queue_id: u16) -> Result<Popen, CommandError> {
+/// `./data/[program_id]_[timestamp].log`
+fn create_student_process(program_id: u16, timestamp: u32) -> Result<Popen, CommandError> {
     let program_path = format!("./archives/{}/main.py", program_id);
     if !Path::new(&program_path).exists() {
         return Err(CommandError::ProtocolViolation("Could not find matching program".into()));
     }
 
     // TODO run the program from a student user (setuid)
-    let output_file = File::create(format!("./data/{}_{}.log", program_id, queue_id))?; // will contain the stdout and stderr of the execute program
+    let output_file = File::create(format!("./data/{}_{}.log", program_id, timestamp))?; // will contain the stdout and stderr of the execute program
     let config = subprocess::PopenConfig {
         cwd: Some(format!("./archives/{}", program_id).into()),
         detached: false, // do not spawn as separate process
@@ -139,7 +139,7 @@ fn create_student_process(program_id: u16, queue_id: u16) -> Result<Popen, Comma
         ..Default::default()
     };
 
-    let process = Popen::create(&["python", "main.py", &queue_id.to_string()], config)?;
+    let process = Popen::create(&["python", "main.py", &timestamp.to_string()], config)?;
     Ok(process)
 }
 
@@ -198,9 +198,9 @@ fn run_until_timeout(
 /// the programs stdout/stderr and the schedulers log file. If any of the files is missing, the archive
 /// is created without them.
 fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
-    let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
-    let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
-    let out_path = format!("./data/{}_{}.zip", res.program_id, res.queue_id);
+    let res_path = format!("./archives/{}/results/{}", res.program_id, res.timestamp);
+    let log_path = format!("./data/{}_{}.log", res.program_id, res.timestamp);
+    let out_path = format!("./data/{}_{}.zip", res.program_id, res.timestamp);
 
     const MAXIMUM_FILE_SIZE: u64 = 1_000_000;
     let _ = truncate_to_size(&log_path, MAXIMUM_FILE_SIZE);
@@ -316,20 +316,21 @@ pub fn return_result(
     com: &mut impl CommunicationHandle,
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
-    check_length(&data, 1)?;
+    check_length(&data, 7)?;
     com.send_packet(CEPPacket::ACK)?;
 
-    let mut con = exec.lock().unwrap();
-    if con.result_queue.is_empty()? {
-        return Err(CommandError::ProtocolViolation(
-            "Received return_result, but not result ready".into(),
-        ));
-    }
-    let res = con.result_queue.peek()?;
-    drop(con);
+    let program_id = u16::from_le_bytes([data[1], data[2]]);
+    let timestamp = u32::from_le_bytes([data[3], data[4], data[5], data[6]]);
+    let result_path = format!("./data/{}_{}.zip", program_id, timestamp);
 
-    let bytes = std::fs::read(format!("./data/{}_{}.zip", res.program_id, res.queue_id))?;
-    log::info!("Returning result for {}:{}", res.program_id, res.queue_id);
+    if !std::path::Path::new(&result_path).exists() {
+        return Err(CommandError::ProtocolViolation(
+            format!("Result {}:{} does not exist", program_id, timestamp).into())
+        );
+    }
+
+    let bytes = std::fs::read(result_path)?;
+    log::info!("Returning result for {}:{}", program_id, timestamp);
     com.send_multi_packet(bytes, &COM_TIMEOUT_DURATION)?;
 
     let response = com.receive_packet(&COM_TIMEOUT_DURATION)?;
@@ -352,9 +353,9 @@ fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
     }
     drop(con); // Unlock Mutex
 
-    let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
-    let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
-    let out_path = format!("./data/{}_{}.zip", res.program_id, res.queue_id);
+    let res_path = format!("./archives/{}/results/{}", res.program_id, res.timestamp);
+    let log_path = format!("./data/{}_{}.log", res.program_id, res.timestamp);
+    let out_path = format!("./data/{}_{}.zip", res.program_id, res.timestamp);
     let _ = std::fs::remove_file(res_path);
     let _ = std::fs::remove_file(log_path);
     let _ = std::fs::remove_file(out_path);

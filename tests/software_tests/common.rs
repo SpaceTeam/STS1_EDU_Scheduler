@@ -31,7 +31,7 @@ impl CommunicationHandle for TestCom {
     fn send(&mut self, bytes: Vec<u8>) -> ComResult<()> {
         match &self.expected_events[self.index] {
             ComEvent::EDU(p) => {
-                assert_eq!(bytes, p.clone().serialize(), "Wrong packet {}", self.index);
+                assert_eq!(bytes, p.clone().serialize(), "Wrong packet #{}, EDU: {:?}, should be {:?}", self.index, bytes, p);
                 self.index += 1;
                 Ok(())
             }
@@ -152,7 +152,7 @@ pub fn store_archive(program_id: u16) -> Vec<u8> {
 }
 
 pub fn execute_program(program_id: u16, timestamp: u32, timeout: u16) -> Vec<u8> {
-    let mut vec = vec![1u8];
+    let mut vec = vec![2u8];
     vec.extend(program_id.to_le_bytes());
     vec.extend(timestamp.to_le_bytes());
     vec.extend(timeout.to_le_bytes());

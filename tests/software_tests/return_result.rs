@@ -127,7 +127,7 @@ fn stopped_return() -> TestResult {
 
 #[test]
 fn no_result_ready() -> TestResult {
-    let packets = vec![COBC(DATA(vec![5])), EDU(ACK), EDU(NACK)];
+    let packets = vec![COBC(DATA(return_result(99, 0))), EDU(ACK), EDU(NACK)];
     let (mut com, mut exec) = common::prepare_handles(packets, "10");
 
     command::handle_command(&mut com, &mut exec);
@@ -152,6 +152,7 @@ fn result_is_not_deleted_after_corrupted_transfer() -> TestResult {
         COBC(ACK),
         COBC(NACK)
     ];
+    common::prepare_program("50");
     let (mut com, mut exec) = common::prepare_handles(packets, "50");
 
     command::handle_command(&mut com, &mut exec);

@@ -104,7 +104,7 @@ impl UpdatePin {
 /// Struct used for storing information about a finished student program
 pub struct ProgramStatus {
     pub program_id: u16,
-    pub queue_id: u16,
+    pub timestamp: u32,
     pub exit_code: u8,
 }
 
@@ -112,42 +112,42 @@ pub struct ProgramStatus {
 #[derive(Clone, Copy)]
 pub struct ResultId {
     pub program_id: u16,
-    pub queue_id: u16,
+    pub timestamp: u32,
 }
 
 /// This impl allows ProgramStatus to be used in a FileQueue
 impl Serializable for ProgramStatus {
-    const SIZE: usize = 5;
+    const SIZE: usize = 7;
 
     fn serialize(self) -> Vec<u8> {
         let mut v = Vec::new();
         v.extend(self.program_id.serialize());
-        v.extend(self.queue_id.serialize());
+        v.extend(self.timestamp.serialize());
         v.push(self.exit_code);
         v
     }
 
     fn deserialize(bytes: &[u8]) -> Self {
         let p_id = u16::from_le_bytes([bytes[0], bytes[1]]);
-        let q_id = u16::from_le_bytes([bytes[2], bytes[3]]);
-        ProgramStatus { program_id: p_id, queue_id: q_id, exit_code: bytes[4] }
+        let stamp = u32::from_le_bytes([bytes[2], bytes[3], bytes[4], bytes[5]]);
+        ProgramStatus { program_id: p_id, timestamp: stamp, exit_code: bytes[6] }
     }
 }
 
 /// This impl allows ResultId to be used in a FileQueue
 impl Serializable for ResultId {
-    const SIZE: usize = 4;
+    const SIZE: usize = 6;
 
     fn serialize(self) -> Vec<u8> {
         let mut v = Vec::new();
         v.extend(self.program_id.serialize());
-        v.extend(self.queue_id.serialize());
+        v.extend(self.timestamp.serialize());
         v
     }
 
     fn deserialize(bytes: &[u8]) -> Self {
-        let p_id = u16::from_le_bytes([bytes[0], bytes[1]]);
-        let q_id = u16::from_le_bytes([bytes[2], bytes[3]]);
-        ResultId { program_id: p_id, queue_id: q_id }
+        let program_id = u16::from_le_bytes([bytes[0], bytes[1]]);
+        let timestamp = u32::from_le_bytes([bytes[2], bytes[3], bytes[4], bytes[5]]);
+        ResultId { program_id, timestamp }
     }
 }

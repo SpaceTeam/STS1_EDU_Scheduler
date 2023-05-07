@@ -123,6 +123,9 @@ pub trait CommunicationHandle {
         }
 
         self.send_packet(CEPPacket::EOF)?;
+        if self.receive_packet(timeout)? != CEPPacket::ACK {
+            return Err(CommunicationError::PacketInvalidError);
+        }
 
         Ok(())
     }
