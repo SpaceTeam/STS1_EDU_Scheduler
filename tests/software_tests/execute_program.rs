@@ -44,7 +44,7 @@ fn execute_program_infinite() -> TestResult {
     assert!(com.is_complete());
 
     std::thread::sleep(std::time::Duration::from_millis(1300));
-    assert!(!exec.lock().unwrap().status_queue.is_empty()?);
+    todo!("Ensure there is a status entry");
 
     common::cleanup("2");
     Ok(())

@@ -104,8 +104,7 @@ pub fn execute_program(
         build_result_archive(rid).unwrap(); // create the zip file with result and log
 
         let mut context = wd_context.lock().unwrap();
-        context.status_queue.push(ProgramStatus { program_id, queue_id, exit_code }).unwrap();
-        context.result_queue.push(rid).unwrap();
+        todo!("Push entries into status queue");
         context.running_flag = false;
         context.update_pin.set_high();
         drop(context);
@@ -279,33 +278,9 @@ pub fn get_status(
     com.send_packet(CSBIPacket::ACK)?;
 
     let mut con = exec.lock().unwrap();
+    
+    todo!();
 
-    let s_empty = con.status_queue.is_empty()?;
-    let r_empty = con.result_queue.is_empty()?;
-
-    match (s_empty, r_empty) {
-        (false, _) => {
-            log::info!("Sending program exit code");
-            let mut v = vec![1];
-            v.extend(con.status_queue.raw_pop()?);
-            if !con.has_data_ready()? {
-                con.update_pin.set_low();
-            }
-            com.send_packet(CSBIPacket::DATA(v))?;
-        }
-        (true, false) => {
-            log::info!("Sending result-ready");
-            let mut v = vec![2];
-            v.extend(con.result_queue.raw_peek()?);
-            com.send_packet(CSBIPacket::DATA(v))?;
-        }
-        _ => {
-            log::info!("Nothing to report");
-            com.send_packet(CSBIPacket::DATA(vec![0]))?;
-        }
-    };
-
-    com.receive_packet(&COM_TIMEOUT_DURATION)?; // throw away ACK
     Ok(())
 }
 
@@ -319,25 +294,7 @@ pub fn return_result(
     check_length(&data, 1)?;
     com.send_packet(CSBIPacket::ACK)?;
 
-    let mut con = exec.lock().unwrap();
-    if con.result_queue.is_empty()? {
-        return Err(CommandError::ProtocolViolation(
-            "Received return_result, but not result ready".into(),
-        ));
-    }
-    let res = con.result_queue.peek()?;
-    drop(con);
-
-    let bytes = std::fs::read(format!("./data/{}_{}.zip", res.program_id, res.queue_id))?;
-    log::info!("Returning result for {}:{}", res.program_id, res.queue_id);
-    com.send_multi_packet(bytes, &COM_TIMEOUT_DURATION)?;
-
-    let response = com.receive_packet(&COM_TIMEOUT_DURATION)?;
-    if response == CSBIPacket::ACK {
-        delete_result(exec)?;
-    } else {
-        log::error!("COBC did not acknowledge result");
-    }
+    todo!("Adjust to return specified result");
 
     Ok(())
 }
@@ -345,19 +302,13 @@ pub fn return_result(
 /// Deletes the result archive corresponding to the next element in the result queue and removes
 /// that element from the queue. The update pin is updated accordingly
 fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
-    let mut con = context.lock().unwrap();
-    let res = con.result_queue.pop()?;
-    if !con.has_data_ready()? {
-        con.update_pin.set_low();
-    }
-    drop(con); // Unlock Mutex
-
-    let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
-    let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
-    let out_path = format!("./data/{}_{}.zip", res.program_id, res.queue_id);
-    let _ = std::fs::remove_file(res_path);
-    let _ = std::fs::remove_file(log_path);
-    let _ = std::fs::remove_file(out_path);
+    todo!();
+    // let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
+    // let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
+    // let out_path = format!("./data/{}_{}.zip", res.program_id, res.queue_id);
+    // let _ = std::fs::remove_file(res_path);
+    // let _ = std::fs::remove_file(log_path);
+    // let _ = std::fs::remove_file(out_path);
 
     Ok(())
 }

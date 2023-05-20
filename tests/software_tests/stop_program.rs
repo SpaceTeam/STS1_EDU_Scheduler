@@ -22,7 +22,7 @@ fn stop_program() -> TestResult {
     command::handle_command(&mut com, &mut exec);
     command::handle_command(&mut com, &mut exec);
     assert!(com.is_complete());
-    assert!(!exec.lock().unwrap().status_queue.is_empty()?);
+    todo!("Ensure there is a status entry");
 
     common::cleanup("3");
     Ok(())

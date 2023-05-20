@@ -12,6 +12,10 @@ simplelog = "^0.12.0"
 subprocess = "0.2.8"
 crc = "3.0.0"
 rppal = "^0.13.1"
+serde = { version = "1.0.163", features = ["derive"] }
+
+[dependencies.filevec]
+path = "lib/filevec"
 
 [features]
 mock = []

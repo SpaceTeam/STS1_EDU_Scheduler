@@ -1,4 +1,3 @@
-use crate::persist::{FileQueue, Serializable};
 use std::{
     sync::{Arc, Mutex},
     thread,
@@ -15,11 +14,6 @@ pub struct ExecutionContext {
     /// running. Changing it from true to false, indicates to the watchdog thread, that the
     /// program should be stopped
     pub running_flag: bool,
-    /// This queue contains information about finished student programs, that is to be sent to
-    /// the COBC  
-    pub status_queue: FileQueue<ProgramStatus>,
-    /// This queue contains information about results, that should be sent to the COBC
-    pub result_queue: FileQueue<ResultId>,
     /// This integer is the pin number of the EDU_Update pin
     pub update_pin: UpdatePin,
 }
@@ -33,8 +27,6 @@ impl ExecutionContext {
         let mut ec = ExecutionContext {
             thread_handle: None,
             running_flag: false,
-            status_queue: FileQueue::<ProgramStatus>::new(status_path)?,
-            result_queue: FileQueue::<ResultId>::new(result_path)?,
             update_pin: UpdatePin::new(update_pin),
         };
 
@@ -52,7 +44,7 @@ impl ExecutionContext {
     }
 
     pub fn has_data_ready(&self) -> Result<bool, std::io::Error> {
-        Ok(!self.status_queue.is_empty()? || !self.result_queue.is_empty()?)
+        todo!();
     }
 }
 
@@ -101,7 +93,9 @@ impl UpdatePin {
     }
 }
 
+
 /// Struct used for storing information about a finished student program
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct ProgramStatus {
     pub program_id: u16,
     pub queue_id: u16,
@@ -109,45 +103,8 @@ pub struct ProgramStatus {
 }
 
 /// Struct used for storing information of a result, waiting to be sent
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct ResultId {
     pub program_id: u16,
     pub queue_id: u16,
-}
-
-/// This impl allows ProgramStatus to be used in a FileQueue
-impl Serializable for ProgramStatus {
-    const SIZE: usize = 5;
-
-    fn serialize(self) -> Vec<u8> {
-        let mut v = Vec::new();
-        v.extend(self.program_id.serialize());
-        v.extend(self.queue_id.serialize());
-        v.push(self.exit_code);
-        v
-    }
-
-    fn deserialize(bytes: &[u8]) -> Self {
-        let p_id = u16::from_le_bytes([bytes[0], bytes[1]]);
-        let q_id = u16::from_le_bytes([bytes[2], bytes[3]]);
-        ProgramStatus { program_id: p_id, queue_id: q_id, exit_code: bytes[4] }
-    }
-}
-
-/// This impl allows ResultId to be used in a FileQueue
-impl Serializable for ResultId {
-    const SIZE: usize = 4;
-
-    fn serialize(self) -> Vec<u8> {
-        let mut v = Vec::new();
-        v.extend(self.program_id.serialize());
-        v.extend(self.queue_id.serialize());
-        v
-    }
-
-    fn deserialize(bytes: &[u8]) -> Self {
-        let p_id = u16::from_le_bytes([bytes[0], bytes[1]]);
-        let q_id = u16::from_le_bytes([bytes[2], bytes[3]]);
-        ResultId { program_id: p_id, queue_id: q_id }
-    }
 }
