@@ -93,7 +93,6 @@ impl UpdatePin {
     }
 }
 
-
 /// Struct used for storing information about a finished student program
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ProgramStatus {

@@ -278,7 +278,7 @@ pub fn get_status(
     com.send_packet(CSBIPacket::ACK)?;
 
     let mut con = exec.lock().unwrap();
-    
+
     todo!();
 
     Ok(())
