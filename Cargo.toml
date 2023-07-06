@@ -12,6 +12,8 @@ simplelog = "^0.12.0"
 subprocess = "0.2.8"
 crc = "3.0.0"
 rppal = "^0.13.1"
+toml = "0.7.6"
+serde = { version = "1.0.166", features = ["derive"] }
 
 [features]
 mock = []
