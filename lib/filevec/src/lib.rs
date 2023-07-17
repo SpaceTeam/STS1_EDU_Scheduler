@@ -1,12 +1,12 @@
-use serde::de::DeserializeOwned;
-use std::io::{Read, Write};
+use serde::{Serialize, de::DeserializeOwned};
+use std::io::{Read, Write, Seek, SeekFrom};
 
-struct FileVec<T: DeserializeOwned> {
+struct FileVec<T: Serialize + DeserializeOwned> {
     vec: Vec<T>,
     file: std::fs::File
 }
 
-impl<T: DeserializeOwned> FileVec<T> {
+impl<T: Serialize + DeserializeOwned> FileVec<T> {
     fn open(path: String) -> Result<Self, std::io::Error> {
         let mut file = std::fs::OpenOptions::new()
             .read(true)
@@ -27,17 +27,59 @@ impl<T: DeserializeOwned> FileVec<T> {
 
         Ok(FileVec { vec, file })
     }
+
+    fn _write_to_file(&mut self) -> Result<(), std::io::Error> {
+        let serialized = rmp_serde::to_vec(&self.vec).unwrap();
+        
+        self.file.set_len(0)?;
+        self.file.seek(SeekFrom::Start(0))?;
+        self.file.write_all(&serialized)?;
+        self.file.flush()?;
+
+        Ok(())
+    }
+
+    fn push(&mut self, value: T) -> Result<(), std::io::Error> {
+        self.vec.push(value);
+        self._write_to_file()?;
+        Ok(())
+    }
+
+    fn remove(&mut self, index: usize) -> Result<T, std::io::Error> {
+        let t = self.vec.remove(index);
+        self._write_to_file()?;
+
+        Ok(t)
+    }
 }
 
-impl<T: DeserializeOwned> AsRef<Vec<T>> for FileVec<T> {
+impl<T: Serialize + DeserializeOwned> AsRef<Vec<T>> for FileVec<T> {
     fn as_ref(&self) -> &Vec<T> {
         &self.vec
     }
 }
 
+impl<T: Serialize + DeserializeOwned> std::ops::Index<usize> for FileVec<T> {
+    type Output = T;
 
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.vec[index]
+    }
+}
+
+impl<T: Serialize + DeserializeOwned> Extend<T> for FileVec<T> {
+    /// # Panics
+    /// 
+    /// Panics if the write to the underlying file fails
+    fn extend<U: IntoIterator<Item = T>>(&mut self, iter: U) {
+        self.vec.extend(iter);
+        self._write_to_file().unwrap();
+    }
+}
+
+#[cfg(test)]
 mod test {
-    use std::io::Write;
+    use std::{io::{Write, Read}, fs::File};
 
     use super::FileVec;
 
@@ -61,6 +103,64 @@ mod test {
         assert_eq!(&DATA, f.as_ref().as_slice());
 
         let _ = std::fs::remove_file("__prefilled");
+    }
+
+    #[test]
+    fn push_single() {
+        let mut f = FileVec::<i32>::open("__push_single".to_string()).unwrap();
+        f.push(123).unwrap();
+        assert_eq!(f[0], 123);
+        
+        drop(f);
+        let mut f = FileVec::<i32>::open("__push_single".to_string()).unwrap();
+        assert_eq!(f[0], 123);
+
+        let _ = std::fs::remove_file("__push_single");
+    }
+
+    #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
+    struct TestaStruct {
+        int16: i16,
+        uint32: u32,
+        stringa: String
+    }
+
+    #[test]
+    fn push_multiple_structs() {
+        let mut f = FileVec::open("__push_multiple".to_string()).unwrap();
+        f.push(TestaStruct { int16: 1, uint32: 2, stringa: "Hello".into()}).unwrap();
+        f.push(TestaStruct { int16: 3, uint32: 4, stringa: "Hello2".into()}).unwrap();
+        f.push(TestaStruct { int16: 5, uint32: 6, stringa: "Hello3".into()}).unwrap();
+        drop(f);
+
+        let mut f: FileVec<TestaStruct> = FileVec::open("__push_multiple".to_string()).unwrap();
+        assert_eq!(f[0], TestaStruct { int16: 1, uint32: 2, stringa: "Hello".into()});
+        assert_eq!(f[2], TestaStruct { int16: 5, uint32: 6, stringa: "Hello3".into()});
+
+        let _ = std::fs::remove_file("__push_multiple");
+    }
+
+    #[test]
+    fn remove() {
+        let mut f: FileVec<i32> = FileVec::open("__remove".to_string()).unwrap();
+        f.extend([0i32, 1, 2, 3, 4, 5, 6].into_iter());
+
+        let mut buffer = Vec::new();
+        std::fs::File::open("__remove").unwrap().read_to_end(&mut buffer).unwrap();
+        assert_eq!(buffer, rmp_serde::to_vec(&[0, 1, 2, 3, 4, 5, 6]).unwrap());
+
+        f.remove(2).unwrap();
+        f.remove(f.as_ref()
+            .iter()
+            .position(|&x| x == 5)
+            .unwrap())
+            .unwrap();
+
+        buffer.clear();
+        std::fs::File::open("__remove").unwrap().read_to_end(&mut buffer).unwrap();
+        assert_eq!(buffer, rmp_serde::to_vec(&[0, 1, 3, 4, 6]).unwrap());
+
+        let _ = std::fs::remove_file("__remove");
     }
 }
 
