@@ -27,8 +27,7 @@ fn main() -> ! {
 
     // construct a wrapper for resources that are shared between different commands
     let ec = command::ExecutionContext::new(
-        "./data/status_queue".into(),
-        "./data/result_queue".into(),
+        "events".to_string(),
         UPDATE_PIN,
     )
     .unwrap();

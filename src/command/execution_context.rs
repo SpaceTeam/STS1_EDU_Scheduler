@@ -3,6 +3,8 @@ use std::{
     thread,
 };
 
+use filevec::FileVec;
+
 /// This type makes the ExecutionContext thread-safe
 pub type SyncExecutionContext = Arc<Mutex<ExecutionContext>>;
 
@@ -16,21 +18,23 @@ pub struct ExecutionContext {
     pub running_flag: bool,
     /// This integer is the pin number of the EDU_Update pin
     pub update_pin: UpdatePin,
+    /// Vector containing events that should be sent to the COBC
+    pub event_vec: FileVec<Event>
 }
 
 impl ExecutionContext {
     pub fn new(
-        status_path: std::path::PathBuf,
-        result_path: std::path::PathBuf,
+        event_file_path: String,
         update_pin: u8,
     ) -> Result<Self, std::io::Error> {
         let mut ec = ExecutionContext {
             thread_handle: None,
             running_flag: false,
             update_pin: UpdatePin::new(update_pin),
+            event_vec: FileVec::open(event_file_path).unwrap()
         };
 
-        if ec.has_data_ready()? {
+        if ec.has_data_ready() {
             ec.update_pin.set_high();
         } else {
             ec.update_pin.set_low();
@@ -43,8 +47,8 @@ impl ExecutionContext {
         self.running_flag
     }
 
-    pub fn has_data_ready(&self) -> Result<bool, std::io::Error> {
-        todo!();
+    pub fn has_data_ready(&self) -> bool {
+        !self.event_vec.as_ref().is_empty()
     }
 }
 
@@ -106,4 +110,10 @@ pub struct ProgramStatus {
 pub struct ResultId {
     pub program_id: u16,
     pub queue_id: u16,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub enum Event {
+    Status(ProgramStatus),
+    Result(ResultId)
 }
