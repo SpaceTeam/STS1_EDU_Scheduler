@@ -26,11 +26,7 @@ fn main() -> ! {
     let mut com = communication::UARTHandle::new(921600);
 
     // construct a wrapper for resources that are shared between different commands
-    let ec = command::ExecutionContext::new(
-        "events".to_string(),
-        UPDATE_PIN,
-    )
-    .unwrap();
+    let ec = command::ExecutionContext::new("events".to_string(), UPDATE_PIN).unwrap();
     let mut exec = Arc::new(Mutex::new(ec));
 
     // start a thread that will update the heartbeat pin

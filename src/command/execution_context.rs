@@ -19,19 +19,16 @@ pub struct ExecutionContext {
     /// This integer is the pin number of the EDU_Update pin
     pub update_pin: UpdatePin,
     /// Vector containing events that should be sent to the COBC
-    pub event_vec: FileVec<Event>
+    pub event_vec: FileVec<Event>,
 }
 
 impl ExecutionContext {
-    pub fn new(
-        event_file_path: String,
-        update_pin: u8,
-    ) -> Result<Self, std::io::Error> {
+    pub fn new(event_file_path: String, update_pin: u8) -> Result<Self, std::io::Error> {
         let mut ec = ExecutionContext {
             thread_handle: None,
             running_flag: false,
             update_pin: UpdatePin::new(update_pin),
-            event_vec: FileVec::open(event_file_path).unwrap()
+            event_vec: FileVec::open(event_file_path).unwrap(),
         };
 
         if ec.has_data_ready() {
@@ -115,5 +112,5 @@ pub struct ResultId {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum Event {
     Status(ProgramStatus),
-    Result(ResultId)
+    Result(ResultId),
 }
