@@ -1,13 +1,13 @@
 use serde::{Serialize, de::DeserializeOwned};
 use std::io::{Read, Write, Seek, SeekFrom};
 
-struct FileVec<T: Serialize + DeserializeOwned> {
+pub struct FileVec<T: Serialize + DeserializeOwned> {
     vec: Vec<T>,
     file: std::fs::File
 }
 
 impl<T: Serialize + DeserializeOwned> FileVec<T> {
-    fn open(path: String) -> Result<Self, std::io::Error> {
+    pub fn open(path: String) -> Result<Self, std::io::Error> {
         let mut file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
@@ -28,7 +28,7 @@ impl<T: Serialize + DeserializeOwned> FileVec<T> {
         Ok(FileVec { vec, file })
     }
 
-    fn _write_to_file(&mut self) -> Result<(), std::io::Error> {
+    fn write_to_file(&mut self) -> Result<(), std::io::Error> {
         let serialized = rmp_serde::to_vec(&self.vec).unwrap();
         
         self.file.set_len(0)?;
@@ -39,15 +39,15 @@ impl<T: Serialize + DeserializeOwned> FileVec<T> {
         Ok(())
     }
 
-    fn push(&mut self, value: T) -> Result<(), std::io::Error> {
+    pub fn push(&mut self, value: T) -> Result<(), std::io::Error> {
         self.vec.push(value);
-        self._write_to_file()?;
+        self.write_to_file()?;
         Ok(())
     }
 
-    fn remove(&mut self, index: usize) -> Result<T, std::io::Error> {
+    pub fn remove(&mut self, index: usize) -> Result<T, std::io::Error> {
         let t = self.vec.remove(index);
-        self._write_to_file()?;
+        self.write_to_file()?;
 
         Ok(t)
     }
@@ -73,13 +73,13 @@ impl<T: Serialize + DeserializeOwned> Extend<T> for FileVec<T> {
     /// Panics if the write to the underlying file fails
     fn extend<U: IntoIterator<Item = T>>(&mut self, iter: U) {
         self.vec.extend(iter);
-        self._write_to_file().unwrap();
+        self.write_to_file().unwrap();
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::{io::{Write, Read}, fs::File};
+    use std::io::{Write, Read};
 
     use super::FileVec;
 
@@ -112,7 +112,7 @@ mod test {
         assert_eq!(f[0], 123);
         
         drop(f);
-        let mut f = FileVec::<i32>::open("__push_single".to_string()).unwrap();
+        let f = FileVec::<i32>::open("__push_single".to_string()).unwrap();
         assert_eq!(f[0], 123);
 
         let _ = std::fs::remove_file("__push_single");
@@ -133,7 +133,7 @@ mod test {
         f.push(TestaStruct { int16: 5, uint32: 6, stringa: "Hello3".into()}).unwrap();
         drop(f);
 
-        let mut f: FileVec<TestaStruct> = FileVec::open("__push_multiple".to_string()).unwrap();
+        let f: FileVec<TestaStruct> = FileVec::open("__push_multiple".to_string()).unwrap();
         assert_eq!(f[0], TestaStruct { int16: 1, uint32: 2, stringa: "Hello".into()});
         assert_eq!(f[2], TestaStruct { int16: 5, uint32: 6, stringa: "Hello3".into()});
 
