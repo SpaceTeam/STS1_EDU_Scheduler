@@ -1,3 +1,31 @@
+//! A wrapper that keeps a Vec backed by a file
+//! 
+//! FileVec contains a Vec that will be also stored in a file, allowing the vector to be restored
+//! when the program is restarted. This is achieved by storing the vectors content in its file on
+//! every function call the modifies the vector.
+//! 
+//! A reference to the underlying vector can be obtained with `as_ref()`, allowing
+//! non-mutating operations.
+//! 
+//! The vector is stored in the ['MessagePack'] format.
+//! 
+//! # Example
+//! ```rust
+//! use filevec::FileVec;
+//! 
+//! let mut f: FileVec<i32> = FileVec::open("__doc_example".to_string()).unwrap();
+//! f.push(123).unwrap();
+//! f.push(345).unwrap();
+//! drop(f);
+//! 
+//! let f: FileVec<i32> = FileVec::open("__doc_example".to_string()).unwrap();
+//! assert_eq!(f[0], 123);
+//! assert_eq!(f[1], 345);
+//! # std::fs::remove_file("__doc_example");
+//! ```
+//! 
+//! ['MessagePack']: https://msgpack.org/index.html
+
 use serde::{Serialize, de::DeserializeOwned};
 use std::io::{Read, Write, Seek, SeekFrom};
 
@@ -7,6 +35,10 @@ pub struct FileVec<T: Serialize + DeserializeOwned> {
 }
 
 impl<T: Serialize + DeserializeOwned> FileVec<T> {
+    /// Creates a new FileVec from the given file. Creates a new file if none exists.
+    /// 
+    /// **Note:** If the file exists and contains invalid data, it is interpreted as
+    /// empty and overwritten.
     pub fn open(path: String) -> Result<Self, std::io::Error> {
         let mut file = std::fs::OpenOptions::new()
             .read(true)
@@ -39,12 +71,14 @@ impl<T: Serialize + DeserializeOwned> FileVec<T> {
         Ok(())
     }
 
+    /// Appends a new value to the vector and then syncs with the underlying file
     pub fn push(&mut self, value: T) -> Result<(), std::io::Error> {
         self.vec.push(value);
         self.write_to_file()?;
         Ok(())
     }
 
+    /// Removes the item at the given index and then syncs with the underlying file
     pub fn remove(&mut self, index: usize) -> Result<T, std::io::Error> {
         let t = self.vec.remove(index);
         self.write_to_file()?;
