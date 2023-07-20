@@ -106,7 +106,7 @@ fn stopped_return() -> TestResult {
         COBC(STOP),
         COBC(DATA(get_status())),
         EDU(ACK),
-        EDU(DATA(vec![2, 9, 0, 5, 0, 0, 0])),
+        EDU(DATA(vec![0])),
         COBC(ACK),
     ];
     common::prepare_program("9");

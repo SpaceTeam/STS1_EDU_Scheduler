@@ -16,14 +16,18 @@ fn stops_running_program() -> TestResult {
         COBC(DATA(stop_program())),
         EDU(ACK),
         EDU(ACK),
+        COBC(DATA(get_status())),
+        EDU(ACK),
+        EDU(DATA(vec![1, 3, 0, 1, 0, 0, 0, 255])),
+        COBC(ACK),
     ];
     common::prepare_program("3");
     let (mut com, mut exec) = common::prepare_handles(packets, "3");
 
     command::handle_command(&mut com, &mut exec);
     command::handle_command(&mut com, &mut exec);
+    command::handle_command(&mut com, &mut exec);
     assert!(com.is_complete());
-    todo!("Ensure there is a status entry");
 
     common::cleanup("3");
     Ok(())

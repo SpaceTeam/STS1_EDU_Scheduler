@@ -9,6 +9,7 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
+use super::Event;
 use super::ProgramStatus;
 use super::ResultId;
 use super::{CommandError, CommandResult, SyncExecutionContext};
@@ -100,12 +101,13 @@ pub fn execute_program(
         };
 
         log::info!("Program {}:{} finished with {}", program_id, timestamp, exit_code);
+        let sid = ProgramStatus { program_id, timestamp, exit_code };
         let rid = ResultId { program_id, timestamp };
         build_result_archive(rid).unwrap(); // create the zip file with result and log
 
         let mut context = wd_context.lock().unwrap();
-        context.status_queue.push(ProgramStatus { program_id, timestamp, exit_code }).unwrap();
-        context.result_queue.push(rid).unwrap();
+        context.event_vec.push(Event::Status(sid)).unwrap();
+        context.event_vec.push(Event::Result(rid)).unwrap();
         context.running_flag = false;
         context.update_pin.set_high();
         drop(context);
@@ -278,9 +280,23 @@ pub fn get_status(
     check_length(&data, 1)?;
     com.send_packet(CEPPacket::ACK)?;
 
-    let mut con = exec.lock().unwrap();
+    let mut l_exec = exec.lock().unwrap();
+    if !l_exec.has_data_ready() {
+        com.send_packet(CEPPacket::DATA(vec![0]))?;
+        return Ok(());
+    }
 
-    todo!();
+    if let Some(index) =
+        l_exec.event_vec.as_ref().iter().position(|x| matches!(x, Event::Status(_)))
+    {
+        let event = l_exec.event_vec[index];
+        com.send_packet(CEPPacket::DATA(event.to_bytes()))?;
+        l_exec.event_vec.remove(index)?;
+    } else {
+        let event = *l_exec.event_vec.as_ref().last().unwrap(); // Safe, because we know it is not empty
+        com.send_packet(CEPPacket::DATA(event.to_bytes()))?;
+        l_exec.event_vec.pop()?;
+    }
 
     Ok(())
 }
@@ -311,7 +327,7 @@ pub fn return_result(
 
     let response = com.receive_packet(&COM_TIMEOUT_DURATION)?;
     if response == CEPPacket::ACK {
-        delete_result(exec)?;
+        delete_result(ResultId { program_id, timestamp })?;
     } else {
         log::error!("COBC did not acknowledge result");
     }
@@ -321,14 +337,13 @@ pub fn return_result(
 
 /// Deletes the result archive corresponding to the next element in the result queue and removes
 /// that element from the queue. The update pin is updated accordingly
-fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
-    todo!();
-    // let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
-    // let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
-    // let out_path = format!("./data/{}_{}.zip", res.program_id, res.queue_id);
-    // let _ = std::fs::remove_file(res_path);
-    // let _ = std::fs::remove_file(log_path);
-    // let _ = std::fs::remove_file(out_path);
+fn delete_result(res: ResultId) -> CommandResult {
+    let res_path = format!("./archives/{}/results/{}", res.program_id, res.timestamp);
+    let log_path = format!("./data/{}_{}.log", res.program_id, res.timestamp);
+    let out_path = format!("./data/{}_{}.zip", res.program_id, res.timestamp);
+    let _ = std::fs::remove_file(res_path);
+    let _ = std::fs::remove_file(log_path);
+    let _ = std::fs::remove_file(out_path);
 
     Ok(())
 }

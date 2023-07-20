@@ -37,15 +37,18 @@ fn execute_program_infinite() -> TestResult {
         COBC(DATA(execute_program(2, 1, 1))), // Execute Program ID 2, Timestamp 1, Timeout 1s
         EDU(ACK),
         EDU(ACK),
+        COBC(DATA(get_status())),
+        EDU(ACK),
+        EDU(DATA(vec![1, 2, 0, 1, 0, 0, 0, 255])),
+        COBC(ACK),
     ];
     common::prepare_program("2");
     let (mut com, mut exec) = common::prepare_handles(packets, "2");
 
     command::handle_command(&mut com, &mut exec);
-    assert!(com.is_complete());
-
     std::thread::sleep(std::time::Duration::from_millis(1300));
-    todo!("Ensure there is a status entry");
+    command::handle_command(&mut com, &mut exec);
+    assert!(com.is_complete());
 
     common::cleanup("2");
     Ok(())

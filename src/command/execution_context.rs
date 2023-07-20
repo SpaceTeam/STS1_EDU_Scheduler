@@ -95,7 +95,7 @@ impl UpdatePin {
 }
 
 /// Struct used for storing information about a finished student program
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct ProgramStatus {
     pub program_id: u16,
     pub timestamp: u32,
@@ -109,8 +109,28 @@ pub struct ResultId {
     pub timestamp: u32,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub enum Event {
     Status(ProgramStatus),
     Result(ResultId),
+}
+
+impl Event {
+    pub fn to_bytes(self) -> Vec<u8> {
+        let mut v = Vec::new();
+        match self {
+            Event::Status(s) => {
+                v.push(1);
+                v.extend(s.program_id.to_le_bytes());
+                v.extend(s.timestamp.to_le_bytes());
+                v.push(s.exit_code);
+            }
+            Event::Result(r) => {
+                v.push(2);
+                v.extend(r.program_id.to_le_bytes());
+                v.extend(r.timestamp.to_le_bytes());
+            }
+        }
+        v
+    }
 }
