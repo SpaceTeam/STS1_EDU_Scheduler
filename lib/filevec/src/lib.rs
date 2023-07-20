@@ -78,6 +78,13 @@ impl<T: Serialize + DeserializeOwned> FileVec<T> {
         Ok(())
     }
 
+    /// Removes the last element from a vector and returns it, or [None] if it is empty.
+    pub fn pop(&mut self) -> Result<Option<T>, std::io::Error> {
+        let ret = self.vec.pop();
+        self.write_to_file()?;
+        Ok(ret)
+    }
+
     /// Removes the item at the given index and then syncs with the underlying file
     pub fn remove(&mut self, index: usize) -> Result<T, std::io::Error> {
         let t = self.vec.remove(index);
@@ -113,7 +120,7 @@ impl<T: Serialize + DeserializeOwned> Extend<T> for FileVec<T> {
 
 #[cfg(test)]
 mod test {
-    use std::io::{Write, Read};
+    use std::{io::{Write, Read}, fs::File};
 
     use super::FileVec;
 
@@ -195,6 +202,17 @@ mod test {
         assert_eq!(buffer, rmp_serde::to_vec(&[0, 1, 3, 4, 6]).unwrap());
 
         let _ = std::fs::remove_file("__remove");
+    }
+
+    #[test]
+    fn pop() {
+        let mut f = FileVec::open("__pop".to_string()).unwrap();
+        f.extend([0, 1, 2, 3].into_iter());
+
+        assert_eq!(f.pop().unwrap(), Some(3));
+        assert_eq!(f.pop().unwrap(), Some(2));
+        
+        let _ = std::fs::remove_file("__pop");
     }
 }
 
