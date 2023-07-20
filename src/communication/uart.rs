@@ -26,8 +26,9 @@ impl UARTHandle {
     /// A `UARTHandle`(r) that uses Raspberry Pi's UART Peripheral
     ///
     pub fn new(path: &str, baud: u32) -> UARTHandle {
-        let mut uart_handler: UARTHandle =
-            UARTHandle { uart_PI: Uart::with_path(path, baud, Parity::None, DATA_BITS, STOP_BITS).unwrap() };
+        let mut uart_handler: UARTHandle = UARTHandle {
+            uart_PI: Uart::with_path(path, baud, Parity::None, DATA_BITS, STOP_BITS).unwrap(),
+        };
 
         let _ = uart_handler.uart_PI.set_write_mode(true);
 
