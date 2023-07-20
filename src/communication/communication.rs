@@ -13,10 +13,25 @@ pub trait CommunicationHandle {
 
     /// Sends the supplied packet
     fn send_packet(&mut self, p: CEPPacket) -> ComResult<()> {
-        self.send(p.serialize())
+        if matches!(&p, CEPPacket::DATA(_)) {
+            loop {
+                self.send(p.clone().serialize())?;
+                match self.receive_packet(&std::time::Duration::MAX) {
+                    Ok(CEPPacket::ACK) => break,
+                    Ok(CEPPacket::NACK) => log::warn!("Received NACK after DATA, resending..."),
+                    Ok(CEPPacket::STOP) => return Err(CommunicationError::STOPCondition),
+                    Ok(_) => return Err(CommunicationError::PacketInvalidError),
+                    Err(e) => return Err(e),
+                }
+            }
+        } else {
+            self.send(p.serialize())?;
+        }
+
+        Ok(())
     }
 
-    /// Blocks until it receives a CSBIPacket
+    /// Blocks until it receives a CEPPacket
     fn receive_packet(&mut self, timeout: &std::time::Duration) -> ComResult<CEPPacket> {
         let pack = match self.receive(1, timeout)?[0] {
             0xd7 => CEPPacket::ACK,
@@ -105,21 +120,7 @@ pub trait CommunicationHandle {
             }
 
             self.send_packet(CEPPacket::DATA(chunks[i].to_vec()))?;
-
-            match self.receive_packet(timeout)? {
-                CEPPacket::NACK => {
-                    log::warn!("NACK on packet. Resending...");
-                }
-                CEPPacket::ACK => {
-                    i += 1;
-                }
-                CEPPacket::STOP => {
-                    return Err(CommunicationError::STOPCondition);
-                }
-                _ => {
-                    return Err(CommunicationError::PacketInvalidError);
-                }
-            }
+            i += 1;
         }
 
         self.send_packet(CEPPacket::EOF)?;
