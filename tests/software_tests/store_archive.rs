@@ -1,5 +1,5 @@
 use STS1_EDU_Scheduler::command::{self};
-use STS1_EDU_Scheduler::communication::CSBIPacket::*;
+use STS1_EDU_Scheduler::communication::CEPPacket::*;
 mod common;
 use common::ComEvent::*;
 
@@ -14,6 +14,7 @@ fn store_archive() -> TestResult {
         COBC(DATA(std::fs::read("./tests/student_program.zip")?)), // COBC sends the archive
         EDU(ACK),                           // EDU acknowledges packet integrity
         COBC(EOF),                          // COBC signals end of packets
+        EDU(ACK),                           // EDU acknowledges EOF
         EDU(ACK),                           // EDU signals successful Store Archive
     ];
 
@@ -76,6 +77,7 @@ fn invalid_crc() -> TestResult {
         COBC(DATA(bytes)),
         EDU(ACK),
         COBC(EOF),
+        EDU(ACK),
         EDU(ACK),
     ];
     let (mut com, mut exec) = common::prepare_handles(packets, "14");

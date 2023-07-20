@@ -1,8 +1,9 @@
-use crate::persist::{FileQueue, Serializable};
 use std::{
     sync::{Arc, Mutex},
     thread,
 };
+
+use filevec::FileVec;
 
 /// This type makes the ExecutionContext thread-safe
 pub type SyncExecutionContext = Arc<Mutex<ExecutionContext>>;
@@ -15,44 +16,41 @@ pub struct ExecutionContext {
     /// running. Changing it from true to false, indicates to the watchdog thread, that the
     /// program should be stopped
     pub running_flag: bool,
-    /// This queue contains information about finished student programs, that is to be sent to
-    /// the COBC  
-    pub status_queue: FileQueue<ProgramStatus>,
-    /// This queue contains information about results, that should be sent to the COBC
-    pub result_queue: FileQueue<ResultId>,
     /// This integer is the pin number of the EDU_Update pin
     pub update_pin: UpdatePin,
+    /// Vector containing events that should be sent to the COBC
+    pub event_vec: FileVec<Event>,
 }
 
 impl ExecutionContext {
-    pub fn new(
-        status_path: std::path::PathBuf,
-        result_path: std::path::PathBuf,
-        update_pin: u8,
-    ) -> Result<Self, std::io::Error> {
+    pub fn new(event_file_path: String, update_pin: u8) -> Result<Self, std::io::Error> {
         let mut ec = ExecutionContext {
             thread_handle: None,
             running_flag: false,
-            status_queue: FileQueue::<ProgramStatus>::new(status_path)?,
-            result_queue: FileQueue::<ResultId>::new(result_path)?,
             update_pin: UpdatePin::new(update_pin),
+            event_vec: FileVec::open(event_file_path).unwrap(),
         };
 
-        if ec.has_data_ready()? {
-            ec.update_pin.set_high();
-        } else {
-            ec.update_pin.set_low();
-        }
+        ec.check_update_pin();
 
         Ok(ec)
+    }
+
+    /// Checks and sets/resets the update pin accordingly
+    pub fn check_update_pin(&mut self) {
+        if self.has_data_ready() {
+            self.update_pin.set_high();
+        } else {
+            self.update_pin.set_low();
+        }
     }
 
     pub fn is_student_program_running(&self) -> bool {
         self.running_flag
     }
 
-    pub fn has_data_ready(&self) -> Result<bool, std::io::Error> {
-        Ok(!self.status_queue.is_empty()? || !self.result_queue.is_empty()?)
+    pub fn has_data_ready(&self) -> bool {
+        !self.event_vec.as_ref().is_empty()
     }
 }
 
@@ -102,52 +100,42 @@ impl UpdatePin {
 }
 
 /// Struct used for storing information about a finished student program
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ProgramStatus {
     pub program_id: u16,
-    pub queue_id: u16,
+    pub timestamp: u32,
     pub exit_code: u8,
 }
 
 /// Struct used for storing information of a result, waiting to be sent
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ResultId {
     pub program_id: u16,
-    pub queue_id: u16,
+    pub timestamp: u32,
 }
 
-/// This impl allows ProgramStatus to be used in a FileQueue
-impl Serializable for ProgramStatus {
-    const SIZE: usize = 5;
-
-    fn serialize(self) -> Vec<u8> {
-        let mut v = Vec::new();
-        v.extend(self.program_id.serialize());
-        v.extend(self.queue_id.serialize());
-        v.push(self.exit_code);
-        v
-    }
-
-    fn deserialize(bytes: &[u8]) -> Self {
-        let p_id = u16::from_le_bytes([bytes[0], bytes[1]]);
-        let q_id = u16::from_le_bytes([bytes[2], bytes[3]]);
-        ProgramStatus { program_id: p_id, queue_id: q_id, exit_code: bytes[4] }
-    }
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq)]
+pub enum Event {
+    Status(ProgramStatus),
+    Result(ResultId),
 }
 
-/// This impl allows ResultId to be used in a FileQueue
-impl Serializable for ResultId {
-    const SIZE: usize = 4;
-
-    fn serialize(self) -> Vec<u8> {
+impl Event {
+    pub fn to_bytes(self) -> Vec<u8> {
         let mut v = Vec::new();
-        v.extend(self.program_id.serialize());
-        v.extend(self.queue_id.serialize());
+        match self {
+            Event::Status(s) => {
+                v.push(1);
+                v.extend(s.program_id.to_le_bytes());
+                v.extend(s.timestamp.to_le_bytes());
+                v.push(s.exit_code);
+            }
+            Event::Result(r) => {
+                v.push(2);
+                v.extend(r.program_id.to_le_bytes());
+                v.extend(r.timestamp.to_le_bytes());
+            }
+        }
         v
-    }
-
-    fn deserialize(bytes: &[u8]) -> Self {
-        let p_id = u16::from_le_bytes([bytes[0], bytes[1]]);
-        let q_id = u16::from_le_bytes([bytes[2], bytes[3]]);
-        ResultId { program_id: p_id, queue_id: q_id }
     }
 }

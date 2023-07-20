@@ -1,7 +1,7 @@
 use std::fs;
 use std::io::{Read, Write};
 use STS1_EDU_Scheduler::command::{self, CommandError};
-use STS1_EDU_Scheduler::communication::{CSBIPacket::*, CommunicationError};
+use STS1_EDU_Scheduler::communication::{CEPPacket::*, CommunicationError};
 
 mod common;
 use common::ComEvent::*;

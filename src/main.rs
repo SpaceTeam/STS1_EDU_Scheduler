@@ -9,34 +9,39 @@ use simplelog as sl;
 
 mod command;
 mod communication;
-mod persist;
 
-const HEARTBEAT_PIN: u8 = 34;
-const HEARTBEAT_FREQ: u64 = 10; //Hz
-const UPDATE_PIN: u8 = 35;
+#[derive(serde::Deserialize)]
+struct Configuration {
+    uart: String,
+    baudrate: u32,
+    heartbeat_pin: u8,
+    update_pin: u8,
+    heartbeat_freq: u64,
+    log_path: String,
+}
 
 fn main() -> ! {
+    let config: Configuration =
+        toml::from_str(&std::fs::read_to_string("./config.toml").unwrap()).unwrap();
+
     // write all logging into a file
     let _ = sl::WriteLogger::init(
         sl::LevelFilter::Info,
         sl::Config::default(),
-        std::fs::File::create("log").unwrap(),
+        std::fs::File::create(&config.log_path).unwrap(),
     );
 
+    log::info!("Scheduler started");
+
     // construct a wrapper for UART communication
-    let mut com = communication::UARTHandle::new(921600);
+    let mut com = communication::UARTHandle::new(&config.uart, config.baudrate);
 
     // construct a wrapper for resources that are shared between different commands
-    let ec = command::ExecutionContext::new(
-        "./data/status_queue".into(),
-        "./data/result_queue".into(),
-        UPDATE_PIN,
-    )
-    .unwrap();
+    let ec = command::ExecutionContext::new("events".to_string(), config.update_pin).unwrap();
     let mut exec = Arc::new(Mutex::new(ec));
 
     // start a thread that will update the heartbeat pin
-    thread::spawn(heartbeat_loop);
+    thread::spawn(move || heartbeat_loop(config.heartbeat_pin, config.heartbeat_freq));
 
     // main loop
     loop {
@@ -44,17 +49,16 @@ fn main() -> ! {
     }
 }
 
-fn heartbeat_loop() -> ! {
-    const TOGGLE_TIME_MS: time::Duration =
-        time::Duration::from_millis((1000 / HEARTBEAT_FREQ / 2) as u64);
+fn heartbeat_loop(heartbeat_pin: u8, freq: u64) -> ! {
+    let toogle_time = time::Duration::from_millis((1000 / freq / 2) as u64);
 
     let gpio = Gpio::new().unwrap();
-    let mut pin = gpio.get(HEARTBEAT_PIN).unwrap().into_output();
+    let mut pin = gpio.get(heartbeat_pin).unwrap().into_output();
 
     loop {
         pin.set_high();
-        thread::sleep(TOGGLE_TIME_MS);
+        thread::sleep(toogle_time);
         pin.set_low();
-        thread::sleep(TOGGLE_TIME_MS);
+        thread::sleep(toogle_time);
     }
 }
