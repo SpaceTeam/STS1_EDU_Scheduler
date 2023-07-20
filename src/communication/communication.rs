@@ -21,16 +21,14 @@ pub trait CommunicationHandle {
                     Ok(CSBIPacket::NACK) => log::warn!("Received NACK after DATA, resending..."),
                     Ok(CSBIPacket::STOP) => return Err(CommunicationError::STOPCondition),
                     Ok(_) => return Err(CommunicationError::PacketInvalidError),
-                    Err(e) => return Err(e)
+                    Err(e) => return Err(e),
                 }
             }
-        }
-        else {
+        } else {
             self.send(p.serialize())?;
         }
-        
-        Ok(())
 
+        Ok(())
     }
 
     /// Blocks until it receives a CSBIPacket
@@ -141,7 +139,7 @@ pub enum CommunicationError {
     /// Signals that a multi packet receive or send was interrupted by a STOP condition
     STOPCondition,
     /// Signals that a receive timed out
-    TimeoutError
+    TimeoutError,
 }
 
 impl std::fmt::Display for CommunicationError {
