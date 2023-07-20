@@ -31,13 +31,18 @@ impl ExecutionContext {
             event_vec: FileVec::open(event_file_path).unwrap(),
         };
 
-        if ec.has_data_ready() {
-            ec.update_pin.set_high();
-        } else {
-            ec.update_pin.set_low();
-        }
+        ec.check_update_pin();
 
         Ok(ec)
+    }
+
+    /// Checks and sets/resets the update pin accordingly
+    pub fn check_update_pin(&mut self) {
+        if self.has_data_ready() {
+            self.update_pin.set_high();
+        } else {
+            self.update_pin.set_low();
+        }
     }
 
     pub fn is_student_program_running(&self) -> bool {
@@ -95,7 +100,7 @@ impl UpdatePin {
 }
 
 /// Struct used for storing information about a finished student program
-#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ProgramStatus {
     pub program_id: u16,
     pub timestamp: u32,
@@ -103,13 +108,13 @@ pub struct ProgramStatus {
 }
 
 /// Struct used for storing information of a result, waiting to be sent
-#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ResultId {
     pub program_id: u16,
     pub timestamp: u32,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum Event {
     Status(ProgramStatus),
     Result(ResultId),

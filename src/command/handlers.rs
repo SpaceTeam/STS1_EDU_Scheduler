@@ -295,9 +295,14 @@ pub fn get_status(
     } else {
         let event = *l_exec.event_vec.as_ref().last().unwrap(); // Safe, because we know it is not empty
         com.send_packet(CEPPacket::DATA(event.to_bytes()))?;
-        l_exec.event_vec.pop()?;
+
+        if !matches!(event, Event::Result(_)) {
+            // Results are removed when deleted
+            l_exec.event_vec.pop()?;
+        }
     }
 
+    l_exec.check_update_pin();
     Ok(())
 }
 
@@ -327,7 +332,15 @@ pub fn return_result(
 
     let response = com.receive_packet(&COM_TIMEOUT_DURATION)?;
     if response == CEPPacket::ACK {
-        delete_result(ResultId { program_id, timestamp })?;
+        let result_id = ResultId { program_id, timestamp };
+        delete_result(result_id)?;
+
+        let mut l_exec = exec.lock().unwrap();
+        let event_index =
+            l_exec.event_vec.as_ref().iter().position(|x| x == &Event::Result(result_id)).unwrap();
+        l_exec.event_vec.remove(event_index)?;
+        l_exec.check_update_pin();
+        drop(l_exec);
     } else {
         log::error!("COBC did not acknowledge result");
     }

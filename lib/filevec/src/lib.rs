@@ -1,50 +1,47 @@
 //! A wrapper that keeps a Vec backed by a file
-//! 
+//!
 //! FileVec contains a Vec that will be also stored in a file, allowing the vector to be restored
 //! when the program is restarted. This is achieved by storing the vectors content in its file on
 //! every function call the modifies the vector.
-//! 
+//!
 //! A reference to the underlying vector can be obtained with `as_ref()`, allowing
 //! non-mutating operations.
-//! 
+//!
 //! The vector is stored in the ['MessagePack'] format.
-//! 
+//!
 //! # Example
 //! ```rust
 //! use filevec::FileVec;
-//! 
+//!
 //! let mut f: FileVec<i32> = FileVec::open("__doc_example".to_string()).unwrap();
 //! f.push(123).unwrap();
 //! f.push(345).unwrap();
 //! drop(f);
-//! 
+//!
 //! let f: FileVec<i32> = FileVec::open("__doc_example".to_string()).unwrap();
 //! assert_eq!(f[0], 123);
 //! assert_eq!(f[1], 345);
 //! # std::fs::remove_file("__doc_example");
 //! ```
-//! 
+//!
 //! ['MessagePack']: https://msgpack.org/index.html
 
-use serde::{Serialize, de::DeserializeOwned};
-use std::io::{Read, Write, Seek, SeekFrom};
+use serde::{de::DeserializeOwned, Serialize};
+use std::io::{Read, Seek, SeekFrom, Write};
 
 pub struct FileVec<T: Serialize + DeserializeOwned> {
     vec: Vec<T>,
-    file: std::fs::File
+    file: std::fs::File,
 }
 
 impl<T: Serialize + DeserializeOwned> FileVec<T> {
     /// Creates a new FileVec from the given file. Creates a new file if none exists.
-    /// 
+    ///
     /// **Note:** If the file exists and contains invalid data, it is interpreted as
     /// empty and overwritten.
     pub fn open(path: String) -> Result<Self, std::io::Error> {
-        let mut file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open(path)?;
+        let mut file =
+            std::fs::OpenOptions::new().read(true).write(true).create(true).open(path)?;
         let metadata = file.metadata()?;
 
         let vec = if metadata.len() > 0 {
@@ -52,8 +49,7 @@ impl<T: Serialize + DeserializeOwned> FileVec<T> {
             file.read_to_end(&mut buffer)?;
 
             rmp_serde::from_slice(&buffer).unwrap_or(Vec::new())
-        }
-        else {
+        } else {
             Vec::new()
         };
 
@@ -62,7 +58,7 @@ impl<T: Serialize + DeserializeOwned> FileVec<T> {
 
     fn write_to_file(&mut self) -> Result<(), std::io::Error> {
         let serialized = rmp_serde::to_vec(&self.vec).unwrap();
-        
+
         self.file.set_len(0)?;
         self.file.seek(SeekFrom::Start(0))?;
         self.file.write_all(&serialized)?;
@@ -110,7 +106,7 @@ impl<T: Serialize + DeserializeOwned> std::ops::Index<usize> for FileVec<T> {
 
 impl<T: Serialize + DeserializeOwned> Extend<T> for FileVec<T> {
     /// # Panics
-    /// 
+    ///
     /// Panics if the write to the underlying file fails
     fn extend<U: IntoIterator<Item = T>>(&mut self, iter: U) {
         self.vec.extend(iter);
@@ -120,14 +116,17 @@ impl<T: Serialize + DeserializeOwned> Extend<T> for FileVec<T> {
 
 #[cfg(test)]
 mod test {
-    use std::{io::{Write, Read}, fs::File};
+    use std::{
+        fs::File,
+        io::{Read, Write},
+    };
 
     use super::FileVec;
 
     #[test]
     fn empty_vec() {
         let f = FileVec::<u16>::open("__empty_vec".to_string()).unwrap();
-        
+
         assert_eq!(f.as_ref().len(), 0);
         assert!(std::path::Path::new("__empty_vec").exists());
 
@@ -151,7 +150,7 @@ mod test {
         let mut f = FileVec::<i32>::open("__push_single".to_string()).unwrap();
         f.push(123).unwrap();
         assert_eq!(f[0], 123);
-        
+
         drop(f);
         let f = FileVec::<i32>::open("__push_single".to_string()).unwrap();
         assert_eq!(f[0], 123);
@@ -163,20 +162,20 @@ mod test {
     struct TestaStruct {
         int16: i16,
         uint32: u32,
-        stringa: String
+        stringa: String,
     }
 
     #[test]
     fn push_multiple_structs() {
         let mut f = FileVec::open("__push_multiple".to_string()).unwrap();
-        f.push(TestaStruct { int16: 1, uint32: 2, stringa: "Hello".into()}).unwrap();
-        f.push(TestaStruct { int16: 3, uint32: 4, stringa: "Hello2".into()}).unwrap();
-        f.push(TestaStruct { int16: 5, uint32: 6, stringa: "Hello3".into()}).unwrap();
+        f.push(TestaStruct { int16: 1, uint32: 2, stringa: "Hello".into() }).unwrap();
+        f.push(TestaStruct { int16: 3, uint32: 4, stringa: "Hello2".into() }).unwrap();
+        f.push(TestaStruct { int16: 5, uint32: 6, stringa: "Hello3".into() }).unwrap();
         drop(f);
 
         let f: FileVec<TestaStruct> = FileVec::open("__push_multiple".to_string()).unwrap();
-        assert_eq!(f[0], TestaStruct { int16: 1, uint32: 2, stringa: "Hello".into()});
-        assert_eq!(f[2], TestaStruct { int16: 5, uint32: 6, stringa: "Hello3".into()});
+        assert_eq!(f[0], TestaStruct { int16: 1, uint32: 2, stringa: "Hello".into() });
+        assert_eq!(f[2], TestaStruct { int16: 5, uint32: 6, stringa: "Hello3".into() });
 
         let _ = std::fs::remove_file("__push_multiple");
     }
@@ -191,11 +190,7 @@ mod test {
         assert_eq!(buffer, rmp_serde::to_vec(&[0, 1, 2, 3, 4, 5, 6]).unwrap());
 
         f.remove(2).unwrap();
-        f.remove(f.as_ref()
-            .iter()
-            .position(|&x| x == 5)
-            .unwrap())
-            .unwrap();
+        f.remove(f.as_ref().iter().position(|&x| x == 5).unwrap()).unwrap();
 
         buffer.clear();
         std::fs::File::open("__remove").unwrap().read_to_end(&mut buffer).unwrap();
@@ -211,8 +206,7 @@ mod test {
 
         assert_eq!(f.pop().unwrap(), Some(3));
         assert_eq!(f.pop().unwrap(), Some(2));
-        
+
         let _ = std::fs::remove_file("__pop");
     }
 }
-
