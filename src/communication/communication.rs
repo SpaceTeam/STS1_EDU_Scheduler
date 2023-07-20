@@ -13,7 +13,24 @@ pub trait CommunicationHandle {
 
     /// Sends the supplied packet
     fn send_packet(&mut self, p: CSBIPacket) -> ComResult<()> {
-        self.send(p.serialize())
+        if matches!(&p, CSBIPacket::DATA(_)) {
+            loop {
+                self.send(p.clone().serialize())?;
+                match self.receive_packet(&std::time::Duration::MAX) {
+                    Ok(CSBIPacket::ACK) => break,
+                    Ok(CSBIPacket::NACK) => log::warn!("Received NACK after DATA, resending..."),
+                    Ok(CSBIPacket::STOP) => return Err(CommunicationError::STOPCondition),
+                    Ok(_) => return Err(CommunicationError::PacketInvalidError),
+                    Err(e) => return Err(e)
+                }
+            }
+        }
+        else {
+            self.send(p.serialize())?;
+        }
+        
+        Ok(())
+
     }
 
     /// Blocks until it receives a CSBIPacket
@@ -104,21 +121,7 @@ pub trait CommunicationHandle {
             }
 
             self.send_packet(CSBIPacket::DATA(chunks[i].to_vec()))?;
-
-            match self.receive_packet(timeout)? {
-                CSBIPacket::NACK => {
-                    log::warn!("NACK on packet. Resending...");
-                }
-                CSBIPacket::ACK => {
-                    i += 1;
-                }
-                CSBIPacket::STOP => {
-                    return Err(CommunicationError::STOPCondition);
-                }
-                _ => {
-                    return Err(CommunicationError::PacketInvalidError);
-                }
-            }
+            i += 1;
         }
 
         self.send_packet(CSBIPacket::EOF)?;
@@ -138,7 +141,7 @@ pub enum CommunicationError {
     /// Signals that a multi packet receive or send was interrupted by a STOP condition
     STOPCondition,
     /// Signals that a receive timed out
-    TimeoutError,
+    TimeoutError
 }
 
 impl std::fmt::Display for CommunicationError {
