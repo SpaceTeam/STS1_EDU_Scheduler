@@ -101,7 +101,7 @@ impl UpdatePin {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ProgramStatus {
     pub program_id: u16,
-    pub queue_id: u16,
+    pub timestamp: u32,
     pub exit_code: u8,
 }
 
@@ -109,7 +109,7 @@ pub struct ProgramStatus {
 #[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct ResultId {
     pub program_id: u16,
-    pub queue_id: u16,
+    pub timestamp: u32,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
