@@ -305,7 +305,6 @@ pub fn get_status(
         }
     };
 
-    com.receive_packet(&COM_TIMEOUT_DURATION)?; // throw away ACK
     Ok(())
 }
 
