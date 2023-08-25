@@ -205,13 +205,13 @@ fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
     const MAXIMUM_FILE_SIZE: u64 = 1_000_000;
     let _ = truncate_to_size(&log_path, MAXIMUM_FILE_SIZE);
     let _ = truncate_to_size(&res_path, MAXIMUM_FILE_SIZE);
-    let _ = truncate_to_size("log", MAXIMUM_FILE_SIZE);
+    // let _ = truncate_to_size("log", MAXIMUM_FILE_SIZE);
 
     let _ = Command::new("zip")
         .arg("-0")
         .arg(out_path)
         .arg("--junk-paths")
-        .arg("log")
+    //  .arg("log")
         .arg(res_path)
         .arg(log_path)
         .status();
