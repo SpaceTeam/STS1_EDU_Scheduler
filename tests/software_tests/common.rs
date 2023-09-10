@@ -2,15 +2,15 @@ use std::sync::{Arc, Mutex};
 
 use STS1_EDU_Scheduler::{
     command::{ExecutionContext, SyncExecutionContext},
-    communication::{CSBIPacket, ComResult, CommunicationHandle},
+    communication::{CEPPacket, ComResult, CommunicationHandle},
 };
 
 pub enum ComEvent {
     /// EDU shall want to receive the given packet
-    COBC(CSBIPacket),
+    COBC(CEPPacket),
     COBC_INVALID(Vec<u8>),
     /// EDU shall send the given packet
-    EDU(CSBIPacket),
+    EDU(CEPPacket),
     /// Makes the thread sleep for the given duration. Can be used to wait for execution to complete
     SLEEP(std::time::Duration),
     /// Allow the EDU to send any packet
@@ -31,7 +31,14 @@ impl CommunicationHandle for TestCom {
     fn send(&mut self, bytes: Vec<u8>) -> ComResult<()> {
         match &self.expected_events[self.index] {
             ComEvent::EDU(p) => {
-                assert_eq!(bytes, p.clone().serialize(), "Wrong packet {}", self.index);
+                assert_eq!(
+                    bytes,
+                    p.clone().serialize(),
+                    "Wrong packet #{}, EDU: {:?}, should be {:?}",
+                    self.index,
+                    bytes,
+                    p
+                );
                 self.index += 1;
                 Ok(())
             }
@@ -128,12 +135,7 @@ pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, SyncEx
     file_per_thread_logger::allow_uninitialized();
     file_per_thread_logger::initialize("tests/tmp/log-");
     let com = TestCom::new(packets);
-    let ec = ExecutionContext::new(
-        format!("tests/tmp/{}_s", unique).into(),
-        format!("tests/tmp/{}_r", unique).into(),
-        12,
-    )
-    .unwrap();
+    let ec = ExecutionContext::new(format!("tests/tmp/{unique}"), 12).unwrap();
     let exec = Arc::new(Mutex::new(ec));
 
     (com, exec)
@@ -143,4 +145,33 @@ pub fn cleanup(unique: &str) {
     let _ = std::fs::remove_dir_all(format!("./archives/{}", unique));
     let _ = std::fs::remove_file(format!("tests/tmp/{}_s", unique));
     let _ = std::fs::remove_file(format!("tests/tmp/{}_r", unique));
+}
+
+pub fn store_archive(program_id: u16) -> Vec<u8> {
+    let mut vec = vec![1u8];
+    vec.extend(program_id.to_le_bytes());
+    vec
+}
+
+pub fn execute_program(program_id: u16, timestamp: u32, timeout: u16) -> Vec<u8> {
+    let mut vec = vec![2u8];
+    vec.extend(program_id.to_le_bytes());
+    vec.extend(timestamp.to_le_bytes());
+    vec.extend(timeout.to_le_bytes());
+    vec
+}
+
+pub fn stop_program() -> Vec<u8> {
+    vec![3u8]
+}
+
+pub fn get_status() -> Vec<u8> {
+    vec![4u8]
+}
+
+pub fn return_result(program_id: u16, timestamp: u32) -> Vec<u8> {
+    let mut vec = vec![5u8];
+    vec.extend(program_id.to_le_bytes());
+    vec.extend(timestamp.to_le_bytes());
+    vec
 }

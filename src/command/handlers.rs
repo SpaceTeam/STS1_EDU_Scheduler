@@ -1,6 +1,6 @@
 use subprocess::Popen;
 
-use crate::communication::CSBIPacket;
+use crate::communication::CEPPacket;
 use crate::communication::CommunicationHandle;
 use std::fs::File;
 use std::io::prelude::*;
@@ -9,6 +9,7 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
+use super::Event;
 use super::ProgramStatus;
 use super::ResultId;
 use super::{CommandError, CommandResult, SyncExecutionContext};
@@ -22,7 +23,7 @@ pub fn store_archive(
     _exec: &mut SyncExecutionContext,
 ) -> CommandResult {
     check_length(&data, 3)?;
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
 
     let id = u16::from_le_bytes([data[1], data[2]]).to_string();
     log::info!("Storing Archive {}", id);
@@ -30,7 +31,7 @@ pub fn store_archive(
     let bytes = com.receive_multi_packet(&COM_TIMEOUT_DURATION, || false)?; // !! TODO !!
     unpack_archive(id, bytes)?;
 
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
     Ok(())
 }
 
@@ -73,23 +74,23 @@ fn unpack_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
 
 /// Executes a students program and starts a watchdog for it. The watchdog also creates entries in the
 /// status and result queue found in `context`. The result, including logs, is packed into
-/// `./data/{program_id}_{queue_id}`
+/// `./data/{program_id}_{timestamp}`
 pub fn execute_program(
     data: Vec<u8>,
     com: &mut impl CommunicationHandle,
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
-    check_length(&data, 7)?;
-    com.send_packet(CSBIPacket::ACK)?;
+    check_length(&data, 9)?;
+    com.send_packet(CEPPacket::ACK)?;
 
     let program_id = u16::from_le_bytes([data[1], data[2]]);
-    let queue_id = u16::from_le_bytes([data[3], data[4]]);
-    let timeout = Duration::from_secs(u16::from_le_bytes([data[5], data[6]]).into());
-    log::info!("Executing Program {}:{} for {}s", program_id, queue_id, timeout.as_secs());
+    let timestamp = u32::from_le_bytes([data[3], data[4], data[5], data[6]]);
+    let timeout = Duration::from_secs(u16::from_le_bytes([data[7], data[8]]).into());
+    log::info!("Executing Program {}:{} for {}s", program_id, timestamp, timeout.as_secs());
 
     terminate_student_program(exec).expect("to terminate a running program");
 
-    let student_process = create_student_process(program_id, queue_id)?;
+    let student_process = create_student_process(program_id, timestamp)?;
 
     // WATCHDOG THREAD
     let mut wd_context = exec.clone();
@@ -99,13 +100,14 @@ pub fn execute_program(
             Err(()) => 255,
         };
 
-        log::info!("Program {}:{} finished with {}", program_id, queue_id, exit_code);
-        let rid = ResultId { program_id, queue_id };
+        log::info!("Program {}:{} finished with {}", program_id, timestamp, exit_code);
+        let sid = ProgramStatus { program_id, timestamp, exit_code };
+        let rid = ResultId { program_id, timestamp };
         build_result_archive(rid).unwrap(); // create the zip file with result and log
 
         let mut context = wd_context.lock().unwrap();
-        context.status_queue.push(ProgramStatus { program_id, queue_id, exit_code }).unwrap();
-        context.result_queue.push(rid).unwrap();
+        context.event_vec.push(Event::Status(sid)).unwrap();
+        context.event_vec.push(Event::Result(rid)).unwrap();
         context.running_flag = false;
         context.update_pin.set_high();
         drop(context);
@@ -117,20 +119,20 @@ pub fn execute_program(
     l_context.running_flag = true;
     drop(l_context);
 
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
     Ok(())
 }
 
 /// This function creates and executes a student process. Its stdout/stderr is written into
-/// `./data/[program_id]_[queue_id].log`
-fn create_student_process(program_id: u16, queue_id: u16) -> Result<Popen, CommandError> {
+/// `./data/[program_id]_[timestamp].log`
+fn create_student_process(program_id: u16, timestamp: u32) -> Result<Popen, CommandError> {
     let program_path = format!("./archives/{}/main.py", program_id);
     if !Path::new(&program_path).exists() {
         return Err(CommandError::ProtocolViolation("Could not find matching program".into()));
     }
 
     // TODO run the program from a student user (setuid)
-    let output_file = File::create(format!("./data/{}_{}.log", program_id, queue_id))?; // will contain the stdout and stderr of the execute program
+    let output_file = File::create(format!("./data/{}_{}.log", program_id, timestamp))?; // will contain the stdout and stderr of the execute program
     let config = subprocess::PopenConfig {
         cwd: Some(format!("./archives/{}", program_id).into()),
         detached: false, // do not spawn as separate process
@@ -139,7 +141,7 @@ fn create_student_process(program_id: u16, queue_id: u16) -> Result<Popen, Comma
         ..Default::default()
     };
 
-    let process = Popen::create(&["python", "main.py", &queue_id.to_string()], config)?;
+    let process = Popen::create(&["python", "main.py", &timestamp.to_string()], config)?;
     Ok(process)
 }
 
@@ -198,9 +200,9 @@ fn run_until_timeout(
 /// the programs stdout/stderr and the schedulers log file. If any of the files is missing, the archive
 /// is created without them.
 fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
-    let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
-    let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
-    let out_path = format!("./data/{}_{}.zip", res.program_id, res.queue_id);
+    let res_path = format!("./archives/{}/results/{}", res.program_id, res.timestamp);
+    let log_path = format!("./data/{}_{}.log", res.program_id, res.timestamp);
+    let out_path = format!("./data/{}_{}.zip", res.program_id, res.timestamp);
 
     const MAXIMUM_FILE_SIZE: u64 = 1_000_000;
     let _ = truncate_to_size(&log_path, MAXIMUM_FILE_SIZE);
@@ -238,11 +240,11 @@ pub fn stop_program(
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
     check_length(&data, 1)?;
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
 
     terminate_student_program(exec).expect("to terminate student program");
 
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
     Ok(())
 }
 
@@ -276,35 +278,31 @@ pub fn get_status(
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
     check_length(&data, 1)?;
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
 
-    let mut con = exec.lock().unwrap();
+    let mut l_exec = exec.lock().unwrap();
+    if !l_exec.has_data_ready() {
+        com.send_packet(CEPPacket::DATA(vec![0]))?;
+        return Ok(());
+    }
 
-    let s_empty = con.status_queue.is_empty()?;
-    let r_empty = con.result_queue.is_empty()?;
+    if let Some(index) =
+        l_exec.event_vec.as_ref().iter().position(|x| matches!(x, Event::Status(_)))
+    {
+        let event = l_exec.event_vec[index];
+        com.send_packet(CEPPacket::DATA(event.to_bytes()))?;
+        l_exec.event_vec.remove(index)?;
+    } else {
+        let event = *l_exec.event_vec.as_ref().last().unwrap(); // Safe, because we know it is not empty
+        com.send_packet(CEPPacket::DATA(event.to_bytes()))?;
 
-    match (s_empty, r_empty) {
-        (false, _) => {
-            log::info!("Sending program exit code");
-            let mut v = vec![1];
-            v.extend(con.status_queue.raw_pop()?);
-            if !con.has_data_ready()? {
-                con.update_pin.set_low();
-            }
-            com.send_packet(CSBIPacket::DATA(v))?;
+        if !matches!(event, Event::Result(_)) {
+            // Results are removed when deleted
+            l_exec.event_vec.pop()?;
         }
-        (true, false) => {
-            log::info!("Sending result-ready");
-            let mut v = vec![2];
-            v.extend(con.result_queue.raw_peek()?);
-            com.send_packet(CSBIPacket::DATA(v))?;
-        }
-        _ => {
-            log::info!("Nothing to report");
-            com.send_packet(CSBIPacket::DATA(vec![0]))?;
-        }
-    };
+    }
 
+    l_exec.check_update_pin();
     Ok(())
 }
 
@@ -315,25 +313,34 @@ pub fn return_result(
     com: &mut impl CommunicationHandle,
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
-    check_length(&data, 1)?;
-    com.send_packet(CSBIPacket::ACK)?;
+    check_length(&data, 7)?;
+    com.send_packet(CEPPacket::ACK)?;
 
-    let mut con = exec.lock().unwrap();
-    if con.result_queue.is_empty()? {
+    let program_id = u16::from_le_bytes([data[1], data[2]]);
+    let timestamp = u32::from_le_bytes([data[3], data[4], data[5], data[6]]);
+    let result_path = format!("./data/{}_{}.zip", program_id, timestamp);
+
+    if !std::path::Path::new(&result_path).exists() {
         return Err(CommandError::ProtocolViolation(
-            "Received return_result, but not result ready".into(),
+            format!("Result {}:{} does not exist", program_id, timestamp).into(),
         ));
     }
-    let res = con.result_queue.peek()?;
-    drop(con);
 
-    let bytes = std::fs::read(format!("./data/{}_{}.zip", res.program_id, res.queue_id))?;
-    log::info!("Returning result for {}:{}", res.program_id, res.queue_id);
+    let bytes = std::fs::read(result_path)?;
+    log::info!("Returning result for {}:{}", program_id, timestamp);
     com.send_multi_packet(bytes, &COM_TIMEOUT_DURATION)?;
 
     let response = com.receive_packet(&COM_TIMEOUT_DURATION)?;
-    if response == CSBIPacket::ACK {
-        delete_result(exec)?;
+    if response == CEPPacket::ACK {
+        let result_id = ResultId { program_id, timestamp };
+        delete_result(result_id)?;
+
+        let mut l_exec = exec.lock().unwrap();
+        let event_index =
+            l_exec.event_vec.as_ref().iter().position(|x| x == &Event::Result(result_id)).unwrap();
+        l_exec.event_vec.remove(event_index)?;
+        l_exec.check_update_pin();
+        drop(l_exec);
     } else {
         log::error!("COBC did not acknowledge result");
     }
@@ -343,17 +350,10 @@ pub fn return_result(
 
 /// Deletes the result archive corresponding to the next element in the result queue and removes
 /// that element from the queue. The update pin is updated accordingly
-fn delete_result(context: &mut SyncExecutionContext) -> CommandResult {
-    let mut con = context.lock().unwrap();
-    let res = con.result_queue.pop()?;
-    if !con.has_data_ready()? {
-        con.update_pin.set_low();
-    }
-    drop(con); // Unlock Mutex
-
-    let res_path = format!("./archives/{}/results/{}", res.program_id, res.queue_id);
-    let log_path = format!("./data/{}_{}.log", res.program_id, res.queue_id);
-    let out_path = format!("./data/{}_{}.zip", res.program_id, res.queue_id);
+fn delete_result(res: ResultId) -> CommandResult {
+    let res_path = format!("./archives/{}/results/{}", res.program_id, res.timestamp);
+    let log_path = format!("./data/{}_{}.log", res.program_id, res.timestamp);
+    let out_path = format!("./data/{}_{}.zip", res.program_id, res.timestamp);
     let _ = std::fs::remove_file(res_path);
     let _ = std::fs::remove_file(log_path);
     let _ = std::fs::remove_file(out_path);
@@ -368,12 +368,12 @@ pub fn update_time(
     _exec: &mut SyncExecutionContext,
 ) -> CommandResult {
     check_length(&data, 5)?;
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
 
     let time = i32::from_le_bytes([data[1], data[2], data[3], data[4]]);
     set_system_time(time)?;
 
-    com.send_packet(CSBIPacket::ACK)?;
+    com.send_packet(CEPPacket::ACK)?;
     Ok(())
 }
 

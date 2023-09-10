@@ -7,6 +7,7 @@ log
 archives/
 data/
 tests/tmp/
+lib/**/target
 
 # Added by cargo
 

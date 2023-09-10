@@ -1,4 +1,4 @@
-use crate::communication::{CSBIPacket, CommunicationHandle};
+use crate::communication::{CEPPacket, CommunicationHandle};
 use std::time::Duration;
 
 mod handlers;
@@ -23,7 +23,7 @@ pub fn handle_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecuti
         }
         Err(CommandError::ProtocolViolation(e)) => {
             log::error!("Protocol Violation: {e}");
-            com.send_packet(CSBIPacket::NACK).unwrap();
+            com.send_packet(CEPPacket::NACK).unwrap();
         }
         Err(CommandError::External(e)) => {
             log::error!("External error: {e}");
@@ -37,7 +37,7 @@ pub fn process_command(
 ) -> CommandResult {
     let packet = com.receive_packet(&Duration::MAX)?;
     let data = match packet {
-        CSBIPacket::DATA(data) => data,
+        CEPPacket::DATA(data) => data,
         _ => {
             return Err(CommandError::NonRecoverable(
                 format!("Received {:?} as command start, expected DATA", packet).into(),
