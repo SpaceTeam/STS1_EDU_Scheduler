@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::{sync::{Arc, Mutex}, process::{Stdio, Child}};
 
 use STS1_EDU_Scheduler::{
     command::{ExecutionContext, SyncExecutionContext},
@@ -175,3 +175,35 @@ pub fn return_result(program_id: u16, timestamp: u32) -> Vec<u8> {
     vec.extend(timestamp.to_le_bytes());
     vec
 }
+
+fn get_config_str(unique: &str) -> String {
+    format!("
+    uart = \"/tmp/ttySTS1-{}\"
+    baudrate = 921600
+    heartbeat_pin = 34
+    update_pin = 35
+    heartbeat_freq = 10
+    log_path = \"log\"
+    ", unique)
+}
+
+pub fn start_scheduler(unique: &str) -> Result<(Child, Child), std::io::Error>{
+    let test_dir = format!("./tests/tmp/{}", unique);
+    let scheduler_bin = std::fs::canonicalize("./target/release/STS1_EDU_Scheduler")?;
+    std::fs::create_dir_all(&test_dir)?;
+    std::fs::write(format!("{}/config.toml", &test_dir), get_config_str(unique))?;
+
+    let serial_port = std::process::Command::new("socat")
+        .arg("-d")
+        .arg(format!("pty,raw,echo=0,link=/tmp/ttySTS1-{},b921600", unique))
+        .arg("stdin")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()?;
+
+    let scheduler = std::process::Command::new(scheduler_bin)
+        .current_dir(test_dir)
+        .spawn().unwrap();
+
+    Ok((scheduler, serial_port))
+} 

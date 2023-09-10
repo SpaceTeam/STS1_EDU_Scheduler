@@ -18,3 +18,6 @@ mod get_status;
 
 #[path = "software_tests/return_result.rs"]
 mod return_result;
+
+#[path = "software_tests/simulation.rs"]
+mod simulation;
