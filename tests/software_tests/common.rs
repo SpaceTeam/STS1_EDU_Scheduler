@@ -1,4 +1,4 @@
-use std::{sync::{Arc, Mutex}, process::{Stdio, Child}};
+use std::{sync::{Arc, Mutex}, process::{Stdio, Child}, io::{Write, Read}};
 
 use STS1_EDU_Scheduler::{
     command::{ExecutionContext, SyncExecutionContext},
@@ -190,16 +190,17 @@ fn get_config_str(unique: &str) -> String {
 pub fn start_scheduler(unique: &str) -> Result<(Child, Child), std::io::Error>{
     let test_dir = format!("./tests/tmp/{}", unique);
     let scheduler_bin = std::fs::canonicalize("./target/release/STS1_EDU_Scheduler")?;
+    std::fs::remove_dir_all(&test_dir)?;
     std::fs::create_dir_all(&test_dir)?;
     std::fs::write(format!("{}/config.toml", &test_dir), get_config_str(unique))?;
 
     let serial_port = std::process::Command::new("socat")
-        .arg("-d")
-        .arg(format!("pty,raw,echo=0,link=/tmp/ttySTS1-{},b921600", unique))
-        .arg("stdin")
+        .arg("stdio")
+        .arg(format!("pty,raw,echo=0,link=/tmp/ttySTS1-{},b921600,wait-slave", unique))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;
+    std::thread::sleep(std::time::Duration::from_millis(100));
 
     let scheduler = std::process::Command::new(scheduler_bin)
         .current_dir(test_dir)
@@ -207,3 +208,15 @@ pub fn start_scheduler(unique: &str) -> Result<(Child, Child), std::io::Error>{
 
     Ok((scheduler, serial_port))
 } 
+
+pub fn receive_ack(reader: &mut impl std::io::Read) -> Result<(), std::io::Error> {
+    let mut buffer = [0; 1];
+    reader.read_exact(&mut buffer).unwrap();
+    
+    if buffer[0] == CEPPacket::ACK.serialize()[0] {
+        Ok(())
+    }
+    else {
+        Err(std::io::Error::new(std::io::ErrorKind::Other, format!("received {:#x} instead of ACK", buffer[0])))
+    }
+}
