@@ -9,7 +9,7 @@ coverage: build_with_cov
 	firefox ./target/debug/coverage/index.html&
 
 sw_test:
-	cargo test --release --features mock
+	RUST_LOG=info cargo test --release --features mock
 
 packs:
 	cargo test build_pack --features rpi

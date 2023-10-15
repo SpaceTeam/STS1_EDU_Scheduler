@@ -190,7 +190,7 @@ fn get_config_str(unique: &str) -> String {
 pub fn start_scheduler(unique: &str) -> Result<(Child, Child), std::io::Error>{
     let test_dir = format!("./tests/tmp/{}", unique);
     let scheduler_bin = std::fs::canonicalize("./target/release/STS1_EDU_Scheduler")?;
-    std::fs::remove_dir_all(&test_dir)?;
+    let _ = std::fs::remove_dir_all(&test_dir);
     std::fs::create_dir_all(&test_dir)?;
     std::fs::write(format!("{}/config.toml", &test_dir), get_config_str(unique))?;
 
