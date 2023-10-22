@@ -1,7 +1,7 @@
-use STS1_EDU_Scheduler::command::{self};
-use STS1_EDU_Scheduler::communication::CEPPacket::*;
 use crate::software_tests::common;
 use crate::software_tests::common::ComEvent::*;
+use STS1_EDU_Scheduler::command::{self};
+use STS1_EDU_Scheduler::communication::CEPPacket::*;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 

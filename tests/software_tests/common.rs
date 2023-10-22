@@ -1,4 +1,8 @@
-use std::{sync::{Arc, Mutex}, process::{Stdio, Child}, io::{Write, Read}};
+use std::{
+    io::{Read, Write},
+    process::{Child, Stdio},
+    sync::{Arc, Mutex},
+};
 
 use STS1_EDU_Scheduler::{
     command::{ExecutionContext, SyncExecutionContext},
