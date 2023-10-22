@@ -43,8 +43,13 @@ pub fn terminate_student_program(exec: &mut SyncExecutionContext) -> CommandResu
 
     for _ in 0..20 {
         std::thread::sleep(Duration::from_millis(100)); // Sensible amount?
-        let con = exec.lock().unwrap();
+        let mut con = exec.lock().unwrap();
         if con.thread_handle.as_ref().unwrap().is_finished() {
+            con.thread_handle
+                .take()
+                .unwrap()
+                .join()
+                .or(Err(CommandError::NonRecoverable("Supervisor thread panicked".into())))?;
             return Ok(());
         }
     }

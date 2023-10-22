@@ -46,7 +46,7 @@ impl ExecutionContext {
     }
 
     pub fn is_student_program_running(&self) -> bool {
-        self.running_flag
+        self.thread_handle.is_some()
     }
 
     pub fn has_data_ready(&self) -> bool {
