@@ -24,6 +24,9 @@ fn main() -> ! {
     let config: Configuration =
         toml::from_str(&std::fs::read_to_string("./config.toml").unwrap()).unwrap();
 
+    create_directory_if_not_exists("archives").unwrap();
+    create_directory_if_not_exists("data").unwrap();
+
     // write all logging into a file
     let _ = sl::WriteLogger::init(
         sl::LevelFilter::Info,
@@ -60,5 +63,14 @@ fn heartbeat_loop(heartbeat_pin: u8, freq: u64) -> ! {
         thread::sleep(toogle_time);
         pin.set_low();
         thread::sleep(toogle_time);
+    }
+}
+
+/// Tries to create a directory, but only returns an error if the path does not already exists
+fn create_directory_if_not_exists(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+    match std::fs::create_dir(path) {
+        Ok(_) => Ok(()), 
+        Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(e) => Err(e)
     }
 }
