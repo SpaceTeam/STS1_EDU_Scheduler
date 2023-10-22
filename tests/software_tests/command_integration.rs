@@ -3,8 +3,8 @@ use std::io::{Read, Write};
 use STS1_EDU_Scheduler::command::{self, CommandError};
 use STS1_EDU_Scheduler::communication::{CEPPacket::*, CommunicationError};
 
-mod common;
-use common::ComEvent::*;
+use crate::software_tests::common;
+use crate::software_tests::common::ComEvent::*;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
