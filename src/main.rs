@@ -56,7 +56,7 @@ fn heartbeat_loop(heartbeat_pin: u8, freq: u64) -> ! {
     if cfg!(feature = "mock") {
         loop {}
     }
-    
+
     let toogle_time = time::Duration::from_millis((1000 / freq / 2) as u64);
 
     let gpio = Gpio::new().unwrap();
@@ -73,8 +73,8 @@ fn heartbeat_loop(heartbeat_pin: u8, freq: u64) -> ! {
 /// Tries to create a directory, but only returns an error if the path does not already exists
 fn create_directory_if_not_exists(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
     match std::fs::create_dir(path) {
-        Ok(_) => Ok(()), 
+        Ok(_) => Ok(()),
         Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
-        Err(e) => Err(e)
+        Err(e) => Err(e),
     }
 }

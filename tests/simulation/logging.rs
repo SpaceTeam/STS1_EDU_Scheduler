@@ -22,7 +22,7 @@ fn logfile_is_cleared_after_sent() -> std::io::Result<()> {
     let _ = simulate_return_result(&mut cobc_in, &mut cobc_out, 1, 0)?;
     cobc_out.write_all(&CEPPacket::ACK.serialize())?;
     std::thread::sleep(std::time::Duration::from_millis(100));
-    
+
     scheduler.kill().unwrap();
 
     let log_metadata = std::fs::metadata("./tests/tmp/log_is_cleared_after_sent/log")?;

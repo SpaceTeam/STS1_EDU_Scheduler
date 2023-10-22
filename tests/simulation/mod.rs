@@ -121,7 +121,10 @@ pub fn read_data_packet(input: &mut impl std::io::Read, data: &mut Vec<u8>) -> s
 }
 
 /// Reads a multi packet round without checking the CRC and returns the concatenated contents
-pub fn read_multi_data_packets(input: &mut impl std::io::Read, output: &mut impl std::io::Write) ->  std::io::Result<Vec<u8>> {
+pub fn read_multi_data_packets(
+    input: &mut impl std::io::Read,
+    output: &mut impl std::io::Write,
+) -> std::io::Result<Vec<u8>> {
     let mut eof_byte = [0; 1];
     let mut data = Vec::new();
     loop {
@@ -133,7 +136,7 @@ pub fn read_multi_data_packets(input: &mut impl std::io::Read, output: &mut impl
             break;
         }
     }
-    
+
     output.write_all(&CEPPacket::ACK.serialize())?;
     Ok(data)
 }

@@ -1,12 +1,26 @@
 use crate::communication::{CEPPacket, CommunicationHandle};
 use std::time::Duration;
 
-mod handlers;
-pub use handlers::*;
+mod common;
+pub use common::*;
 mod execution_context;
 pub use execution_context::*;
 mod error;
 pub use error::CommandError;
+
+mod execute_program;
+mod get_status;
+mod return_result;
+mod stop_program;
+mod store_archive;
+mod update_time;
+
+use execute_program::execute_program;
+use get_status::get_status;
+use return_result::return_result;
+use stop_program::stop_program;
+use store_archive::store_archive;
+use update_time::update_time;
 
 type CommandResult = Result<(), CommandError>;
 
