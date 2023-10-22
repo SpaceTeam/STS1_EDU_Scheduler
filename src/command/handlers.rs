@@ -205,9 +205,11 @@ fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
     let out_path = format!("./data/{}_{}.zip", res.program_id, res.timestamp);
 
     const MAXIMUM_FILE_SIZE: u64 = 1_000_000;
-    let _ = truncate_to_size(&log_path, MAXIMUM_FILE_SIZE);
-    let _ = truncate_to_size(&res_path, MAXIMUM_FILE_SIZE);
-    let _ = truncate_to_size("log", MAXIMUM_FILE_SIZE);
+    for path in [&res_path, &log_path, &out_path, &"log".into()] {
+        if let Ok(true) = truncate_to_size(path, MAXIMUM_FILE_SIZE) {
+            log::warn!("Truncating {} from {} bytes", path, MAXIMUM_FILE_SIZE);
+        }
+    }
 
     let _ = Command::new("zip")
         .arg("-0")
@@ -221,16 +223,19 @@ fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-/// Truncates the file at `path` to the given size
-fn truncate_to_size(path: &str, n_bytes: u64) -> Result<(), std::io::Error> {
+/// Truncates the file at `path` to the given size. Returns wether it actually had to truncate.
+fn truncate_to_size(path: &str, n_bytes: u64) -> Result<bool, std::io::Error> {
+    log::info!("Truncating {:?}", &path);
     let file = std::fs::File::options().write(true).open(path)?;
     let size = file.metadata()?.len();
     if size > n_bytes {
-        log::warn!("Truncating {} from {} bytes", path, size);
         file.set_len(n_bytes)?;
         file.sync_all()?;
+        Ok(true)
     }
-    Ok(())
+    else {
+        Ok(false)
+    }
 }
 
 /// Stops the currently running student program
@@ -357,6 +362,7 @@ fn delete_result(res: ResultId) -> CommandResult {
     let _ = std::fs::remove_file(res_path);
     let _ = std::fs::remove_file(log_path);
     let _ = std::fs::remove_file(out_path);
+    let _ = truncate_to_size("log", 0);
 
     Ok(())
 }

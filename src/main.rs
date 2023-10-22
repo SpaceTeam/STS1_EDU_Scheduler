@@ -31,7 +31,7 @@ fn main() -> ! {
     let _ = sl::WriteLogger::init(
         sl::LevelFilter::Info,
         sl::Config::default(),
-        std::fs::File::create(&config.log_path).unwrap(),
+        std::fs::OpenOptions::new().create(true).append(true).open("log").unwrap(),
     );
 
     log::info!("Scheduler started");
