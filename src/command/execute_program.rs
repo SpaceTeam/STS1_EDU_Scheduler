@@ -34,10 +34,7 @@ pub fn execute_program(
     // WATCHDOG THREAD
     let mut wd_context = exec.clone();
     let wd_handle = std::thread::spawn(move || {
-        let exit_code = match supervise_process(student_process, timeout, &mut wd_context) {
-            Ok(code) => code,
-            Err(()) => 255,
-        };
+        let exit_code = supervise_process(student_process, timeout, &mut wd_context).unwrap_or(255);
 
         log::info!("Program {}:{} finished with {}", program_id, timestamp, exit_code);
         let sid = ProgramStatus { program_id, timestamp, exit_code };
