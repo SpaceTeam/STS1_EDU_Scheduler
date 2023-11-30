@@ -2,12 +2,10 @@ mod command_execution;
 mod logging;
 
 use std::{
-    fmt::format,
     io::{Read, Write},
     process::{Child, Stdio},
 };
 
-use crate::software_tests::common::*;
 use STS1_EDU_Scheduler::communication::CEPPacket;
 
 fn get_config_str(unique: &str) -> String {
@@ -139,4 +137,33 @@ pub fn read_multi_data_packets(
 
     output.write_all(&CEPPacket::ACK.serialize())?;
     Ok(data)
+}
+
+pub fn store_archive(program_id: u16) -> Vec<u8> {
+    let mut vec = vec![1u8];
+    vec.extend(program_id.to_le_bytes());
+    vec
+}
+
+pub fn execute_program(program_id: u16, timestamp: u32, timeout: u16) -> Vec<u8> {
+    let mut vec = vec![2u8];
+    vec.extend(program_id.to_le_bytes());
+    vec.extend(timestamp.to_le_bytes());
+    vec.extend(timeout.to_le_bytes());
+    vec
+}
+
+pub fn stop_program() -> Vec<u8> {
+    vec![3u8]
+}
+
+pub fn get_status() -> Vec<u8> {
+    vec![4u8]
+}
+
+pub fn return_result(program_id: u16, timestamp: u32) -> Vec<u8> {
+    let mut vec = vec![5u8];
+    vec.extend(program_id.to_le_bytes());
+    vec.extend(timestamp.to_le_bytes());
+    vec
 }

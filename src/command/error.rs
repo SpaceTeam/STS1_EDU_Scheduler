@@ -26,9 +26,10 @@ impl From<CommunicationError> for CommandError {
         match e {
             CommunicationError::PacketInvalidError => CommandError::External(Box::new(e)),
             CommunicationError::CRCError => CommandError::ProtocolViolation(Box::new(e)),
-            CommunicationError::InterfaceError => CommandError::NonRecoverable(Box::new(e)),
+            CommunicationError::Io(_) => CommandError::NonRecoverable(Box::new(e)),
             CommunicationError::STOPCondition => CommandError::External(Box::new(e)),
-            CommunicationError::TimeoutError => todo!("Timeout not yet specified"),
+            CommunicationError::NotAcknowledged => CommandError::ProtocolViolation(Box::new(e)),
+            CommunicationError::TimedOut => todo!("Timeout not yet specified"),
         }
     }
 }

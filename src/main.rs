@@ -1,9 +1,11 @@
+#![allow(non_snake_case)]
 use core::time;
 use rppal::gpio::Gpio;
 use std::{
-    sync::{Arc, Mutex},
     thread,
+    time::Duration,
 };
+use STS1_EDU_Scheduler::communication::CommunicationHandle;
 
 use simplelog as sl;
 
@@ -37,11 +39,11 @@ fn main() -> ! {
     log::info!("Scheduler started");
 
     // construct a wrapper for UART communication
-    let mut com = communication::UARTHandle::new(&config.uart, config.baudrate);
+    let mut com = serialport::new(&config.uart, config.baudrate).open().unwrap();
+    com.set_timeout(&Duration::from_secs(60));
 
     // construct a wrapper for resources that are shared between different commands
-    let ec = command::ExecutionContext::new("events".to_string(), config.update_pin).unwrap();
-    let mut exec = Arc::new(Mutex::new(ec));
+    let mut exec = command::ExecutionContext::new("events".to_string(), config.update_pin).unwrap();
 
     // start a thread that will update the heartbeat pin
     thread::spawn(move || heartbeat_loop(config.heartbeat_pin, config.heartbeat_freq));

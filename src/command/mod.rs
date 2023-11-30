@@ -1,5 +1,4 @@
 use crate::communication::{CEPPacket, CommunicationHandle};
-use std::time::Duration;
 
 mod common;
 pub use common::*;
@@ -33,11 +32,10 @@ pub fn handle_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecuti
 
         Err(CommandError::NonRecoverable(e)) => {
             log::error!("Non-Recoverable error: {e}");
-            panic!("Aborting now");
+            panic!("Aborting now {e:?}");
         }
         Err(CommandError::ProtocolViolation(e)) => {
             log::error!("Protocol Violation: {e}");
-            com.send_packet(CEPPacket::NACK).unwrap();
         }
         Err(CommandError::External(e)) => {
             log::error!("External error: {e}");
@@ -49,7 +47,7 @@ pub fn process_command(
     com: &mut impl CommunicationHandle,
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
-    let packet = com.receive_packet(&Duration::MAX)?;
+    let packet = com.receive_packet()?;
     let data = match packet {
         CEPPacket::DATA(data) => data,
         _ => {

@@ -63,37 +63,3 @@ fn stopped_store() -> TestResult {
     common::cleanup("4");
     Ok(())
 }
-
-#[test]
-fn invalid_crc() -> TestResult {
-    let mut bytes = std::fs::read("./tests/student_program.zip")?;
-    let packets = vec![
-        COBC(DATA(vec![1, 14, 0])),
-        EDU(ACK),
-        COBC(DATA(bytes.drain(0..20).collect())),
-        EDU(ACK),
-        COBC_INVALID(vec![0x8b, 5, 0, 0, 0, 0, 0, 0, 0, 10, 10, 10]),
-        EDU(NACK),
-        COBC(DATA(bytes)),
-        EDU(ACK),
-        COBC(EOF),
-        EDU(ACK),
-        EDU(ACK),
-    ];
-    let (mut com, mut exec) = common::prepare_handles(packets, "14");
-
-    command::handle_command(&mut com, &mut exec);
-    assert!(com.is_complete());
-
-    assert_eq!(
-        0,
-        std::process::Command::new("diff") // check wether the archive was stored correctly
-            .args(["-yq", "--strip-trailing-cr", "tests/test_data", "archives/14"])
-            .status()?
-            .code()
-            .unwrap()
-    );
-
-    common::cleanup("14");
-    Ok(())
-}

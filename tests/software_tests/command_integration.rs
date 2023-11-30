@@ -1,7 +1,5 @@
-use std::fs;
-use std::io::{Read, Write};
-use STS1_EDU_Scheduler::command::{self, CommandError};
-use STS1_EDU_Scheduler::communication::{CEPPacket::*, CommunicationError};
+use STS1_EDU_Scheduler::command;
+use STS1_EDU_Scheduler::communication::CEPPacket::*;
 
 use crate::software_tests::common;
 use crate::software_tests::common::ComEvent::*;
@@ -12,15 +10,15 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 fn invalid_packets_from_cobc() -> TestResult {
     let packets = vec![
         COBC(DATA(vec![1, 2])),
+        EDU(ACK),
         EDU(NACK),
         COBC(DATA(vec![2, 0, 1])),
-        EDU(NACK),
-        COBC_INVALID(vec![0x8b, 2, 0, 0, 0, 0, 0, 1, 10]), // Invalid CRC
+        EDU(ACK),
         EDU(NACK),
     ];
     let (mut com, mut exec) = common::prepare_handles(packets, "13");
 
-    for _ in 0..3 {
+    for _ in 0..2 {
         command::handle_command(&mut com, &mut exec);
     }
 

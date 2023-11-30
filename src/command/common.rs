@@ -1,13 +1,12 @@
 use std::time::Duration;
-
+use crate::communication::{CommunicationHandle, CEPPacket};
 use super::{CommandError, CommandResult, SyncExecutionContext};
 
-pub const COM_TIMEOUT_DURATION: std::time::Duration = std::time::Duration::new(2, 0);
-
-pub fn check_length(vec: &Vec<u8>, n: usize) -> Result<(), CommandError> {
+pub fn check_length(com: &mut impl CommunicationHandle, vec: &Vec<u8>, n: usize) -> Result<(), CommandError> {
     let actual_len = vec.len();
     if actual_len != n {
         log::error!("Command came with {actual_len} bytes, should have {n}");
+        com.send_packet(&CEPPacket::NACK)?;
         Err(CommandError::ProtocolViolation(
             format!("Received command with {actual_len} bytes, expected {n}").into(),
         ))

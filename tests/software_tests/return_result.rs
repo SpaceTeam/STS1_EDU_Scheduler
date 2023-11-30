@@ -25,8 +25,11 @@ fn returns_result_correctly() -> TestResult {
         COBC(ACK),
         COBC(DATA(return_result(7, 3))),
         EDU(ACK),
-        ACTION(Box::new(|bytes| {
-            std::fs::File::create("tests/tmp/7.zip").unwrap().write(&bytes).unwrap();
+        ACTION(Box::new(|packet| {
+            std::fs::File::create("tests/tmp/7.zip")
+                .unwrap()
+                .write(&packet.clone().serialize())
+                .unwrap();
         })),
         COBC(ACK),
         EDU(EOF),

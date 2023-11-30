@@ -14,6 +14,9 @@ crc = "3.0.0"
 rppal = "^0.13.1"
 toml = "0.7.6"
 serde = { version = "1.0.166", features = ["derive"] }
+strum = { version = "0.25.0", features = ["derive"] }
+serialport = "4.2.2"
+test-case = "3.3.1"
 
 [dependencies.filevec]
 path = "lib/filevec"

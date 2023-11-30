@@ -19,8 +19,7 @@ pub fn execute_program(
     com: &mut impl CommunicationHandle,
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
-    check_length(&data, 9)?;
-    com.send_packet(CEPPacket::ACK)?;
+    check_length(com, &data, 9)?;
 
     let program_id = u16::from_le_bytes([data[1], data[2]]);
     let timestamp = u32::from_le_bytes([data[3], data[4], data[5], data[6]]);
@@ -29,7 +28,13 @@ pub fn execute_program(
 
     terminate_student_program(exec).expect("to terminate a running program");
 
-    let student_process = create_student_process(program_id, timestamp)?;
+    let student_process = match create_student_process(program_id, timestamp) {
+        Ok(p) => p,
+        Err(e) => {
+            com.send_packet(&CEPPacket::NACK)?;
+            return Err(e);
+        }
+    };
 
     // WATCHDOG THREAD
     let mut wd_context = exec.clone();
@@ -55,7 +60,7 @@ pub fn execute_program(
     l_context.running_flag = true;
     drop(l_context);
 
-    com.send_packet(CEPPacket::ACK)?;
+    com.send_packet(&CEPPacket::ACK)?;
     Ok(())
 }
 
