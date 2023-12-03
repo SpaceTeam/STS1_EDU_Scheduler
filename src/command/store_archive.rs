@@ -32,7 +32,6 @@ pub fn store_archive(
 /// Returns Ok or passes along a file access/unzip process error
 fn unpack_archive(folder: String, bytes: Vec<u8>) -> CommandResult {
     // Store bytes into temporary file
-    // Store bytes into temporary file
     let zip_path = format!("./data/{}.zip", folder);
     let mut zip_file = std::fs::File::create(&zip_path)?;
     zip_file.write_all(&bytes)?;
