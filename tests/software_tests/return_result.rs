@@ -77,7 +77,7 @@ fn truncate_result() -> TestResult {
     command::handle_command(&mut com, &mut exec);
     assert!(com.is_complete());
 
-    assert!(std::fs::File::open("./data/8_5.zip")?.metadata()?.len() < 1_001_000);
+    assert!(std::fs::File::open("./data/8_5.tar")?.metadata()?.len() < 1_001_000);
 
     common::cleanup("8");
     Ok(())
@@ -119,7 +119,7 @@ fn stopped_return() -> TestResult {
     command::handle_command(&mut com, &mut exec);
     assert!(com.is_complete());
 
-    assert!(std::fs::File::open("./data/9_5.zip").is_ok());
+    assert!(std::fs::File::open("./data/9_5.tar").is_ok());
 
     common::cleanup("9");
     Ok(())
@@ -159,7 +159,7 @@ fn result_is_not_deleted_after_corrupted_transfer() -> TestResult {
     command::handle_command(&mut com, &mut exec);
     assert!(com.is_complete());
 
-    assert!(std::fs::File::open("./data/50_0.zip").is_ok());
+    assert!(std::fs::File::open("./data/50_0.tar").is_ok());
 
     common::cleanup("50");
     Ok(())
