@@ -1,8 +1,12 @@
-use std::time::Duration;
-use crate::communication::{CommunicationHandle, CEPPacket};
 use super::{CommandError, CommandResult, SyncExecutionContext};
+use crate::communication::{CEPPacket, CommunicationHandle};
+use std::time::Duration;
 
-pub fn check_length(com: &mut impl CommunicationHandle, vec: &Vec<u8>, n: usize) -> Result<(), CommandError> {
+pub fn check_length(
+    com: &mut impl CommunicationHandle,
+    vec: &Vec<u8>,
+    n: usize,
+) -> Result<(), CommandError> {
     let actual_len = vec.len();
     if actual_len != n {
         log::error!("Command came with {actual_len} bytes, should have {n}");

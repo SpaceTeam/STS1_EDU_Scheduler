@@ -1,10 +1,7 @@
 #![allow(non_snake_case)]
 use core::time;
 use rppal::gpio::Gpio;
-use std::{
-    thread,
-    time::Duration,
-};
+use std::{thread, time::Duration};
 use STS1_EDU_Scheduler::communication::CommunicationHandle;
 
 use simplelog as sl;

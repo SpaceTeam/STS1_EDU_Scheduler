@@ -120,7 +120,7 @@ pub trait CommunicationHandle: Read + Write {
         match self.receive_packet()? {
             CEPPacket::Ack => Ok(()),
             CEPPacket::Nack => Err(CommunicationError::NotAcknowledged),
-            _ => Err(CommunicationError::PacketInvalidError)
+            _ => Err(CommunicationError::PacketInvalidError),
         }
     }
 }
@@ -147,7 +147,7 @@ pub enum CommunicationError {
     /// Signals that a receive timed out
     TimedOut,
     /// Nack was received when Ack was expected
-    NotAcknowledged
+    NotAcknowledged,
 }
 
 impl std::fmt::Display for CommunicationError {

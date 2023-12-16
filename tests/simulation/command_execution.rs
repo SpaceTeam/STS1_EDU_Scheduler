@@ -2,11 +2,10 @@ use crate::simulation::*;
 
 #[test]
 fn simulate_archive_is_stored_correctly() -> Result<(), std::io::Error> {
-    let (mut scheduler, mut serial_port) = start_scheduler("archive_is_stored_correctly")?;
-    let mut cobc_in = serial_port.stdout.take().unwrap();
-    let mut cobc_out = serial_port.stdin.take().unwrap();
+    let (mut com, _socat) = SimulationComHandle::with_socat_proc("archive_is_stored_correctly");
+    let _sched = start_scheduler("archive_is_stored_correctly")?;
 
-    simulate_test_store_archive(&mut cobc_in, &mut cobc_out, 1)?;
+    simulate_test_store_archive(&mut com, 1).unwrap();
     std::thread::sleep(std::time::Duration::from_millis(400));
 
     assert_eq!(
@@ -23,6 +22,5 @@ fn simulate_archive_is_stored_correctly() -> Result<(), std::io::Error> {
             .unwrap()
     );
 
-    scheduler.kill()?;
     Ok(())
 }
