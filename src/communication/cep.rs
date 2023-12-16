@@ -2,20 +2,20 @@ use crc::{Crc, CRC_32_MPEG_2};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CEPPacket {
-    ACK,
-    NACK,
-    STOP,
-    EOF,
-    DATA(Vec<u8>),
+    Ack,
+    Nack,
+    Stop,
+    Eof,
+    Data(Vec<u8>),
 }
 
 #[derive(Clone, Copy, strum::FromRepr)]
 pub enum CEPPacketHeader {
-    ACK = 0xd7,
-    NACK = 0x27,
-    STOP = 0xb4,
-    EOF = 0x59,
-    DATA = 0x8b,
+    Ack = 0xd7,
+    Nack = 0x27,
+    Stop = 0xb4,
+    Eof = 0x59,
+    Data = 0x8b,
 }
 
 impl CEPPacket {
@@ -24,10 +24,10 @@ impl CEPPacket {
 
     const CRC: Crc<u32> = Crc::<u32>::new(&CRC_32_MPEG_2);
 
-    /// Calculates the CRC32 MPEG-2 checksum for the contained data. For variants other than Self::DATA, 0 is returned
+    /// Calculates the CRC32 MPEG-2 checksum for the contained data. For variants other than Self::Data, 0 is returned
     pub fn checksum(&self) -> u32 {
-        if let Self::DATA(data) = self {
-            Self::CRC.checksum(&data)
+        if let Self::Data(data) = self {
+            Self::CRC.checksum(data)
         } else {
             0
         }
@@ -35,11 +35,11 @@ impl CEPPacket {
 
     pub fn serialize(self) -> Vec<u8> {
         match self {
-            CEPPacket::ACK => vec![0xd7],
-            CEPPacket::NACK => vec![0x27],
-            CEPPacket::STOP => vec![0xb4],
-            CEPPacket::EOF => vec![0x59],
-            CEPPacket::DATA(bytes) => {
+            CEPPacket::Ack => vec![0xd7],
+            CEPPacket::Nack => vec![0x27],
+            CEPPacket::Stop => vec![0xb4],
+            CEPPacket::Eof => vec![0x59],
+            CEPPacket::Data(bytes) => {
                 let mut v = vec![0x8b];
                 let crc32 = CEPPacket::CRC.checksum(&bytes);
                 v.reserve_exact(6 + bytes.len());
@@ -57,11 +57,11 @@ impl CEPPacket {
 
     pub const fn header(&self) -> u8 {
         let header = match self {
-            CEPPacket::ACK => CEPPacketHeader::ACK,
-            CEPPacket::NACK => CEPPacketHeader::NACK,
-            CEPPacket::STOP => CEPPacketHeader::STOP,
-            CEPPacket::EOF => CEPPacketHeader::EOF,
-            CEPPacket::DATA(_) => CEPPacketHeader::DATA,
+            CEPPacket::Ack => CEPPacketHeader::Ack,
+            CEPPacket::Nack => CEPPacketHeader::Nack,
+            CEPPacket::Stop => CEPPacketHeader::Stop,
+            CEPPacket::Eof => CEPPacketHeader::Eof,
+            CEPPacket::Data(_) => CEPPacketHeader::Data,
         };
         header as u8
     }
@@ -70,10 +70,10 @@ impl CEPPacket {
 impl From<&CEPPacket> for Vec<u8> {
     fn from(value: &CEPPacket) -> Self {
         match value {
-            CEPPacket::DATA(bytes) => {
+            CEPPacket::Data(bytes) => {
                 let mut v = Vec::with_capacity(7 + bytes.len());
                 v.push(value.header());
-                let crc32 = CEPPacket::CRC.checksum(&bytes);
+                let crc32 = CEPPacket::CRC.checksum(bytes);
                 v.extend((bytes.len() as u16).to_le_bytes());
                 v.extend(bytes);
                 v.extend(crc32.to_le_bytes());
@@ -95,16 +95,16 @@ impl TryFrom<Vec<u8>> for CEPPacket {
     type Error = CEPParseError;
 
     fn try_from(mut value: Vec<u8>) -> Result<Self, Self::Error> {
-        let header_byte = value.get(0).ok_or(CEPParseError::WrongLength)?;
+        let header_byte = value.first().ok_or(CEPParseError::WrongLength)?;
         let header = CEPPacketHeader::from_repr(*header_byte as usize)
             .ok_or(CEPParseError::InvalidHeader)?;
 
         let packet = match header {
-            CEPPacketHeader::ACK => CEPPacket::ACK,
-            CEPPacketHeader::NACK => CEPPacket::NACK,
-            CEPPacketHeader::STOP => CEPPacket::STOP,
-            CEPPacketHeader::EOF => CEPPacket::EOF,
-            CEPPacketHeader::DATA => {
+            CEPPacketHeader::Ack => CEPPacket::Ack,
+            CEPPacketHeader::Nack => CEPPacket::Nack,
+            CEPPacketHeader::Stop => CEPPacket::Stop,
+            CEPPacketHeader::Eof => CEPPacket::Eof,
+            CEPPacketHeader::Data => {
                 let length_bytes = value.get(1..3).ok_or(CEPParseError::WrongLength)?;
                 let length = u16::from_le_bytes(length_bytes.try_into().unwrap()) as usize;
                 value.drain(0..3);
@@ -117,7 +117,7 @@ impl TryFrom<Vec<u8>> for CEPPacket {
                     return Err(CEPParseError::InvalidCRC);
                 }
 
-                CEPPacket::DATA(value)
+                CEPPacket::Data(value)
             }
         };
 
@@ -130,11 +130,11 @@ mod tests {
     use super::*;
     use test_case::test_case;
 
-    #[test_case(vec![0xD7], CEPPacket::ACK)]
-    #[test_case(vec![0x27], CEPPacket::NACK)]
-    #[test_case(vec![0x59], CEPPacket::EOF)]
-    #[test_case(vec![0xB4], CEPPacket::STOP)]
-    #[test_case(vec![0x8B, 0, 0, 0xff, 0xff, 0xff, 0xff], CEPPacket::DATA(vec![]); "empty DATA packet")]
+    #[test_case(vec![0xD7], CEPPacket::Ack)]
+    #[test_case(vec![0x27], CEPPacket::Nack)]
+    #[test_case(vec![0x59], CEPPacket::Eof)]
+    #[test_case(vec![0xB4], CEPPacket::Stop)]
+    #[test_case(vec![0x8B, 0, 0, 0xff, 0xff, 0xff, 0xff], CEPPacket::Data(vec![]); "empty Data packet")]
     fn packet_is_parsed_and_serialized_correctly(vec: Vec<u8>, packet: CEPPacket) {
         assert_eq!(&packet.clone().serialize(), &vec);
         assert_eq!(CEPPacket::try_from(vec).unwrap(), packet);

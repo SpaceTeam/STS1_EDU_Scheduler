@@ -7,7 +7,7 @@ use crate::{
 
 use super::{truncate_to_size, CommandResult, SyncExecutionContext};
 
-/// Handles a complete return result command. The result zip file is only deleted if a final ACK is
+/// Handles a complete return result command. The result zip file is only deleted if a final Ack is
 /// received.
 pub fn return_result(
     data: Vec<u8>,
@@ -21,7 +21,7 @@ pub fn return_result(
     let result_path = format!("./data/{}_{}.zip", program_id, timestamp);
 
     if !std::path::Path::new(&result_path).exists() {
-        com.send_packet(&CEPPacket::NACK)?;
+        com.send_packet(&CEPPacket::Nack)?;
         return Err(CommandError::ProtocolViolation(
             format!("Result {}:{} does not exist", program_id, timestamp).into(),
         ));

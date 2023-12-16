@@ -47,12 +47,12 @@ pub fn receive_ack(reader: &mut impl std::io::Read) -> Result<(), std::io::Error
     let mut buffer = [0; 1];
     reader.read_exact(&mut buffer).unwrap();
 
-    if buffer[0] == CEPPacket::ACK.serialize()[0] {
+    if buffer[0] == CEPPacket::Ack.serialize()[0] {
         Ok(())
     } else {
         Err(std::io::Error::new(
             std::io::ErrorKind::Other,
-            format!("received {:#x} instead of ACK", buffer[0]),
+            format!("received {:#x} instead of Ack", buffer[0]),
         ))
     }
 }
@@ -63,11 +63,11 @@ pub fn simulate_test_store_archive(
     program_id: u16,
 ) -> std::io::Result<()> {
     let archive = std::fs::read("tests/student_program.zip")?;
-    cobc_out.write_all(&CEPPacket::DATA(store_archive(program_id)).serialize())?;
+    cobc_out.write_all(&CEPPacket::Data(store_archive(program_id)).serialize())?;
     receive_ack(cobc_in)?;
-    cobc_out.write_all(&CEPPacket::DATA(archive).serialize())?;
+    cobc_out.write_all(&CEPPacket::Data(archive).serialize())?;
     receive_ack(cobc_in)?;
-    cobc_out.write_all(&CEPPacket::EOF.serialize())?;
+    cobc_out.write_all(&CEPPacket::Eof.serialize())?;
     receive_ack(cobc_in)?;
     receive_ack(cobc_in)?;
 
@@ -82,7 +82,7 @@ pub fn simulate_execute_program(
     timeout: u16,
 ) -> std::io::Result<()> {
     cobc_out
-        .write_all(&CEPPacket::DATA(execute_program(program_id, timestamp, timeout)).serialize())?;
+        .write_all(&CEPPacket::Data(execute_program(program_id, timestamp, timeout)).serialize())?;
     receive_ack(cobc_in)?;
     receive_ack(cobc_in)?;
     Ok(())
@@ -94,7 +94,7 @@ pub fn simulate_return_result(
     program_id: u16,
     timestamp: u32,
 ) -> std::io::Result<Vec<u8>> {
-    cobc_out.write_all(&CEPPacket::DATA(return_result(program_id, timestamp)).serialize())?;
+    cobc_out.write_all(&CEPPacket::Data(return_result(program_id, timestamp)).serialize())?;
     receive_ack(cobc_in)?;
 
     let data = read_multi_data_packets(cobc_in, cobc_out)?;
@@ -127,15 +127,15 @@ pub fn read_multi_data_packets(
     let mut data = Vec::new();
     loop {
         read_data_packet(input, &mut data)?;
-        output.write_all(&CEPPacket::ACK.serialize())?;
+        output.write_all(&CEPPacket::Ack.serialize())?;
 
         input.read_exact(&mut eof_byte)?;
-        if eof_byte[0] == CEPPacket::EOF.serialize()[0] {
+        if eof_byte[0] == CEPPacket::Eof.serialize()[0] {
             break;
         }
     }
 
-    output.write_all(&CEPPacket::ACK.serialize())?;
+    output.write_all(&CEPPacket::Ack.serialize())?;
     Ok(data)
 }
 

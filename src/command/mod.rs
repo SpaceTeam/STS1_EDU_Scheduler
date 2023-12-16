@@ -49,10 +49,10 @@ pub fn process_command(
 ) -> CommandResult {
     let packet = com.receive_packet()?;
     let data = match packet {
-        CEPPacket::DATA(data) => data,
+        CEPPacket::Data(data) => data,
         _ => {
             return Err(CommandError::NonRecoverable(
-                format!("Received {:?} as command start, expected DATA", packet).into(),
+                format!("Received {:?} as command start, expected Data", packet).into(),
             ));
         }
     };

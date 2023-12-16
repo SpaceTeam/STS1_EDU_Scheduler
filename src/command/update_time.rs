@@ -15,7 +15,7 @@ pub fn update_time(
     let time = i32::from_le_bytes([data[1], data[2], data[3], data[4]]);
     set_system_time(time)?;
 
-    com.send_packet(&CEPPacket::ACK)?;
+    com.send_packet(&CEPPacket::Ack)?;
     Ok(())
 }
 

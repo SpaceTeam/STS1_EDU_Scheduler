@@ -56,10 +56,10 @@ fn main() -> ! {
 
 fn heartbeat_loop(heartbeat_pin: u8, freq: u64) -> ! {
     if cfg!(feature = "mock") {
-        loop {}
+        std::thread::park();
     }
 
-    let toogle_time = time::Duration::from_millis((1000 / freq / 2) as u64);
+    let toogle_time = time::Duration::from_millis(1000 / freq / 2);
 
     let gpio = Gpio::new().unwrap();
     let mut pin = gpio.get(heartbeat_pin).unwrap().into_output();

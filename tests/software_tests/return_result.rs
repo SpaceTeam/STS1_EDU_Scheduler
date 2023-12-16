@@ -11,30 +11,30 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 #[test]
 fn returns_result_correctly() -> TestResult {
     let packets = vec![
-        COBC(DATA(execute_program(7, 3, 1))), // Execute Program 7, Queue 0, Timeout 1s
-        EDU(ACK),
-        EDU(ACK),
+        COBC(Data(execute_program(7, 3, 1))), // Execute Program 7, Queue 0, Timeout 1s
+        EDU(Ack),
+        EDU(Ack),
         SLEEP(std::time::Duration::from_millis(500)),
-        COBC(DATA(get_status())), // Get Status
-        EDU(ACK),
-        EDU(DATA(vec![1, 7, 0, 3, 0, 0, 0, 0])), // Program Finished
-        COBC(ACK),
-        COBC(DATA(get_status())), // Get Status
-        EDU(ACK),
-        EDU(DATA(vec![2, 7, 0, 3, 0, 0, 0])), // Result Ready
-        COBC(ACK),
-        COBC(DATA(return_result(7, 3))),
-        EDU(ACK),
+        COBC(Data(get_status())), // Get Status
+        EDU(Ack),
+        EDU(Data(vec![1, 7, 0, 3, 0, 0, 0, 0])), // Program Finished
+        COBC(Ack),
+        COBC(Data(get_status())), // Get Status
+        EDU(Ack),
+        EDU(Data(vec![2, 7, 0, 3, 0, 0, 0])), // Result Ready
+        COBC(Ack),
+        COBC(Data(return_result(7, 3))),
+        EDU(Ack),
         ACTION(Box::new(|packet| {
             std::fs::File::create("tests/tmp/7.zip")
                 .unwrap()
                 .write(&packet.clone().serialize())
                 .unwrap();
         })),
-        COBC(ACK),
-        EDU(EOF),
-        COBC(ACK),
-        COBC(ACK),
+        COBC(Ack),
+        EDU(Eof),
+        COBC(Ack),
+        COBC(Ack),
     ];
 
     common::prepare_program("7");
@@ -63,14 +63,14 @@ fn returns_result_correctly() -> TestResult {
 #[test]
 fn truncate_result() -> TestResult {
     let packets = vec![
-        COBC(DATA(execute_program(8, 5, 5))), // Execute Program 8, Queue 5, Timeout 2s
-        EDU(ACK),
-        EDU(ACK),
+        COBC(Data(execute_program(8, 5, 5))), // Execute Program 8, Queue 5, Timeout 2s
+        EDU(Ack),
+        EDU(Ack),
         SLEEP(std::time::Duration::from_millis(3000)),
-        COBC(DATA(get_status())),
-        EDU(ACK),
-        EDU(DATA(vec![1, 8, 0, 5, 0, 0, 0, 0])),
-        COBC(ACK),
+        COBC(Data(get_status())),
+        EDU(Ack),
+        EDU(Data(vec![1, 8, 0, 5, 0, 0, 0, 0])),
+        COBC(Ack),
     ];
 
     common::prepare_program("8");
@@ -89,28 +89,28 @@ fn truncate_result() -> TestResult {
 #[test]
 fn stopped_return() -> TestResult {
     let packets = vec![
-        COBC(DATA(execute_program(9, 5, 3))),
-        EDU(ACK),
-        EDU(ACK),
+        COBC(Data(execute_program(9, 5, 3))),
+        EDU(Ack),
+        EDU(Ack),
         SLEEP(std::time::Duration::from_millis(3000)),
-        COBC(DATA(get_status())),
-        EDU(ACK),
-        EDU(DATA(vec![1, 9, 0, 5, 0, 0, 0, 0])),
-        COBC(ACK),
-        COBC(DATA(get_status())),
-        EDU(ACK),
-        EDU(DATA(vec![2, 9, 0, 5, 0, 0, 0])),
-        COBC(ACK),
-        COBC(DATA(return_result(9, 5))),
-        EDU(ACK),
+        COBC(Data(get_status())),
+        EDU(Ack),
+        EDU(Data(vec![1, 9, 0, 5, 0, 0, 0, 0])),
+        COBC(Ack),
+        COBC(Data(get_status())),
+        EDU(Ack),
+        EDU(Data(vec![2, 9, 0, 5, 0, 0, 0])),
+        COBC(Ack),
+        COBC(Data(return_result(9, 5))),
+        EDU(Ack),
         ANY,
-        COBC(ACK),
+        COBC(Ack),
         ANY,
-        COBC(STOP),
-        COBC(DATA(get_status())),
-        EDU(ACK),
-        EDU(DATA(vec![2, 9, 0, 5, 0, 0, 0])),
-        COBC(ACK),
+        COBC(Stop),
+        COBC(Data(get_status())),
+        EDU(Ack),
+        EDU(Data(vec![2, 9, 0, 5, 0, 0, 0])),
+        COBC(Ack),
     ];
     common::prepare_program("9");
     let (mut com, mut exec) = common::prepare_handles(packets, "9");
@@ -130,7 +130,7 @@ fn stopped_return() -> TestResult {
 
 #[test]
 fn no_result_ready() -> TestResult {
-    let packets = vec![COBC(DATA(return_result(99, 0))), EDU(ACK), EDU(NACK)];
+    let packets = vec![COBC(Data(return_result(99, 0))), EDU(Ack), EDU(Nack)];
     let (mut com, mut exec) = common::prepare_handles(packets, "10");
 
     command::handle_command(&mut com, &mut exec);
@@ -143,17 +143,17 @@ fn no_result_ready() -> TestResult {
 #[test]
 fn result_is_not_deleted_after_corrupted_transfer() -> TestResult {
     let packets = vec![
-        COBC(DATA(execute_program(50, 0, 3))),
-        EDU(ACK),
-        EDU(ACK),
+        COBC(Data(execute_program(50, 0, 3))),
+        EDU(Ack),
+        EDU(Ack),
         SLEEP(std::time::Duration::from_millis(2000)),
-        COBC(DATA(return_result(50, 0))),
-        EDU(ACK),
+        COBC(Data(return_result(50, 0))),
+        EDU(Ack),
         ANY,
-        COBC(ACK),
-        EDU(EOF),
-        COBC(ACK),
-        COBC(NACK),
+        COBC(Ack),
+        EDU(Eof),
+        COBC(Ack),
+        COBC(Nack),
     ];
     common::prepare_program("50");
     let (mut com, mut exec) = common::prepare_handles(packets, "50");

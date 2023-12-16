@@ -49,10 +49,10 @@ impl CommunicationHandle for TestCom {
             ComEvent::SLEEP(d) => std::thread::sleep(d),
             ComEvent::ANY => (),
             ComEvent::ACTION(f) => f(packet),
-            event @ _ => panic!("Expected {event:?} instead of send_packet"),
+            event => panic!("Expected {event:?} instead of send_packet"),
         }
 
-        if matches!(packet, CEPPacket::DATA(_)) {
+        if matches!(packet, CEPPacket::Data(_)) {
             self.await_ack(&Self::INTEGRITY_ACK_TIMEOUT)?;
         }
 
@@ -63,8 +63,8 @@ impl CommunicationHandle for TestCom {
         match self.expected_events.pop_front().unwrap() {
             ComEvent::COBC(p) => {
                 println!("Received {p:?}");
-                if matches!(p, CEPPacket::DATA(_)) {
-                    self.send_packet(&CEPPacket::ACK)?;
+                if matches!(p, CEPPacket::Data(_)) {
+                    self.send_packet(&CEPPacket::Ack)?;
                 }
                 Ok(p)
             }
@@ -72,7 +72,7 @@ impl CommunicationHandle for TestCom {
                 std::thread::sleep(d);
                 self.receive_packet()
             }
-            event @ _ => panic!("Expected {event:?} instead of receive_packet"),
+            event => panic!("Expected {event:?} instead of receive_packet"),
         }
     }
 

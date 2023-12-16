@@ -20,7 +20,7 @@ pub fn store_archive(
     let bytes = com.receive_multi_packet(|| false)?; // !! TODO !!
     unpack_archive(id, bytes)?;
 
-    com.send_packet(&CEPPacket::ACK)?;
+    com.send_packet(&CEPPacket::Ack)?;
     Ok(())
 }
 

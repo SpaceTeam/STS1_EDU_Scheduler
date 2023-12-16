@@ -6,7 +6,7 @@ pub fn check_length(com: &mut impl CommunicationHandle, vec: &Vec<u8>, n: usize)
     let actual_len = vec.len();
     if actual_len != n {
         log::error!("Command came with {actual_len} bytes, should have {n}");
-        com.send_packet(&CEPPacket::NACK)?;
+        com.send_packet(&CEPPacket::Nack)?;
         Err(CommandError::ProtocolViolation(
             format!("Received command with {actual_len} bytes, expected {n}").into(),
         ))

@@ -12,6 +12,6 @@ pub fn stop_program(
 
     terminate_student_program(exec).expect("to terminate student program");
 
-    com.send_packet(&CEPPacket::ACK)?;
+    com.send_packet(&CEPPacket::Ack)?;
     Ok(())
 }

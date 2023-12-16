@@ -20,7 +20,7 @@ fn logfile_is_cleared_after_sent() -> std::io::Result<()> {
     simulate_execute_program(&mut cobc_in, &mut cobc_out, 1, 0, 3).unwrap();
     std::thread::sleep(std::time::Duration::from_millis(100));
     let _ = simulate_return_result(&mut cobc_in, &mut cobc_out, 1, 0).unwrap();
-    cobc_out.write_all(&CEPPacket::ACK.serialize()).unwrap();
+    cobc_out.write_all(&CEPPacket::Ack.serialize()).unwrap();
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     scheduler.kill().unwrap();

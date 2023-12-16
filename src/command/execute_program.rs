@@ -31,7 +31,7 @@ pub fn execute_program(
     let student_process = match create_student_process(program_id, timestamp) {
         Ok(p) => p,
         Err(e) => {
-            com.send_packet(&CEPPacket::NACK)?;
+            com.send_packet(&CEPPacket::Nack)?;
             return Err(e);
         }
     };
@@ -60,7 +60,7 @@ pub fn execute_program(
     l_context.running_flag = true;
     drop(l_context);
 
-    com.send_packet(&CEPPacket::ACK)?;
+    com.send_packet(&CEPPacket::Ack)?;
     Ok(())
 }
 

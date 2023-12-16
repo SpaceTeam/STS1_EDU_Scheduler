@@ -11,9 +11,9 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 #[test]
 fn execute_program_normal() -> TestResult {
     let packets = vec![
-        COBC(DATA(execute_program(1, 0, 2))), // Execute Program ID 1, Timestamp 0, Timeout 2s
-        EDU(ACK),
-        EDU(ACK),
+        COBC(Data(execute_program(1, 0, 2))), // Execute Program ID 1, Timestamp 0, Timeout 2s
+        EDU(Ack),
+        EDU(Ack),
     ];
     common::prepare_program("1");
     let (mut com, mut exec) = common::prepare_handles(packets, "1");
@@ -34,13 +34,13 @@ fn execute_program_normal() -> TestResult {
 #[test]
 fn execute_program_infinite() -> TestResult {
     let packets = vec![
-        COBC(DATA(execute_program(2, 1, 1))), // Execute Program ID 2, Timestamp 1, Timeout 1s
-        EDU(ACK),
-        EDU(ACK),
-        COBC(DATA(get_status())),
-        EDU(ACK),
-        EDU(DATA(vec![1, 2, 0, 1, 0, 0, 0, 255])),
-        COBC(ACK),
+        COBC(Data(execute_program(2, 1, 1))), // Execute Program ID 2, Timestamp 1, Timeout 1s
+        EDU(Ack),
+        EDU(Ack),
+        COBC(Data(get_status())),
+        EDU(Ack),
+        EDU(Data(vec![1, 2, 0, 1, 0, 0, 0, 255])),
+        COBC(Ack),
     ];
     common::prepare_program("2");
     let (mut com, mut exec) = common::prepare_handles(packets, "2");
@@ -56,7 +56,7 @@ fn execute_program_infinite() -> TestResult {
 
 #[test]
 fn execute_missing_program() -> TestResult {
-    let packets = vec![COBC(DATA(execute_program(11, 0, 2))), EDU(ACK), EDU(NACK)];
+    let packets = vec![COBC(Data(execute_program(11, 0, 2))), EDU(Ack), EDU(Nack)];
     let (mut com, mut exec) = common::prepare_handles(packets, "12");
 
     command::handle_command(&mut com, &mut exec);
