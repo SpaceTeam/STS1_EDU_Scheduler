@@ -3,4 +3,3 @@ baudrate = 921600
 heartbeat_pin = 34
 update_pin = 35
 heartbeat_freq = 10 # Hz
-log_path = "./log"

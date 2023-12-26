@@ -1,12 +1,12 @@
 # Prerequisites 'rustup component add llvm-tools-preview' and 'cargo install grcov'
 
 build_with_cov:
-	RUSTFLAGS="-Cinstrument-coverage" cargo build
+	RUSTFLAGS="-Cinstrument-coverage" cargo build --release --features mock
 
 coverage: build_with_cov
-	RUSTFLAGS="-Cinstrument-coverage" LLVM_PROFILE_FILE="STS1-%p-%m.profraw" cargo test --features mock
-	grcov . -s . --binary-path ./target/debug/ -t html --branch --ignore-not-existing -o ./target/debug/coverage/
-	firefox ./target/debug/coverage/index.html&
+	LLVM_PROFILE_FILE="STS1-%p-%m.profraw" cargo test --features mock --release
+	grcov . -s . --binary-path ./target/release/ -t html --branch --ignore-not-existing -o ./target/release/coverage/
+	firefox ./target/release/coverage/index.html&
 
 sw_test:
 	cargo build --release && RUST_LOG=info cargo test --release --features mock
