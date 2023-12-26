@@ -25,7 +25,7 @@ impl From<CommunicationError> for CommandError {
     fn from(e: CommunicationError) -> Self {
         match e {
             CommunicationError::PacketInvalidError => CommandError::External(Box::new(e)),
-            CommunicationError::CRCError => CommandError::ProtocolViolation(Box::new(e)),
+            CommunicationError::CepParsing(_) => CommandError::ProtocolViolation(Box::new(e)),
             CommunicationError::Io(_) => CommandError::NonRecoverable(Box::new(e)),
             CommunicationError::StopCondition => CommandError::External(Box::new(e)),
             CommunicationError::NotAcknowledged => CommandError::ProtocolViolation(Box::new(e)),

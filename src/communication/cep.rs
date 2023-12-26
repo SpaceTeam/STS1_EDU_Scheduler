@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use crc::{Crc, CRC_32_MPEG_2};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,20 +36,18 @@ impl CEPPacket {
     }
 
     pub fn serialize(self) -> Vec<u8> {
+        let header = self.header();
         match self {
-            CEPPacket::Ack => vec![0xd7],
-            CEPPacket::Nack => vec![0x27],
-            CEPPacket::Stop => vec![0xb4],
-            CEPPacket::Eof => vec![0x59],
             CEPPacket::Data(bytes) => {
-                let mut v = vec![0x8b];
+                let mut v = Vec::with_capacity(7 + bytes.len());
                 let crc32 = CEPPacket::CRC.checksum(&bytes);
-                v.reserve_exact(6 + bytes.len());
+                v.push(header);
                 v.extend((bytes.len() as u16).to_le_bytes());
                 v.extend(bytes);
                 v.extend(crc32.to_le_bytes());
                 v
             }
+            _ => vec![header],
         }
     }
 
@@ -64,6 +64,38 @@ impl CEPPacket {
             CEPPacket::Data(_) => CEPPacketHeader::Data,
         };
         header as u8
+    }
+
+    pub fn try_from_read(reader: &mut (impl Read + ?Sized)) -> Result<Self, CEPParseError> {
+        let mut header_buffer = [0; 1];
+        reader.read_exact(&mut header_buffer)?;
+
+        let header = CEPPacketHeader::from_repr(header_buffer[0] as usize)
+            .ok_or(CEPParseError::WrongLength)?;
+        let packet = match header {
+            CEPPacketHeader::Ack => CEPPacket::Ack,
+            CEPPacketHeader::Nack => CEPPacket::Nack,
+            CEPPacketHeader::Stop => CEPPacket::Stop,
+            CEPPacketHeader::Eof => CEPPacket::Eof,
+            CEPPacketHeader::Data => {
+                let mut length_buffer = [0; 2];
+                reader.read_exact(&mut length_buffer)?;
+                let length = u16::from_le_bytes(length_buffer);
+
+                let mut data_buffer = vec![0; length as usize];
+                reader.read_exact(&mut data_buffer)?;
+
+                let mut crc_buffer = [0; 4];
+                reader.read_exact(&mut crc_buffer)?;
+                if !CEPPacket::crc_is_valid(&data_buffer, u32::from_le_bytes(crc_buffer)) {
+                    return Err(CEPParseError::InvalidCRC);
+                }
+
+                CEPPacket::Data(data_buffer)
+            }
+        };
+
+        Ok(packet)
     }
 }
 
@@ -84,11 +116,20 @@ impl From<&CEPPacket> for Vec<u8> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, strum::Display)]
 pub enum CEPParseError {
     WrongLength,
     InvalidHeader,
     InvalidCRC,
+    Io(std::io::Error),
+}
+
+impl std::error::Error for CEPParseError {}
+
+impl From<std::io::Error> for CEPParseError {
+    fn from(value: std::io::Error) -> Self {
+        CEPParseError::Io(value)
+    }
 }
 
 impl TryFrom<Vec<u8>> for CEPPacket {

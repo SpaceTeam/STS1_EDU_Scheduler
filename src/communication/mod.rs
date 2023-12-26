@@ -6,29 +6,42 @@ use std::{
     time::Duration,
 };
 
-use self::cep::CEPPacketHeader;
+use self::cep::CEPParseError;
 
 pub type ComResult<T> = Result<T, CommunicationError>;
 
 pub trait CommunicationHandle: Read + Write {
     const INTEGRITY_ACK_TIMEOUT: Duration;
-    const UNLIMITED_TIMEOUT: Duration;
+    const UNLIMITED_TIMEOUT: Duration = Duration::MAX;
+
+    const DATA_PACKET_RETRIES: usize = 4;
 
     fn set_timeout(&mut self, timeout: &Duration);
 
     fn send_packet(&mut self, packet: &CEPPacket) -> ComResult<()> {
-        self.write_all(&[packet.header()])?;
+        let bytes = Vec::from(packet);
+        self.write_all(&bytes)?;
 
-        if let CEPPacket::Data(data) = packet {
-            self.write_all(&(data.len() as u16).to_le_bytes())?;
-            self.write_all(data)?;
-            self.write_all(&packet.checksum().to_le_bytes())?;
-            self.flush()?;
+        if matches!(packet, CEPPacket::Data(_)) {
+            for _ in 0..Self::DATA_PACKET_RETRIES {
+                let response = self.receive_packet()?;
+                match response {
+                    CEPPacket::Ack => return Ok(()),
+                    CEPPacket::Nack => log::warn!("Received NACK after data packet; Retrying"),
+                    p => {
+                        log::error!("Received {p:?} after data packet");
+                        return Err(CommunicationError::PacketInvalidError);
+                    }
+                }
 
-            self.await_ack(&Self::INTEGRITY_ACK_TIMEOUT)?;
+                self.write_all(&bytes)?;
+            }
+        } else {
+            return Ok(());
         }
 
-        Ok(())
+        log::error!("No ACK after {} retries, giving up", Self::DATA_PACKET_RETRIES);
+        Err(CommunicationError::PacketInvalidError)
     }
 
     fn send_multi_packet(&mut self, bytes: &[u8]) -> ComResult<()> {
@@ -44,37 +57,24 @@ pub trait CommunicationHandle: Read + Write {
     }
 
     fn receive_packet(&mut self) -> ComResult<CEPPacket> {
-        let mut header_buffer = [0; 1];
-        self.read_exact(&mut header_buffer)?;
-
-        let header = CEPPacketHeader::from_repr(header_buffer[0] as usize)
-            .ok_or(CommunicationError::PacketInvalidError)?;
-        let packet = match header {
-            CEPPacketHeader::Ack => CEPPacket::Ack,
-            CEPPacketHeader::Nack => CEPPacket::Nack,
-            CEPPacketHeader::Stop => CEPPacket::Stop,
-            CEPPacketHeader::Eof => CEPPacket::Eof,
-            CEPPacketHeader::Data => {
-                let mut length_buffer = [0; 2];
-                self.read_exact(&mut length_buffer)?;
-                let length = u16::from_le_bytes(length_buffer);
-
-                let mut data_buffer = vec![0; length as usize];
-                self.read_exact(&mut data_buffer)?;
-
-                let mut crc_buffer = [0; 4];
-                self.read_exact(&mut crc_buffer)?;
-                if !CEPPacket::crc_is_valid(&data_buffer, u32::from_le_bytes(crc_buffer)) {
-                    return Err(CommunicationError::CRCError);
+        for _ in 0..Self::DATA_PACKET_RETRIES {
+            match CEPPacket::try_from_read(self) {
+                Ok(p @ CEPPacket::Data(_)) => {
+                    self.send_packet(&CEPPacket::Ack)?;
+                    return Ok(p);
                 }
-
-                self.send_packet(&CEPPacket::Ack)?;
-                CEPPacket::Data(data_buffer)
+                Ok(p) => return Ok(p),
+                Err(CEPParseError::InvalidCRC) => {
+                    log::warn!("Received data packet with invalid CRC; Retrying")
+                }
+                Err(e) => {
+                    log::error!("Failed to read packet: {e:?}");
+                    return Err(e.into());
+                }
             }
-        };
+        }
 
-        //self.set_timeout(&Duration::MAX);
-        Ok(packet)
+        todo!()
     }
 
     fn receive_multi_packet(&mut self, stop_fn: impl Fn() -> bool) -> ComResult<Vec<u8>> {
@@ -138,8 +138,8 @@ impl CommunicationHandle for Box<dyn serialport::SerialPort> {
 pub enum CommunicationError {
     /// Signals that an unknown command packet was received
     PacketInvalidError,
-    /// Signals that the CRC checksum of a data packet was wrong
-    CRCError,
+    /// Relays an error from trying to parse a CEP packet
+    CepParsing(CEPParseError),
     /// Signals that the underlying sending or receiving failed. Not recoverable on its own.
     Io(std::io::Error),
     /// Signals that a multi packet receive or send was interrupted by a Stop condition
@@ -158,10 +158,19 @@ impl std::fmt::Display for CommunicationError {
 
 impl From<std::io::Error> for CommunicationError {
     fn from(value: std::io::Error) -> Self {
-        if value.kind() == std::io::ErrorKind::TimedOut {
-            CommunicationError::TimedOut
-        } else {
-            CommunicationError::Io(value)
+        match value.kind() {
+            std::io::ErrorKind::TimedOut => CommunicationError::TimedOut,
+            std::io::ErrorKind::InvalidData => CommunicationError::PacketInvalidError,
+            _ => CommunicationError::Io(value),
+        }
+    }
+}
+
+impl From<CEPParseError> for CommunicationError {
+    fn from(value: CEPParseError) -> Self {
+        match value {
+            CEPParseError::Io(e) => Self::Io(e),
+            e => Self::CepParsing(e),
         }
     }
 }
@@ -169,7 +178,7 @@ impl From<std::io::Error> for CommunicationError {
 impl std::error::Error for CommunicationError {}
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use super::*;
     use test_case::test_case;
 
@@ -206,7 +215,6 @@ pub mod tests {
     #[test_case(CEPPacket::Stop)]
     #[test_case(CEPPacket::Eof)]
     #[test_case(CEPPacket::Data(vec![1, 2, 3]))]
-
     fn packet_is_sent_correctly(packet: CEPPacket) {
         let mut com = TestComHandle::default();
         com.data_to_read.append(&mut CEPPacket::Ack.serialize());
@@ -233,11 +241,32 @@ pub mod tests {
     }
 
     #[test]
-    fn error_on_nack() {
+    fn retry_on_nack() {
         let mut com = TestComHandle::default();
         com.data_to_read.append(&mut CEPPacket::Nack.serialize());
+        com.data_to_read.append(&mut CEPPacket::Nack.serialize());
+        com.data_to_read.append(&mut CEPPacket::Ack.serialize());
 
-        let ret = com.send_packet(&CEPPacket::Data(vec![1, 2, 3])).unwrap_err();
-        assert!(matches!(ret, CommunicationError::NotAcknowledged));
+        com.send_packet(&CEPPacket::Data(vec![1, 2, 3])).unwrap();
+
+        let mut expected = CEPPacket::Data(vec![1, 2, 3]).serialize();
+        expected.extend(CEPPacket::Data(vec![1, 2, 3]).serialize());
+        expected.extend(CEPPacket::Data(vec![1, 2, 3]).serialize());
+        assert_eq!(com.written_data, expected);
+    }
+
+    #[test]
+    fn fail_after_retries() {
+        let mut com = TestComHandle::default();
+        for _ in 0..TestComHandle::DATA_PACKET_RETRIES {
+            com.data_to_read.append(&mut CEPPacket::Nack.serialize());
+        }
+
+        assert!(
+            matches!(
+                com.send_packet(&CEPPacket::Data(vec![1, 2, 3])),
+                Err(CommunicationError::PacketInvalidError)
+            )
+        );
     }
 }
