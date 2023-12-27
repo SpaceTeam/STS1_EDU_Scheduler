@@ -20,10 +20,11 @@ pub trait CommunicationHandle: Read + Write {
 
     fn send_packet(&mut self, packet: &CEPPacket) -> ComResult<()> {
         let bytes = Vec::from(packet);
-        self.write_all(&bytes)?;
 
-        if matches!(packet, CEPPacket::Data(_)) {
-            for _ in 0..Self::DATA_PACKET_RETRIES {
+        for _ in 0..Self::DATA_PACKET_RETRIES {
+            self.write_all(&bytes)?;
+
+            if matches!(packet, CEPPacket::Data(_)) {
                 let response = self.receive_packet()?;
                 match response {
                     CEPPacket::Ack => return Ok(()),
@@ -33,11 +34,9 @@ pub trait CommunicationHandle: Read + Write {
                         return Err(CommunicationError::PacketInvalidError);
                     }
                 }
-
-                self.write_all(&bytes)?;
+            } else {
+                return Ok(());
             }
-        } else {
-            return Ok(());
         }
 
         log::error!("No ACK after {} retries, giving up", Self::DATA_PACKET_RETRIES);
@@ -249,10 +248,8 @@ mod tests {
 
         com.send_packet(&CEPPacket::Data(vec![1, 2, 3])).unwrap();
 
-        let mut expected = CEPPacket::Data(vec![1, 2, 3]).serialize();
-        expected.extend(CEPPacket::Data(vec![1, 2, 3]).serialize());
-        expected.extend(CEPPacket::Data(vec![1, 2, 3]).serialize());
-        assert_eq!(com.written_data, expected);
+        assert_eq!(com.written_data, CEPPacket::Data(vec![1, 2, 3]).serialize().repeat(3));
+        assert!(com.data_to_read.is_empty());
     }
 
     #[test]
@@ -262,11 +259,48 @@ mod tests {
             com.data_to_read.append(&mut CEPPacket::Nack.serialize());
         }
 
-        assert!(
-            matches!(
-                com.send_packet(&CEPPacket::Data(vec![1, 2, 3])),
-                Err(CommunicationError::PacketInvalidError)
-            )
+        assert!(matches!(
+            com.send_packet(&CEPPacket::Data(vec![1, 2, 3])),
+            Err(CommunicationError::PacketInvalidError)
+        ));
+        assert!(com.data_to_read.is_empty());
+        assert_eq!(
+            com.written_data,
+            CEPPacket::Data(vec![1, 2, 3]).serialize().repeat(TestComHandle::DATA_PACKET_RETRIES)
         );
     }
+
+    #[test]
+    fn multi_packet_is_sent_correctly() {
+        let mut com = TestComHandle::default();
+
+        let data = vec![123u8; 2 * CEPPacket::MAXIMUM_DATA_LENGTH + 50];
+        let chunks = data.chunks(CEPPacket::MAXIMUM_DATA_LENGTH);
+        com.data_to_read = CEPPacket::Ack.serialize().repeat(chunks.len() + 1);
+
+        com.send_multi_packet(&data).unwrap();
+
+        assert!(com.data_to_read.is_empty());
+        for c in chunks {
+            assert_eq!(com.written_data.drain(0..c.len()+7).as_slice(), CEPPacket::Data(c.to_vec()).serialize());
+        }
+        assert_eq!(com.written_data, CEPPacket::Eof.serialize());
+    }
+
+    #[test]
+    fn multi_packet_is_received_correctly() {
+        let mut com = TestComHandle::default();
+
+        let data = vec![123u8; 2 * CEPPacket::MAXIMUM_DATA_LENGTH + 50];
+        let chunks = data.chunks(CEPPacket::MAXIMUM_DATA_LENGTH);
+        for c in chunks.clone() {
+            com.data_to_read.append(&mut CEPPacket::Data(c.to_vec()).serialize());
+        }
+        com.data_to_read.append(&mut CEPPacket::Eof.serialize());
+
+        assert_eq!(com.receive_multi_packet(|| false).unwrap(), data);
+        assert!(com.data_to_read.is_empty());
+        assert_eq!(com.written_data, CEPPacket::Ack.serialize().repeat(chunks.len() + 1))
+    }
+
 }

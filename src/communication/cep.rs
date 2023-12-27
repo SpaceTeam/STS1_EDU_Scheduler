@@ -21,7 +21,7 @@ pub enum CEPPacketHeader {
 }
 
 impl CEPPacket {
-    pub const MAXIMUM_DATA_LENGTH: usize = 32768;
+    pub const MAXIMUM_DATA_LENGTH: usize = 11000;
     pub const MAXIMUM_PACKET_LENGTH: usize = 7 + Self::MAXIMUM_DATA_LENGTH;
 
     const CRC: Crc<u32> = Crc::<u32>::new(&CRC_32_MPEG_2);
@@ -71,7 +71,7 @@ impl CEPPacket {
         reader.read_exact(&mut header_buffer)?;
 
         let header = CEPPacketHeader::from_repr(header_buffer[0] as usize)
-            .ok_or(CEPParseError::WrongLength)?;
+            .ok_or(CEPParseError::InvalidLength)?;
         let packet = match header {
             CEPPacketHeader::Ack => CEPPacket::Ack,
             CEPPacketHeader::Nack => CEPPacket::Nack,
@@ -81,6 +81,10 @@ impl CEPPacket {
                 let mut length_buffer = [0; 2];
                 reader.read_exact(&mut length_buffer)?;
                 let length = u16::from_le_bytes(length_buffer);
+
+                if length as usize > Self::MAXIMUM_DATA_LENGTH {
+                    return Err(CEPParseError::InvalidLength);
+                }
 
                 let mut data_buffer = vec![0; length as usize];
                 reader.read_exact(&mut data_buffer)?;
@@ -118,7 +122,7 @@ impl From<&CEPPacket> for Vec<u8> {
 
 #[derive(Debug, strum::Display)]
 pub enum CEPParseError {
-    WrongLength,
+    InvalidLength,
     InvalidHeader,
     InvalidCRC,
     Io(std::io::Error),
@@ -135,34 +139,8 @@ impl From<std::io::Error> for CEPParseError {
 impl TryFrom<Vec<u8>> for CEPPacket {
     type Error = CEPParseError;
 
-    fn try_from(mut value: Vec<u8>) -> Result<Self, Self::Error> {
-        let header_byte = value.first().ok_or(CEPParseError::WrongLength)?;
-        let header = CEPPacketHeader::from_repr(*header_byte as usize)
-            .ok_or(CEPParseError::InvalidHeader)?;
-
-        let packet = match header {
-            CEPPacketHeader::Ack => CEPPacket::Ack,
-            CEPPacketHeader::Nack => CEPPacket::Nack,
-            CEPPacketHeader::Stop => CEPPacket::Stop,
-            CEPPacketHeader::Eof => CEPPacket::Eof,
-            CEPPacketHeader::Data => {
-                let length_bytes = value.get(1..3).ok_or(CEPParseError::WrongLength)?;
-                let length = u16::from_le_bytes(length_bytes.try_into().unwrap()) as usize;
-                value.drain(0..3);
-
-                let crc_bytes = value.drain(length..length + 4);
-                let crc = u32::from_le_bytes(crc_bytes.as_slice().try_into().unwrap());
-                drop(crc_bytes);
-
-                if !CEPPacket::crc_is_valid(&value, crc) {
-                    return Err(CEPParseError::InvalidCRC);
-                }
-
-                CEPPacket::Data(value)
-            }
-        };
-
-        Ok(packet)
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from_read(&mut std::io::Cursor::new(value))
     }
 }
 
@@ -176,8 +154,29 @@ mod tests {
     #[test_case(vec![0x59], CEPPacket::Eof)]
     #[test_case(vec![0xB4], CEPPacket::Stop)]
     #[test_case(vec![0x8B, 0, 0, 0xff, 0xff, 0xff, 0xff], CEPPacket::Data(vec![]); "empty Data packet")]
+    #[test_case(vec![0x8B, 4, 0, 0x0a, 0x0b, 0x05, 0x73, 0x52, 0x27, 0x92, 0xf4], CEPPacket::Data(vec![0x0a, 0x0b, 0x05, 0x73]); "filled data packet")]
     fn packet_is_parsed_and_serialized_correctly(vec: Vec<u8>, packet: CEPPacket) {
         assert_eq!(&packet.clone().serialize(), &vec);
         assert_eq!(CEPPacket::try_from(vec).unwrap(), packet);
+    }
+
+    #[test]
+    fn invalid_crc_is_rejected() {
+        assert!(
+            matches!(
+                CEPPacket::try_from(vec![0x8B, 4, 0, 0x0a, 0x0b, 0x05, 0x74, 0x52, 0x27, 0x92, 0xf4]),
+                Err(CEPParseError::InvalidCRC)
+            )
+        )
+    }
+
+    #[test]
+    fn invalid_length_is_rejected() {
+        assert!(
+            matches!(
+                CEPPacket::try_from(vec![0x8B, 0xff, 0xff]),
+                Err(CEPParseError::InvalidLength)
+            )
+        )
     }
 }
