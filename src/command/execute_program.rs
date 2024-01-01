@@ -152,22 +152,14 @@ fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
         }
     }
 
-    let path_to_res = format!("./archives/{}/results", res.program_id);
-    let result = format!("{}", res.timestamp);
-    let path_to_log = String::from("../../../data");
-    let log = format!("{}_{}.log", res.program_id, res.timestamp);
     let _ = Command::new("tar")
         .arg("-cf")
         .arg(out_path)
-        .arg("--exclude")
+        .arg(res_path)
+        .arg(log_path)
         .arg("log")
-        .arg("-C")
-        .arg(path_to_res)
-        .arg(result)
-        .arg("-C")
-        .arg(path_to_log)
-        .arg(log)
         .status();
 
     Ok(())
 }
+

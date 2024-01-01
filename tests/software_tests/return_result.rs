@@ -50,8 +50,8 @@ fn returns_result_correctly() -> TestResult {
         .arg("7.tar")
         .status()?;
 
-    assert_eq!(std::fs::read("tests/tmp/3")?, vec![0xde, 0xad]);
-    assert!(std::fs::read("tests/tmp/7_3.log").is_ok());
+    assert_eq!(std::fs::read("tests/tmp/archives/7/results/3")?, vec![0xde, 0xad]);
+    assert!(std::fs::read("tests/tmp/data/7_3.log").is_ok());
 
     common::cleanup("7");
     Ok(())
