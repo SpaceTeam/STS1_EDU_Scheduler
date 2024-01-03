@@ -8,11 +8,10 @@ pub fn stop_program(
     com: &mut impl CommunicationHandle,
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
-    check_length(&data, 1)?;
-    com.send_packet(CEPPacket::ACK)?;
+    check_length(com, &data, 1)?;
 
     terminate_student_program(exec).expect("to terminate student program");
 
-    com.send_packet(CEPPacket::ACK)?;
+    com.send_packet(&CEPPacket::Ack)?;
     Ok(())
 }

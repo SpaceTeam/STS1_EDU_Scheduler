@@ -8,7 +8,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn get_status_none() -> TestResult {
-    let packets = vec![COBC(DATA(vec![4])), EDU(ACK), EDU(DATA(vec![0])), COBC(ACK)];
+    let packets = vec![COBC(Data(vec![4])), EDU(Ack), EDU(Data(vec![0])), COBC(Ack)];
 
     let (mut com, mut exec) = common::prepare_handles(packets, "5");
     command::handle_command(&mut com, &mut exec);
@@ -21,18 +21,18 @@ fn get_status_none() -> TestResult {
 #[test]
 fn get_status_finished() -> TestResult {
     let packets = vec![
-        COBC(DATA(execute_program(6, 0, 1))), // Execute Program 6, Queue 0, Timeout 1s
-        EDU(ACK),
-        EDU(ACK),
+        COBC(Data(execute_program(6, 0, 1))), // Execute Program 6, Queue 0, Timeout 1s
+        EDU(Ack),
+        EDU(Ack),
         SLEEP(std::time::Duration::from_millis(500)),
-        COBC(DATA(vec![4])), // Get Status
-        EDU(ACK),
-        EDU(DATA(vec![1, 6, 0, 0, 0, 0, 0, 0])), // Program Finished
-        COBC(ACK),
-        COBC(DATA(vec![4])), // Get Status
-        EDU(ACK),
-        EDU(DATA(vec![2, 6, 0, 0, 0, 0, 0])), // Result Ready
-        COBC(ACK),
+        COBC(Data(vec![4])), // Get Status
+        EDU(Ack),
+        EDU(Data(vec![1, 6, 0, 0, 0, 0, 0, 0])), // Program Finished
+        COBC(Ack),
+        COBC(Data(vec![4])), // Get Status
+        EDU(Ack),
+        EDU(Data(vec![2, 6, 0, 0, 0, 0, 0])), // Result Ready
+        COBC(Ack),
     ];
 
     common::prepare_program("6");
@@ -50,22 +50,22 @@ fn get_status_finished() -> TestResult {
 #[test]
 fn get_status_priority_for_status() -> TestResult {
     let packets = vec![
-        COBC(DATA(execute_program(15, 0, 2))),
-        EDU(ACK),
-        EDU(ACK),
+        COBC(Data(execute_program(15, 0, 2))),
+        EDU(Ack),
+        EDU(Ack),
         SLEEP(std::time::Duration::from_millis(500)),
-        COBC(DATA(get_status())),
-        EDU(ACK),
-        EDU(DATA(vec![1, 15, 0, 0, 0, 0, 0, 0])),
-        COBC(ACK),
-        COBC(DATA(execute_program(15, 0, 2))),
-        EDU(ACK),
-        EDU(ACK),
+        COBC(Data(get_status())),
+        EDU(Ack),
+        EDU(Data(vec![1, 15, 0, 0, 0, 0, 0, 0])),
+        COBC(Ack),
+        COBC(Data(execute_program(15, 0, 2))),
+        EDU(Ack),
+        EDU(Ack),
         SLEEP(std::time::Duration::from_millis(500)),
-        COBC(DATA(get_status())),
-        EDU(ACK),
-        EDU(DATA(vec![1, 15, 0, 0, 0, 0, 0, 0])),
-        COBC(ACK),
+        COBC(Data(get_status())),
+        EDU(Ack),
+        EDU(Data(vec![1, 15, 0, 0, 0, 0, 0, 0])),
+        COBC(Ack),
     ];
     common::prepare_program("15");
     let (mut com, mut exec) = common::prepare_handles(packets, "15");

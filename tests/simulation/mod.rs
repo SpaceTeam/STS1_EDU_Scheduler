@@ -1,14 +1,65 @@
 mod command_execution;
+mod full_run;
 mod logging;
 
 use std::{
-    fmt::format,
     io::{Read, Write},
-    process::{Child, Stdio},
+    process::{Child, ChildStdin, ChildStdout, Stdio},
+    time::Duration,
 };
+use STS1_EDU_Scheduler::communication::{CEPPacket, CommunicationError, CommunicationHandle};
 
-use crate::software_tests::common::*;
-use STS1_EDU_Scheduler::communication::CEPPacket;
+pub struct SimulationComHandle<T: Read, U: Write> {
+    cobc_in: T,
+    cobc_out: U,
+}
+
+impl SimulationComHandle<ChildStdout, ChildStdin> {
+    fn with_socat_proc(unique: &str) -> (Self, PoisonedChild) {
+        let mut proc = std::process::Command::new("socat")
+            .arg("stdio")
+            .arg(format!("pty,raw,echo=0,link=/tmp/ttySTS1-{},b921600,wait-slave", unique))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+
+        loop {
+            if std::path::Path::new(&format!("/tmp/ttySTS1-{unique}")).exists() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+
+        (
+            Self { cobc_in: proc.stdout.take().unwrap(), cobc_out: proc.stdin.take().unwrap() },
+            PoisonedChild(proc),
+        )
+    }
+}
+
+impl<T: Read, U: Write> Read for SimulationComHandle<T, U> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.cobc_in.read(buf)
+    }
+}
+
+impl<T: Read, U: Write> Write for SimulationComHandle<T, U> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.cobc_out.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.cobc_out.flush()
+    }
+}
+
+impl<T: Read, U: Write> CommunicationHandle for SimulationComHandle<T, U> {
+    const INTEGRITY_ACK_TIMEOUT: Duration = Duration::MAX;
+    const UNLIMITED_TIMEOUT: Duration = Duration::MAX;
+
+    fn set_timeout(&mut self, _timeout: &std::time::Duration) {}
+}
 
 fn get_config_str(unique: &str) -> String {
     format!(
@@ -24,119 +75,100 @@ fn get_config_str(unique: &str) -> String {
     )
 }
 
-pub fn start_scheduler(unique: &str) -> Result<(Child, Child), std::io::Error> {
+/// A simple wrapper that ensures child processes are killed when dropped
+struct PoisonedChild(pub Child);
+impl Drop for PoisonedChild {
+    fn drop(&mut self) {
+        self.0.kill().unwrap();
+    }
+}
+
+fn start_scheduler(unique: &str) -> Result<PoisonedChild, std::io::Error> {
     let test_dir = format!("./tests/tmp/{}", unique);
     let scheduler_bin = std::fs::canonicalize("./target/release/STS1_EDU_Scheduler")?;
     let _ = std::fs::remove_dir_all(&test_dir);
     std::fs::create_dir_all(&test_dir)?;
     std::fs::write(format!("{}/config.toml", &test_dir), get_config_str(unique))?;
 
-    let serial_port = std::process::Command::new("socat")
-        .arg("stdio")
-        .arg(format!("pty,raw,echo=0,link=/tmp/ttySTS1-{},b921600,wait-slave", unique))
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()?;
-    std::thread::sleep(std::time::Duration::from_millis(100));
-
     let scheduler =
         std::process::Command::new(scheduler_bin).current_dir(test_dir).spawn().unwrap();
 
-    Ok((scheduler, serial_port))
-}
-
-pub fn receive_ack(reader: &mut impl std::io::Read) -> Result<(), std::io::Error> {
-    let mut buffer = [0; 1];
-    reader.read_exact(&mut buffer).unwrap();
-
-    if buffer[0] == CEPPacket::ACK.serialize()[0] {
-        Ok(())
-    } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("received {:#x} instead of ACK", buffer[0]),
-        ))
-    }
+    Ok(PoisonedChild(scheduler))
 }
 
 pub fn simulate_test_store_archive(
-    cobc_in: &mut impl std::io::Read,
-    cobc_out: &mut impl std::io::Write,
+    com: &mut impl CommunicationHandle,
     program_id: u16,
-) -> std::io::Result<()> {
-    let archive = std::fs::read("tests/student_program.zip")?;
-    cobc_out.write_all(&CEPPacket::DATA(store_archive(program_id)).serialize())?;
-    receive_ack(cobc_in)?;
-    cobc_out.write_all(&CEPPacket::DATA(archive).serialize())?;
-    receive_ack(cobc_in)?;
-    cobc_out.write_all(&CEPPacket::EOF.serialize())?;
-    receive_ack(cobc_in)?;
-    receive_ack(cobc_in)?;
+) -> Result<(), CommunicationError> {
+    let archive = std::fs::read("tests/student_program.zip").unwrap();
+    com.send_packet(&CEPPacket::Data(store_archive(program_id)))?;
+    com.send_multi_packet(&archive)?;
+    com.await_ack(&Duration::MAX)?;
 
     Ok(())
 }
 
 pub fn simulate_execute_program(
-    cobc_in: &mut impl std::io::Read,
-    cobc_out: &mut impl std::io::Write,
+    com: &mut impl CommunicationHandle,
     program_id: u16,
     timestamp: u32,
     timeout: u16,
-) -> std::io::Result<()> {
-    cobc_out
-        .write_all(&CEPPacket::DATA(execute_program(program_id, timestamp, timeout)).serialize())?;
-    receive_ack(cobc_in)?;
-    receive_ack(cobc_in)?;
+) -> Result<(), CommunicationError> {
+    com.send_packet(&CEPPacket::Data(execute_program(program_id, timestamp, timeout)))?;
+    com.await_ack(&Duration::MAX)?;
+
     Ok(())
+}
+
+pub fn simulate_get_status(
+    com: &mut impl CommunicationHandle,
+) -> Result<Vec<u8>, CommunicationError> {
+    com.send_packet(&CEPPacket::Data(get_status()))?;
+    let response = com.receive_packet()?;
+
+    if let CEPPacket::Data(data) = response {
+        Ok(data)
+    } else {
+        Err(CommunicationError::PacketInvalidError)
+    }
 }
 
 pub fn simulate_return_result(
-    cobc_in: &mut impl std::io::Read,
-    cobc_out: &mut impl std::io::Write,
+    com: &mut impl CommunicationHandle,
     program_id: u16,
     timestamp: u32,
-) -> std::io::Result<Vec<u8>> {
-    cobc_out.write_all(&CEPPacket::DATA(return_result(program_id, timestamp)).serialize())?;
-    receive_ack(cobc_in)?;
+) -> Result<Vec<u8>, CommunicationError> {
+    com.send_packet(&CEPPacket::Data(return_result(program_id, timestamp)))?;
+    let data = com.receive_multi_packet(|| false)?;
 
-    let data = read_multi_data_packets(cobc_in, cobc_out)?;
     Ok(data)
 }
 
-/// Reads a data packet from input and returns the data content (does not check CRC)
-pub fn read_data_packet(input: &mut impl std::io::Read, data: &mut Vec<u8>) -> std::io::Result<()> {
-    let mut header = [0; 3];
-    input.read_exact(&mut header)?;
-    if header[0] != 0x8B {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("Expected data header (0x8B), received {:#04x}", header[0]),
-        ));
-    }
-
-    let data_len = u16::from_le_bytes([header[1], header[2]]);
-    input.take((data_len + 4).into()).read_to_end(data)?;
-
-    Ok(())
+pub fn store_archive(program_id: u16) -> Vec<u8> {
+    let mut vec = vec![1u8];
+    vec.extend(program_id.to_le_bytes());
+    vec
 }
 
-/// Reads a multi packet round without checking the CRC and returns the concatenated contents
-pub fn read_multi_data_packets(
-    input: &mut impl std::io::Read,
-    output: &mut impl std::io::Write,
-) -> std::io::Result<Vec<u8>> {
-    let mut eof_byte = [0; 1];
-    let mut data = Vec::new();
-    loop {
-        read_data_packet(input, &mut data)?;
-        output.write_all(&CEPPacket::ACK.serialize())?;
+pub fn execute_program(program_id: u16, timestamp: u32, timeout: u16) -> Vec<u8> {
+    let mut vec = vec![2u8];
+    vec.extend(program_id.to_le_bytes());
+    vec.extend(timestamp.to_le_bytes());
+    vec.extend(timeout.to_le_bytes());
+    vec
+}
 
-        input.read_exact(&mut eof_byte)?;
-        if eof_byte[0] == CEPPacket::EOF.serialize()[0] {
-            break;
-        }
-    }
+pub fn stop_program() -> Vec<u8> {
+    vec![3u8]
+}
 
-    output.write_all(&CEPPacket::ACK.serialize())?;
-    Ok(data)
+pub fn get_status() -> Vec<u8> {
+    vec![4u8]
+}
+
+pub fn return_result(program_id: u16, timestamp: u32) -> Vec<u8> {
+    let mut vec = vec![5u8];
+    vec.extend(program_id.to_le_bytes());
+    vec.extend(timestamp.to_le_bytes());
+    vec
 }

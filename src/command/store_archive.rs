@@ -2,7 +2,7 @@ use std::{io::Write, process::Command};
 
 use super::{CommandError, CommandResult, SyncExecutionContext};
 use crate::{
-    command::{check_length, COM_TIMEOUT_DURATION},
+    command::check_length,
     communication::{CEPPacket, CommunicationHandle},
 };
 
@@ -12,16 +12,15 @@ pub fn store_archive(
     com: &mut impl CommunicationHandle,
     _exec: &mut SyncExecutionContext,
 ) -> CommandResult {
-    check_length(&data, 3)?;
-    com.send_packet(CEPPacket::ACK)?;
+    check_length(com, &data, 3)?;
 
     let id = u16::from_le_bytes([data[1], data[2]]).to_string();
     log::info!("Storing Archive {}", id);
 
-    let bytes = com.receive_multi_packet(&COM_TIMEOUT_DURATION, || false)?; // !! TODO !!
+    let bytes = com.receive_multi_packet(|| false)?; // !! TODO !!
     unpack_archive(id, bytes)?;
 
-    com.send_packet(CEPPacket::ACK)?;
+    com.send_packet(&CEPPacket::Ack)?;
     Ok(())
 }
 

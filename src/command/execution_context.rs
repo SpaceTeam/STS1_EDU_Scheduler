@@ -23,7 +23,10 @@ pub struct ExecutionContext {
 }
 
 impl ExecutionContext {
-    pub fn new(event_file_path: String, update_pin: u8) -> Result<Self, std::io::Error> {
+    pub fn new(
+        event_file_path: String,
+        update_pin: u8,
+    ) -> Result<Arc<Mutex<Self>>, std::io::Error> {
         let mut ec = ExecutionContext {
             thread_handle: None,
             running_flag: false,
@@ -33,7 +36,7 @@ impl ExecutionContext {
 
         ec.check_update_pin();
 
-        Ok(ec)
+        Ok(Arc::new(Mutex::new(ec)))
     }
 
     /// Checks and sets/resets the update pin accordingly
@@ -85,7 +88,7 @@ pub struct UpdatePin {
 
 #[cfg(feature = "mock")]
 impl UpdatePin {
-    pub fn new(pin: u8) -> Self {
+    pub fn new(_pin: u8) -> Self {
         let update_pin = UpdatePin { pin: false };
         return update_pin;
     }

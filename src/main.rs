@@ -1,9 +1,8 @@
+#![allow(non_snake_case)]
 use core::time;
 use rppal::gpio::Gpio;
-use std::{
-    sync::{Arc, Mutex},
-    thread,
-};
+use std::{thread, time::Duration};
+use STS1_EDU_Scheduler::communication::CommunicationHandle;
 
 use simplelog as sl;
 
@@ -37,11 +36,11 @@ fn main() -> ! {
     log::info!("Scheduler started");
 
     // construct a wrapper for UART communication
-    let mut com = communication::UARTHandle::new(&config.uart, config.baudrate);
+    let mut com = serialport::new(&config.uart, config.baudrate).open().unwrap();
+    com.set_timeout(&Duration::from_secs(60));
 
     // construct a wrapper for resources that are shared between different commands
-    let ec = command::ExecutionContext::new("events".to_string(), config.update_pin).unwrap();
-    let mut exec = Arc::new(Mutex::new(ec));
+    let mut exec = command::ExecutionContext::new("events".to_string(), config.update_pin).unwrap();
 
     // start a thread that will update the heartbeat pin
     thread::spawn(move || heartbeat_loop(config.heartbeat_pin, config.heartbeat_freq));
@@ -54,10 +53,10 @@ fn main() -> ! {
 
 fn heartbeat_loop(heartbeat_pin: u8, freq: u64) -> ! {
     if cfg!(feature = "mock") {
-        loop {}
+        std::thread::park();
     }
 
-    let toogle_time = time::Duration::from_millis((1000 / freq / 2) as u64);
+    let toogle_time = time::Duration::from_millis(1000 / freq / 2);
 
     let gpio = Gpio::new().unwrap();
     let mut pin = gpio.get(heartbeat_pin).unwrap().into_output();

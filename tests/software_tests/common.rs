@@ -1,7 +1,8 @@
 use std::{
+    collections::VecDeque,
+    fmt::Debug,
     io::{Read, Write},
-    process::{Child, Stdio},
-    sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use STS1_EDU_Scheduler::{
@@ -12,7 +13,6 @@ use STS1_EDU_Scheduler::{
 pub enum ComEvent {
     /// EDU shall want to receive the given packet
     COBC(CEPPacket),
-    COBC_INVALID(Vec<u8>),
     /// EDU shall send the given packet
     EDU(CEPPacket),
     /// Makes the thread sleep for the given duration. Can be used to wait for execution to complete
@@ -20,97 +20,89 @@ pub enum ComEvent {
     /// Allow the EDU to send any packet
     ANY,
     /// EDU shall send a packet, which is then passed to a given function (e.g. to allow for further checks on data)
-    ACTION(Box<dyn Fn(Vec<u8>)>),
+    ACTION(Box<dyn Fn(&CEPPacket)>),
+}
+
+impl Debug for ComEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::COBC(arg0) => f.debug_tuple("COBC").field(arg0).finish(),
+            Self::EDU(arg0) => f.debug_tuple("EDU").field(arg0).finish(),
+            Self::SLEEP(arg0) => f.debug_tuple("SLEEP").field(arg0).finish(),
+            Self::ANY => write!(f, "ANY"),
+            Self::ACTION(_) => f.debug_tuple("ACTION").finish(),
+        }
+    }
 }
 
 /// This communciation handle can simulate what is going on between EDU and COBC. Any send or receive call is
 /// checked against the supplied expected events vector
 pub struct TestCom {
-    expected_events: Vec<ComEvent>,
-    receive_queue: Vec<u8>,
-    index: usize,
+    expected_events: VecDeque<ComEvent>,
 }
 
 impl CommunicationHandle for TestCom {
-    fn send(&mut self, bytes: Vec<u8>) -> ComResult<()> {
-        match &self.expected_events[self.index] {
-            ComEvent::EDU(p) => {
-                assert_eq!(
-                    bytes,
-                    p.clone().serialize(),
-                    "Wrong packet #{}, EDU: {:?}, should be {:?}",
-                    self.index,
-                    bytes,
-                    p
-                );
-                self.index += 1;
-                Ok(())
+    fn send_packet(&mut self, packet: &CEPPacket) -> ComResult<()> {
+        println!("Sent {packet:?}");
+        match self.expected_events.pop_front().unwrap() {
+            ComEvent::EDU(p) => assert_eq!(&p, packet),
+            ComEvent::SLEEP(d) => std::thread::sleep(d),
+            ComEvent::ANY => (),
+            ComEvent::ACTION(f) => f(packet),
+            event => panic!("Expected {event:?} instead of send_packet"),
+        }
+
+        if matches!(packet, CEPPacket::Data(_)) {
+            self.await_ack(&Self::INTEGRITY_ACK_TIMEOUT)?;
+        }
+
+        Ok(())
+    }
+
+    fn receive_packet(&mut self) -> ComResult<CEPPacket> {
+        match self.expected_events.pop_front().unwrap() {
+            ComEvent::COBC(p) => {
+                println!("Received {p:?}");
+                if matches!(p, CEPPacket::Data(_)) {
+                    self.send_packet(&CEPPacket::Ack)?;
+                }
+                Ok(p)
             }
             ComEvent::SLEEP(d) => {
-                std::thread::sleep(*d);
-                self.index += 1;
-                Ok(())
+                std::thread::sleep(d);
+                self.receive_packet()
             }
-            ComEvent::ANY => {
-                self.index += 1;
-                Ok(())
-            }
-            ComEvent::ACTION(f) => {
-                f(bytes);
-                self.index += 1;
-                Ok(())
-            }
-            _ => {
-                panic!("EDU should not send now, index {}", self.index);
-            }
+            event => panic!("Expected {event:?} instead of receive_packet"),
         }
     }
 
-    fn receive(&mut self, n: u16, timeout: &std::time::Duration) -> ComResult<Vec<u8>> {
-        match &self.expected_events[self.index] {
-            ComEvent::COBC(p) => {
-                if !self.receive_queue.is_empty() {
-                    let res: Vec<u8> = self.receive_queue.drain(0..(n as usize)).collect();
-                    if self.receive_queue.is_empty() {
-                        self.index += 1;
-                    }
-                    Ok(res)
-                } else {
-                    self.receive_queue.append(&mut p.clone().serialize());
-                    self.receive(n, timeout)
-                }
-            }
-            ComEvent::COBC_INVALID(b) => {
-                if !self.receive_queue.is_empty() {
-                    let res: Vec<u8> = self.receive_queue.drain(0..(n as usize)).collect();
-                    if self.receive_queue.is_empty() {
-                        self.index += 1;
-                    }
-                    Ok(res)
-                } else {
-                    self.receive_queue.append(&mut b.clone());
-                    self.receive(n, timeout)
-                }
-            }
-            ComEvent::SLEEP(d) => {
-                std::thread::sleep(*d);
-                self.index += 1;
-                self.receive(n, timeout)
-            }
-            _ => {
-                panic!("EDU should send now, index {}", self.index);
-            }
-        }
-    }
+    const INTEGRITY_ACK_TIMEOUT: std::time::Duration = Duration::MAX;
+    const UNLIMITED_TIMEOUT: std::time::Duration = Duration::MAX;
+
+    fn set_timeout(&mut self, _timeout: &std::time::Duration) {}
 }
 
 impl TestCom {
     pub fn new(packets: Vec<ComEvent>) -> Self {
-        TestCom { expected_events: packets, receive_queue: vec![], index: 0 }
+        TestCom { expected_events: packets.into() }
     }
 
     pub fn is_complete(&self) -> bool {
-        self.index == self.expected_events.len()
+        self.expected_events.is_empty()
+    }
+}
+
+impl Read for TestCom {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        Ok(buf.len())
+    }
+}
+impl Write for TestCom {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }
 
@@ -139,8 +131,7 @@ pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, SyncEx
     file_per_thread_logger::allow_uninitialized();
     file_per_thread_logger::initialize("tests/tmp/log-");
     let com = TestCom::new(packets);
-    let ec = ExecutionContext::new(format!("tests/tmp/{unique}"), 12).unwrap();
-    let exec = Arc::new(Mutex::new(ec));
+    let exec = ExecutionContext::new(format!("tests/tmp/{unique}"), 12).unwrap();
 
     (com, exec)
 }

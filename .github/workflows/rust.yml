@@ -15,7 +15,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Install
-      run: sudo apt install socat
+      run: sudo apt install socat libudev-dev
     - name: Build
       run: cargo build --release
     - name: Run tests
