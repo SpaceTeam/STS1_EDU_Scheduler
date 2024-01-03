@@ -53,7 +53,10 @@ fn delete_result(res: ResultId) -> CommandResult {
     let _ = std::fs::remove_file(res_path);
     let _ = std::fs::remove_file(log_path);
     let _ = std::fs::remove_file(out_path);
-    let _ = truncate_to_size("log", 0);
+
+    if let Ok(mut file) = std::fs::File::options().write(true).open("log") {
+        truncate_to_size(&mut file, 0)?;
+    }
 
     Ok(())
 }

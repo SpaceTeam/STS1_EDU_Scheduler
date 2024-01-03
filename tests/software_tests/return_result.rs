@@ -27,7 +27,7 @@ fn returns_result_correctly() -> TestResult {
         EDU(Ack),
         ACTION(Box::new(|packet| {
             let bytes = packet.clone().serialize();
-            std::fs::write("tests/tmp/7.tar", &bytes[3..bytes.len()-4]).unwrap();
+            std::fs::write("tests/tmp/7.tar", &bytes[3..bytes.len() - 4]).unwrap();
         })),
         COBC(Ack),
         EDU(Eof),
@@ -44,14 +44,15 @@ fn returns_result_correctly() -> TestResult {
     command::handle_command(&mut com, &mut exec);
     assert!(com.is_complete());
 
+    let _ = std::fs::create_dir("./tests/tmp/7_unpack");
     std::process::Command::new("tar")
-        .current_dir("./tests/tmp")
+        .current_dir("./tests/tmp/7_unpack")
         .arg("xf")
-        .arg("7.tar")
+        .arg("../7.tar")
         .status()?;
 
-    assert_eq!(std::fs::read("tests/tmp/archives/7/results/3")?, vec![0xde, 0xad]);
-    assert!(std::fs::read("tests/tmp/data/7_3.log").is_ok());
+    assert_eq!(std::fs::read("./tests/tmp/7_unpack/3")?, vec![0xde, 0xad]);
+    assert!(std::fs::read("./tests/tmp/7_unpack/7_3.log").is_ok());
 
     common::cleanup("7");
     Ok(())
