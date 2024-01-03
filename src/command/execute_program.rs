@@ -1,4 +1,8 @@
-use std::{path::Path, process::Command, time::Duration};
+use std::{
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use subprocess::Popen;
 
@@ -44,7 +48,7 @@ pub fn execute_program(
         log::info!("Program {}:{} finished with {}", program_id, timestamp, exit_code);
         let sid = ProgramStatus { program_id, timestamp, exit_code };
         let rid = ResultId { program_id, timestamp };
-        build_result_archive(rid).unwrap(); // create the zip file with result and log
+        build_result_archive(rid).unwrap(); // create the tar file with result and log
 
         let mut context = wd_context.lock().unwrap();
         context.event_vec.push(Event::Status(sid)).unwrap();
@@ -137,29 +141,32 @@ fn run_until_timeout(
     Err(())
 }
 
-/// The function uses `zip` to create an uncompressed archive that includes the result file specified, as well as
+/// The function uses `tar` to create an uncompressed archive that includes the result file specified, as well as
 /// the programs stdout/stderr and the schedulers log file. If any of the files is missing, the archive
 /// is created without them.
 fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
-    let res_path = format!("./archives/{}/results/{}", res.program_id, res.timestamp);
-    let log_path = format!("./data/{}_{}.log", res.program_id, res.timestamp);
-    let out_path = format!("./data/{}_{}.zip", res.program_id, res.timestamp);
+    let res_path =
+        PathBuf::from(format!("./archives/{}/results/{}", res.program_id, res.timestamp));
+    let student_log_path =
+        PathBuf::from(format!("./data/{}_{}.log", res.program_id, res.timestamp));
+    let log_path = PathBuf::from("log");
+
+    let out_path = PathBuf::from(&format!("./data/{}_{}.tar", res.program_id, res.timestamp));
+    let mut archive = tar::Builder::new(std::fs::File::create(out_path)?);
 
     const MAXIMUM_FILE_SIZE: u64 = 1_000_000;
-    for path in [&res_path, &log_path, &out_path, &"log".into()] {
-        if let Ok(true) = truncate_to_size(path, MAXIMUM_FILE_SIZE) {
-            log::warn!("Truncating {} from {} bytes", path, MAXIMUM_FILE_SIZE);
-        }
+    for path in &[res_path, student_log_path, log_path] {
+        let mut file = match std::fs::File::options().read(true).write(true).open(path) {
+            Ok(f) => f,
+            Err(e) if e.kind() == ErrorKind::NotFound => continue,
+            Err(e) => return Err(e),
+        };
+
+        truncate_to_size(&mut file, MAXIMUM_FILE_SIZE)?;
+        archive.append_file(path.file_name().unwrap(), &mut file)?;
     }
 
-    let _ = Command::new("zip")
-        .arg("-0")
-        .arg(out_path)
-        .arg("--junk-paths")
-        .arg("log")
-        .arg(res_path)
-        .arg(log_path)
-        .status();
+    archive.finish()?;
 
     Ok(())
 }

@@ -17,6 +17,7 @@ serde = { version = "1.0.166", features = ["derive"] }
 strum = { version = "0.25.0", features = ["derive"] }
 serialport = "4.2.2"
 test-case = "3.3.1"
+tar = "0.4.40"
 
 [dependencies.filevec]
 path = "lib/filevec"
@@ -27,4 +28,3 @@ rpi = []
 
 [dev-dependencies]
 file-per-thread-logger = "*"
-zip = "0.6.6"

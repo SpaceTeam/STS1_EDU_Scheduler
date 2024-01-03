@@ -19,18 +19,15 @@ pub fn check_length(
     }
 }
 
-/// Truncates the file at `path` to the given size. Returns wether it actually had to truncate.
-pub fn truncate_to_size(path: &str, n_bytes: u64) -> Result<bool, std::io::Error> {
-    log::info!("Truncating {:?}", &path);
-    let file = std::fs::File::options().write(true).open(path)?;
+/// Truncates the files to at most `n_bytes`
+pub fn truncate_to_size(file: &mut std::fs::File, n_bytes: u64) -> Result<(), std::io::Error> {
     let size = file.metadata()?.len();
     if size > n_bytes {
         file.set_len(n_bytes)?;
         file.sync_all()?;
-        Ok(true)
-    } else {
-        Ok(false)
     }
+
+    Ok(())
 }
 
 /// If no program is currently running, this function simply returns. Otherwise it signals the
