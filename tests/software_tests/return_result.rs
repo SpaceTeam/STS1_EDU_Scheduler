@@ -1,5 +1,3 @@
-use std::io::Write;
-
 use crate::software_tests::common;
 use crate::software_tests::common::ComEvent::*;
 use common::*;
@@ -82,48 +80,6 @@ fn truncate_result() -> TestResult {
     assert!(std::fs::File::open("./data/8_5.tar")?.metadata()?.len() < 1_005_000);
 
     common::cleanup("8");
-    Ok(())
-}
-
-#[test]
-fn stopped_return() -> TestResult {
-    let packets = vec![
-        COBC(Data(execute_program(9, 5, 3))),
-        EDU(Ack),
-        EDU(Ack),
-        SLEEP(std::time::Duration::from_millis(3000)),
-        COBC(Data(get_status())),
-        EDU(Ack),
-        EDU(Data(vec![1, 9, 0, 5, 0, 0, 0, 0])),
-        COBC(Ack),
-        COBC(Data(get_status())),
-        EDU(Ack),
-        EDU(Data(vec![2, 9, 0, 5, 0, 0, 0])),
-        COBC(Ack),
-        COBC(Data(return_result(9, 5))),
-        EDU(Ack),
-        ANY,
-        COBC(Ack),
-        ANY,
-        COBC(Stop),
-        COBC(Data(get_status())),
-        EDU(Ack),
-        EDU(Data(vec![2, 9, 0, 5, 0, 0, 0])),
-        COBC(Ack),
-    ];
-    common::prepare_program("9");
-    let (mut com, mut exec) = common::prepare_handles(packets, "9");
-
-    command::handle_command(&mut com, &mut exec);
-    command::handle_command(&mut com, &mut exec);
-    command::handle_command(&mut com, &mut exec);
-    command::handle_command(&mut com, &mut exec);
-    command::handle_command(&mut com, &mut exec);
-    assert!(com.is_complete());
-
-    assert!(std::fs::File::open("./data/9_5.tar").is_ok());
-
-    common::cleanup("9");
     Ok(())
 }
 

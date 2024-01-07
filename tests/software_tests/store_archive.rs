@@ -41,25 +41,3 @@ fn store_archive() -> TestResult {
     common::cleanup("0");
     Ok(())
 }
-
-#[test]
-fn stopped_store() -> TestResult {
-    let packets = vec![
-        COBC(Data(vec![0x01, 0x04, 0x00])), // Store Archive with ID 0
-        EDU(Ack),
-        COBC(Data(std::fs::read("./tests/student_program.zip")?)),
-        EDU(Ack),
-        COBC(Data(vec![0, 1, 2, 3])),
-        EDU(Ack),
-        COBC(Stop),
-    ];
-
-    let (mut com, mut exec) = common::prepare_handles(packets, "4");
-
-    command::handle_command(&mut com, &mut exec);
-
-    assert!(!std::path::Path::new("./archives/4").exists());
-
-    common::cleanup("4");
-    Ok(())
-}

@@ -6,7 +6,6 @@ use crc::{Crc, CRC_32_MPEG_2};
 pub enum CEPPacket {
     Ack,
     Nack,
-    Stop,
     Eof,
     Data(Vec<u8>),
 }
@@ -15,7 +14,6 @@ pub enum CEPPacket {
 pub enum CEPPacketHeader {
     Ack = 0xd7,
     Nack = 0x27,
-    Stop = 0xb4,
     Eof = 0x59,
     Data = 0x8b,
 }
@@ -59,7 +57,6 @@ impl CEPPacket {
         let header = match self {
             CEPPacket::Ack => CEPPacketHeader::Ack,
             CEPPacket::Nack => CEPPacketHeader::Nack,
-            CEPPacket::Stop => CEPPacketHeader::Stop,
             CEPPacket::Eof => CEPPacketHeader::Eof,
             CEPPacket::Data(_) => CEPPacketHeader::Data,
         };
@@ -75,7 +72,6 @@ impl CEPPacket {
         let packet = match header {
             CEPPacketHeader::Ack => CEPPacket::Ack,
             CEPPacketHeader::Nack => CEPPacket::Nack,
-            CEPPacketHeader::Stop => CEPPacket::Stop,
             CEPPacketHeader::Eof => CEPPacket::Eof,
             CEPPacketHeader::Data => {
                 let mut length_buffer = [0; 2];
@@ -152,7 +148,6 @@ mod tests {
     #[test_case(vec![0xD7], CEPPacket::Ack)]
     #[test_case(vec![0x27], CEPPacket::Nack)]
     #[test_case(vec![0x59], CEPPacket::Eof)]
-    #[test_case(vec![0xB4], CEPPacket::Stop)]
     #[test_case(vec![0x8B, 0, 0, 0xff, 0xff, 0xff, 0xff], CEPPacket::Data(vec![]); "empty Data packet")]
     #[test_case(vec![0x8B, 4, 0, 0x0a, 0x0b, 0x05, 0x73, 0x52, 0x27, 0x92, 0xf4], CEPPacket::Data(vec![0x0a, 0x0b, 0x05, 0x73]); "filled data packet")]
     fn packet_is_parsed_and_serialized_correctly(vec: Vec<u8>, packet: CEPPacket) {

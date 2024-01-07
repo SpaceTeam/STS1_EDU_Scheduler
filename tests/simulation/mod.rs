@@ -139,7 +139,7 @@ pub fn simulate_return_result(
     timestamp: u32,
 ) -> Result<Vec<u8>, CommunicationError> {
     com.send_packet(&CEPPacket::Data(return_result(program_id, timestamp)))?;
-    let data = com.receive_multi_packet(|| false)?;
+    let data = com.receive_multi_packet()?;
 
     Ok(data)
 }
