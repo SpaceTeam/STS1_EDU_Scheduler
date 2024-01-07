@@ -16,12 +16,11 @@ struct Configuration {
     heartbeat_pin: u8,
     update_pin: u8,
     heartbeat_freq: u64,
-    log_path: String,
 }
 
 fn main() -> ! {
     let config: Configuration =
-        toml::from_str(&std::fs::read_to_string("./config.toml").unwrap()).unwrap();
+        toml::from_str(&std::fs::read_to_string("./config.toml").expect("Could not open config file")).unwrap();
 
     create_directory_if_not_exists("archives").unwrap();
     create_directory_if_not_exists("data").unwrap();
@@ -36,7 +35,7 @@ fn main() -> ! {
     log::info!("Scheduler started");
 
     // construct a wrapper for UART communication
-    let mut com = serialport::new(&config.uart, config.baudrate).open().unwrap();
+    let mut com = serialport::new(&config.uart, config.baudrate).open().expect("Could not open serial port");
     com.set_timeout(&Duration::from_secs(60));
 
     // construct a wrapper for resources that are shared between different commands

@@ -1,0 +1,10 @@
+[Unit]
+Description=STS1 EDU Scheduler
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/scheduler
+ExecStart=/opt/scheduler/STS1_EDU_Scheduler
+
+[Install]
+WantedBy=multi-user.target

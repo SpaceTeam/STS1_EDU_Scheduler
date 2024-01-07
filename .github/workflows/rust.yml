@@ -28,9 +28,14 @@ jobs:
     - name: Prepare
       run: cargo install cross --git https://github.com/cross-rs/cross
     - name: Build
-      run: cross build --release --target aarch64-unknown-linux-gnu
+      run: |
+        cross build --release --target aarch64-unknown-linux-gnu
+        mv target/aarch64-unknown-linux-gnu/release/STS1_EDU_Scheduler .
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: aarch64 binary
-        path: target/aarch64-unknown-linux-gnu/release/STS1_EDU_Scheduler
+        name: aarch64 package
+        path: |
+          STS1_EDU_Scheduler
+          config.toml
+          scheduler.service
