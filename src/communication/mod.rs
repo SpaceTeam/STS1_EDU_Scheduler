@@ -76,15 +76,11 @@ pub trait CommunicationHandle: Read + Write {
         todo!()
     }
 
-    fn receive_multi_packet(&mut self, stop_fn: impl Fn() -> bool) -> ComResult<Vec<u8>> {
+    fn receive_multi_packet(&mut self) -> ComResult<Vec<u8>> {
         let mut buffer = Vec::new();
 
         loop {
             let pack = self.receive_packet();
-            if stop_fn() {
-                self.send_packet(&CEPPacket::Stop)?;
-                return Err(CommunicationError::StopCondition);
-            }
 
             match pack {
                 Ok(CEPPacket::Data(b)) => {
@@ -92,9 +88,6 @@ pub trait CommunicationHandle: Read + Write {
                 }
                 Ok(CEPPacket::Eof) => {
                     break;
-                }
-                Ok(CEPPacket::Stop) => {
-                    return Err(CommunicationError::StopCondition);
                 }
                 Err(e @ CommunicationError::Io(_)) => {
                     return Err(e);
@@ -141,8 +134,6 @@ pub enum CommunicationError {
     CepParsing(CEPParseError),
     /// Signals that the underlying sending or receiving failed. Not recoverable on its own.
     Io(std::io::Error),
-    /// Signals that a multi packet receive or send was interrupted by a Stop condition
-    StopCondition,
     /// Signals that a receive timed out
     TimedOut,
     /// Nack was received when Ack was expected
@@ -211,7 +202,6 @@ mod tests {
 
     #[test_case(CEPPacket::Ack)]
     #[test_case(CEPPacket::Nack)]
-    #[test_case(CEPPacket::Stop)]
     #[test_case(CEPPacket::Eof)]
     #[test_case(CEPPacket::Data(vec![1, 2, 3]))]
     fn packet_is_sent_correctly(packet: CEPPacket) {
@@ -225,7 +215,6 @@ mod tests {
 
     #[test_case(CEPPacket::Ack)]
     #[test_case(CEPPacket::Nack)]
-    #[test_case(CEPPacket::Stop)]
     #[test_case(CEPPacket::Eof)]
     #[test_case(CEPPacket::Data(vec![1, 2, 3]))]
     fn packet_is_received_correctly(packet: CEPPacket) {
@@ -298,7 +287,7 @@ mod tests {
         }
         com.data_to_read.append(&mut CEPPacket::Eof.serialize());
 
-        assert_eq!(com.receive_multi_packet(|| false).unwrap(), data);
+        assert_eq!(com.receive_multi_packet().unwrap(), data);
         assert!(com.data_to_read.is_empty());
         assert_eq!(com.written_data, CEPPacket::Ack.serialize().repeat(chunks.len() + 1))
     }

@@ -17,7 +17,7 @@ pub fn store_archive(
     let id = u16::from_le_bytes([data[1], data[2]]).to_string();
     log::info!("Storing Archive {}", id);
 
-    let bytes = com.receive_multi_packet(|| false)?; // !! TODO !!
+    let bytes = com.receive_multi_packet()?;
     unpack_archive(id, bytes)?;
 
     com.send_packet(&CEPPacket::Ack)?;

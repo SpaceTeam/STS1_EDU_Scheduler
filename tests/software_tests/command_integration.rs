@@ -48,10 +48,3 @@ fn eof_on_start_panic() {
     let (mut com, mut exec) = common::prepare_handles(vec![COBC(Eof)], "99");
     command::handle_command(&mut com, &mut exec);
 }
-
-#[test]
-#[should_panic]
-fn stop_on_start_panic() {
-    let (mut com, mut exec) = common::prepare_handles(vec![COBC(Stop)], "99");
-    command::handle_command(&mut com, &mut exec);
-}
