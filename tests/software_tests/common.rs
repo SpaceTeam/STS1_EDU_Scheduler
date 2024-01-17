@@ -53,7 +53,7 @@ impl CommunicationHandle for TestCom {
         }
 
         if matches!(packet, CEPPacket::Data(_)) {
-            self.await_ack(&Self::INTEGRITY_ACK_TIMEOUT)?;
+            self.await_ack(Self::INTEGRITY_ACK_TIMEOUT)?;
         }
 
         Ok(())
@@ -79,7 +79,7 @@ impl CommunicationHandle for TestCom {
     const INTEGRITY_ACK_TIMEOUT: std::time::Duration = Duration::MAX;
     const UNLIMITED_TIMEOUT: std::time::Duration = Duration::MAX;
 
-    fn set_timeout(&mut self, _timeout: &std::time::Duration) {}
+    fn set_timeout(&mut self, _timeout: std::time::Duration) {}
 }
 
 impl TestCom {

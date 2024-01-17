@@ -1,7 +1,8 @@
 #![allow(non_snake_case)]
 use core::time;
 use rppal::gpio::Gpio;
-use std::{thread, time::Duration};
+use serialport::SerialPort;
+use std::thread;
 use STS1_EDU_Scheduler::communication::CommunicationHandle;
 
 use simplelog as sl;
@@ -36,7 +37,7 @@ fn main() -> ! {
 
     // construct a wrapper for UART communication
     let mut com = serialport::new(&config.uart, config.baudrate).open().expect("Could not open serial port");
-    com.set_timeout(&Duration::from_secs(60));
+    com.set_timeout(<Box<dyn SerialPort> as CommunicationHandle>::UNLIMITED_TIMEOUT);
 
     // construct a wrapper for resources that are shared between different commands
     let mut exec = command::ExecutionContext::new("events".to_string(), config.update_pin).unwrap();

@@ -12,30 +12,30 @@ pub type ComResult<T> = Result<T, CommunicationError>;
 
 pub trait CommunicationHandle: Read + Write {
     const INTEGRITY_ACK_TIMEOUT: Duration;
-    const UNLIMITED_TIMEOUT: Duration = Duration::MAX;
+    const UNLIMITED_TIMEOUT: Duration;
 
     const DATA_PACKET_RETRIES: usize = 4;
 
-    fn set_timeout(&mut self, timeout: &Duration);
+    fn set_timeout(&mut self, timeout: Duration);
 
     fn send_packet(&mut self, packet: &CEPPacket) -> ComResult<()> {
         let bytes = Vec::from(packet);
+        self.write_all(&bytes)?;
 
-        for _ in 0..Self::DATA_PACKET_RETRIES {
-            self.write_all(&bytes)?;
+        if !(matches!(packet, CEPPacket::Data(_))) {
+            return Ok(());
+        }
 
-            if matches!(packet, CEPPacket::Data(_)) {
-                let response = self.receive_packet()?;
-                match response {
-                    CEPPacket::Ack => return Ok(()),
-                    CEPPacket::Nack => log::warn!("Received NACK after data packet; Retrying"),
-                    p => {
-                        log::error!("Received {p:?} after data packet");
-                        return Err(CommunicationError::PacketInvalidError);
+        for i in 1..=Self::DATA_PACKET_RETRIES {
+            match self.await_ack(Self::INTEGRITY_ACK_TIMEOUT) {
+                Ok(()) => return Ok(()),
+                Err(CommunicationError::NotAcknowledged) => {
+                    log::warn!("Received NACK, retrying");
+                    if i < Self::DATA_PACKET_RETRIES {
+                        self.write_all(&bytes)?;
                     }
-                }
-            } else {
-                return Ok(());
+                },
+                Err(e) => return Err(e)
             }
         }
 
@@ -50,7 +50,7 @@ pub trait CommunicationHandle: Read + Write {
         }
 
         self.send_packet(&CEPPacket::Eof)?;
-        self.await_ack(&Self::INTEGRITY_ACK_TIMEOUT)?;
+        self.await_ack(Self::INTEGRITY_ACK_TIMEOUT)?;
 
         Ok(())
     }
@@ -64,7 +64,8 @@ pub trait CommunicationHandle: Read + Write {
                 }
                 Ok(p) => return Ok(p),
                 Err(CEPParseError::InvalidCRC) => {
-                    log::warn!("Received data packet with invalid CRC; Retrying")
+                    log::warn!("Received data packet with invalid CRC; Retrying");
+                    self.send_packet(&CEPPacket::Nack)?;
                 }
                 Err(e) => {
                     log::error!("Failed to read packet: {e:?}");
@@ -73,7 +74,8 @@ pub trait CommunicationHandle: Read + Write {
             }
         }
 
-        todo!()
+        log::error!("Could not receive data packet after {} retries, giving up", Self::DATA_PACKET_RETRIES);
+        Err(CommunicationError::PacketInvalidError)
     }
 
     fn receive_multi_packet(&mut self) -> ComResult<Vec<u8>> {
@@ -107,22 +109,26 @@ pub trait CommunicationHandle: Read + Write {
         Ok(buffer)
     }
 
-    fn await_ack(&mut self, timeout: &Duration) -> ComResult<()> {
+    /// Try to receive an ACK packet with a given `timeout`. Resets the timeout to Duration::MAX afterwards
+    fn await_ack(&mut self, timeout: Duration) -> ComResult<()> {
         self.set_timeout(timeout);
-        match self.receive_packet()? {
+        let ret = match self.receive_packet()? {
             CEPPacket::Ack => Ok(()),
             CEPPacket::Nack => Err(CommunicationError::NotAcknowledged),
             _ => Err(CommunicationError::PacketInvalidError),
-        }
+        };
+        self.set_timeout(Self::UNLIMITED_TIMEOUT);
+        ret
     }
 }
 
 impl CommunicationHandle for Box<dyn serialport::SerialPort> {
     const INTEGRITY_ACK_TIMEOUT: Duration = Duration::from_millis(100);
-    const UNLIMITED_TIMEOUT: Duration = Duration::MAX;
+    /// Equivalent to 106 days, maximum allowed value due to library limitations (of all serialport libraries I found)
+    const UNLIMITED_TIMEOUT: Duration = Duration::from_millis(9223372035);
 
-    fn set_timeout(&mut self, timeout: &Duration) {
-        serialport::SerialPort::set_timeout(self.as_mut(), *timeout).unwrap()
+    fn set_timeout(&mut self, timeout: Duration) {
+        serialport::SerialPort::set_timeout(self.as_mut(), timeout).unwrap()
     }
 }
 
@@ -197,7 +203,7 @@ mod tests {
     impl CommunicationHandle for TestComHandle {
         const INTEGRITY_ACK_TIMEOUT: Duration = Duration::from_millis(100);
         const UNLIMITED_TIMEOUT: Duration = Duration::MAX;
-        fn set_timeout(&mut self, _timeout: &Duration) {}
+        fn set_timeout(&mut self, _timeout: Duration) {}
     }
 
     #[test_case(CEPPacket::Ack)]
@@ -252,6 +258,7 @@ mod tests {
             com.send_packet(&CEPPacket::Data(vec![1, 2, 3])),
             Err(CommunicationError::PacketInvalidError)
         ));
+        dbg!(&com.data_to_read);
         assert!(com.data_to_read.is_empty());
         assert_eq!(
             com.written_data,
@@ -271,7 +278,10 @@ mod tests {
 
         assert!(com.data_to_read.is_empty());
         for c in chunks {
-            assert_eq!(com.written_data.drain(0..c.len()+7).as_slice(), CEPPacket::Data(c.to_vec()).serialize());
+            assert_eq!(
+                com.written_data.drain(0..c.len() + 7).as_slice(),
+                CEPPacket::Data(c.to_vec()).serialize()
+            );
         }
         assert_eq!(com.written_data, CEPPacket::Eof.serialize());
     }
@@ -291,5 +301,4 @@ mod tests {
         assert!(com.data_to_read.is_empty());
         assert_eq!(com.written_data, CEPPacket::Ack.serialize().repeat(chunks.len() + 1))
     }
-
 }

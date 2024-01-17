@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::communication::{CEPPacket, CommunicationHandle};
 
 mod common;
@@ -20,6 +22,8 @@ use return_result::return_result;
 use stop_program::stop_program;
 use store_archive::store_archive;
 use update_time::update_time;
+
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(1);
 
 type CommandResult = Result<(), CommandError>;
 
