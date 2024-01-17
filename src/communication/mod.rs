@@ -175,6 +175,8 @@ impl std::error::Error for CommunicationError {}
 
 #[cfg(test)]
 mod tests {
+    use self::cep::CEPPacketHeader;
+
     use super::*;
     use test_case::test_case;
 
@@ -248,7 +250,7 @@ mod tests {
     }
 
     #[test]
-    fn fail_after_retries() {
+    fn fail_after_retries_send_packet() {
         let mut com = TestComHandle::default();
         for _ in 0..TestComHandle::DATA_PACKET_RETRIES {
             com.data_to_read.append(&mut CEPPacket::Nack.serialize());
@@ -264,6 +266,30 @@ mod tests {
             com.written_data,
             CEPPacket::Data(vec![1, 2, 3]).serialize().repeat(TestComHandle::DATA_PACKET_RETRIES)
         );
+    }
+
+    #[test]
+    fn fail_after_retries_receive_packet() {
+        let mut com = TestComHandle::default();
+        com.data_to_read.extend([CEPPacketHeader::Data as u8, 1, 0, 2, 1, 1, 1, 1].repeat(TestComHandle::DATA_PACKET_RETRIES));
+
+        let err = com.receive_packet().expect_err("Invalid data packet should fail");
+        assert!(matches!(err, CommunicationError::PacketInvalidError));
+        assert!(com.data_to_read.is_empty(), "Not read: {:?}", com.data_to_read);
+        assert_eq!(com.written_data, CEPPacket::Nack.serialize().repeat(TestComHandle::DATA_PACKET_RETRIES));
+    }
+
+    #[test]
+    fn receive_packet_retries_correctly() {
+        let mut com = TestComHandle::default();
+        com.data_to_read.extend([CEPPacketHeader::Data as u8, 1, 0, 2, 1, 1, 1, 1].repeat(TestComHandle::DATA_PACKET_RETRIES-1));
+        com.data_to_read.append(&mut CEPPacket::Data(vec![2]).serialize());
+
+        assert_eq!(com.receive_packet().unwrap(), CEPPacket::Data(vec![2]));
+        assert!(com.data_to_read.is_empty());
+        let mut expected = CEPPacket::Nack.serialize().repeat(TestComHandle::DATA_PACKET_RETRIES-1);
+        expected.append(&mut CEPPacket::Ack.serialize());
+        assert_eq!(com.written_data, expected);
     }
 
     #[test]
