@@ -24,11 +24,11 @@ impl From<subprocess::PopenError> for CommandError {
 impl From<CommunicationError> for CommandError {
     fn from(e: CommunicationError) -> Self {
         match e {
-            CommunicationError::PacketInvalidError => CommandError::External(Box::new(e)),
-            CommunicationError::CepParsing(_) => CommandError::ProtocolViolation(Box::new(e)),
-            CommunicationError::Io(_) => CommandError::NonRecoverable(Box::new(e)),
-            CommunicationError::NotAcknowledged => CommandError::ProtocolViolation(Box::new(e)),
-            CommunicationError::TimedOut => todo!("Timeout not yet specified"),
+            CommunicationError::PacketInvalidError => CommandError::External(e.into()),
+            CommunicationError::CepParsing(_) => CommandError::ProtocolViolation(e.into()),
+            CommunicationError::Io(_) => CommandError::NonRecoverable(e.into()),
+            CommunicationError::NotAcknowledged => CommandError::ProtocolViolation(e.into()),
+            CommunicationError::TimedOut => CommandError::ProtocolViolation(e.into()),
         }
     }
 }

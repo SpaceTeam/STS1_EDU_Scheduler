@@ -1,6 +1,7 @@
 mod command_execution;
 mod full_run;
 mod logging;
+mod timeout;
 
 use std::{
     io::{Read, Write},

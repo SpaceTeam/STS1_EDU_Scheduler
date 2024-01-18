@@ -123,7 +123,7 @@ pub trait CommunicationHandle: Read + Write {
 }
 
 impl CommunicationHandle for Box<dyn serialport::SerialPort> {
-    const INTEGRITY_ACK_TIMEOUT: Duration = Duration::from_millis(100);
+    const INTEGRITY_ACK_TIMEOUT: Duration = Duration::from_millis(1000);
     /// Equivalent to 106 days, maximum allowed value due to library limitations (of all serialport libraries I found)
     const UNLIMITED_TIMEOUT: Duration = Duration::from_millis(9223372035);
 
@@ -165,7 +165,7 @@ impl From<std::io::Error> for CommunicationError {
 impl From<CEPParseError> for CommunicationError {
     fn from(value: CEPParseError) -> Self {
         match value {
-            CEPParseError::Io(e) => Self::Io(e),
+            CEPParseError::Io(e) => e.into(),
             e => Self::CepParsing(e),
         }
     }
