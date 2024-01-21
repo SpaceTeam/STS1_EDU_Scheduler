@@ -19,7 +19,7 @@ pub enum CEPPacketHeader {
 }
 
 impl CEPPacket {
-    pub const MAXIMUM_DATA_LENGTH: usize = 11000;
+    pub const MAXIMUM_DATA_LENGTH: usize = 11 * 1024;
     pub const MAXIMUM_PACKET_LENGTH: usize = 7 + Self::MAXIMUM_DATA_LENGTH;
 
     const CRC: Crc<u32> = Crc::<u32>::new(&CRC_32_MPEG_2);
