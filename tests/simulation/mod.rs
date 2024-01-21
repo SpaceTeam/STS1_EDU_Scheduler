@@ -1,6 +1,7 @@
 mod command_execution;
 mod full_run;
 mod logging;
+mod timeout;
 
 use std::{
     io::{Read, Write},
@@ -58,7 +59,7 @@ impl<T: Read, U: Write> CommunicationHandle for SimulationComHandle<T, U> {
     const INTEGRITY_ACK_TIMEOUT: Duration = Duration::MAX;
     const UNLIMITED_TIMEOUT: Duration = Duration::MAX;
 
-    fn set_timeout(&mut self, _timeout: &std::time::Duration) {}
+    fn set_timeout(&mut self, _timeout: std::time::Duration) {}
 }
 
 fn get_config_str(unique: &str) -> String {
@@ -103,7 +104,7 @@ pub fn simulate_test_store_archive(
     let archive = std::fs::read("tests/student_program.zip").unwrap();
     com.send_packet(&CEPPacket::Data(store_archive(program_id)))?;
     com.send_multi_packet(&archive)?;
-    com.await_ack(&Duration::MAX)?;
+    com.await_ack(Duration::MAX)?;
 
     Ok(())
 }
@@ -115,7 +116,7 @@ pub fn simulate_execute_program(
     timeout: u16,
 ) -> Result<(), CommunicationError> {
     com.send_packet(&CEPPacket::Data(execute_program(program_id, timestamp, timeout)))?;
-    com.await_ack(&Duration::MAX)?;
+    com.await_ack(Duration::MAX)?;
 
     Ok(())
 }

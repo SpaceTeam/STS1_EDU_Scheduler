@@ -1,7 +1,5 @@
-use std::time::Duration;
-
 use crate::{
-    command::{check_length, CommandError, Event, ResultId},
+    command::{check_length, CommandError, Event, ResultId, COMMAND_TIMEOUT},
     communication::{CEPPacket, CommunicationHandle},
 };
 
@@ -31,7 +29,7 @@ pub fn return_result(
     log::info!("Returning result for {}:{}", program_id, timestamp);
     com.send_multi_packet(&bytes)?;
 
-    com.await_ack(&Duration::from_secs(1))?;
+    com.await_ack(COMMAND_TIMEOUT)?;
     let result_id = ResultId { program_id, timestamp };
     delete_result(result_id)?;
 
