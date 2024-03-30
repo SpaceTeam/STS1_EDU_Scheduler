@@ -118,12 +118,14 @@ pub struct ResultId {
 pub enum Event {
     Status(ProgramStatus),
     Result(ResultId),
+    EnableDosimeter,
+    DisableDosimeter,
 }
 
-impl Event {
-    pub fn to_bytes(self) -> Vec<u8> {
+impl From<Event> for Vec<u8> {
+    fn from(value: Event) -> Self {
         let mut v = Vec::new();
-        match self {
+        match value {
             Event::Status(s) => {
                 v.push(1);
                 v.extend(s.program_id.to_le_bytes());
@@ -134,6 +136,12 @@ impl Event {
                 v.push(2);
                 v.extend(r.program_id.to_le_bytes());
                 v.extend(r.timestamp.to_le_bytes());
+            }
+            Event::EnableDosimeter => {
+                v.push(3);
+            }
+            Event::DisableDosimeter => {
+                v.push(4);
             }
         }
         v
