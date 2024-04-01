@@ -1,6 +1,7 @@
 mod command_execution;
 mod full_run;
 mod logging;
+mod socket;
 mod timeout;
 
 use std::{
@@ -65,14 +66,14 @@ impl<T: Read, U: Write> CommunicationHandle for SimulationComHandle<T, U> {
 fn get_config_str(unique: &str) -> String {
     format!(
         "
-    uart = \"/tmp/ttySTS1-{}\"
+    uart = \"/tmp/ttySTS1-{unique}\"
     baudrate = 921600
     heartbeat_pin = 34
     update_pin = 35
     heartbeat_freq = 10
     log_path = \"log\"
-    ",
-        unique
+    socket = \"/tmp/STS1_EDU_Scheduler_SIM_{unique}\"
+    "
     )
 }
 

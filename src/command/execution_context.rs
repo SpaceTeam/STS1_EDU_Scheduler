@@ -1,4 +1,5 @@
 use std::{
+    str::FromStr,
     sync::{Arc, Mutex},
     thread,
 };
@@ -100,7 +101,7 @@ impl UpdatePin {
 }
 
 /// Struct used for storing information about a finished student program
-#[derive(Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
 pub struct ProgramStatus {
     pub program_id: u16,
     pub timestamp: u32,
@@ -108,13 +109,13 @@ pub struct ProgramStatus {
 }
 
 /// Struct used for storing information of a result, waiting to be sent
-#[derive(Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
 pub struct ResultId {
     pub program_id: u16,
     pub timestamp: u32,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Event {
     Status(ProgramStatus),
     Result(ResultId),
@@ -145,5 +146,17 @@ impl From<Event> for Vec<u8> {
             }
         }
         v
+    }
+}
+
+impl FromStr for Event {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "dosimeter/on" => Ok(Event::EnableDosimeter),
+            "dosimeter/off" => Ok(Event::DisableDosimeter),
+            _ => Err(()),
+        }
     }
 }

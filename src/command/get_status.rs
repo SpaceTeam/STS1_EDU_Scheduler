@@ -24,12 +24,12 @@ pub fn get_status(
         com.send_packet(&CEPPacket::Data(event.into()))?;
         l_exec.event_vec.remove(index)?;
     } else {
-        let event = *l_exec.event_vec.as_ref().last().unwrap(); // Safe, because we know it is not empty
+        let event = *l_exec.event_vec.as_ref().first().unwrap(); // Safe, because we know it is not empty
         com.send_packet(&CEPPacket::Data(event.into()))?;
 
         if !matches!(event, Event::Result(_)) {
             // Results are removed when deleted
-            l_exec.event_vec.pop()?;
+            l_exec.event_vec.remove(0)?;
         }
     }
 
