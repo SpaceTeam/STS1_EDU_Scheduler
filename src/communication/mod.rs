@@ -115,12 +115,13 @@ pub trait CommunicationHandle: Read + Write {
     /// Try to receive an ACK packet with a given `timeout`. Resets the timeout to Duration::MAX afterwards
     fn await_ack(&mut self, timeout: Duration) -> ComResult<()> {
         self.set_timeout(timeout);
-        let ret = match self.receive_packet()? {
+        let result = self.receive_packet();
+        self.set_timeout(Self::UNLIMITED_TIMEOUT);
+        let ret = match result? {
             CEPPacket::Ack => Ok(()),
             CEPPacket::Nack => Err(CommunicationError::NotAcknowledged),
             _ => Err(CommunicationError::PacketInvalidError),
         };
-        self.set_timeout(Self::UNLIMITED_TIMEOUT);
         ret
     }
 }

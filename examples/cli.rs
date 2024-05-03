@@ -20,6 +20,7 @@ fn main() {
     loop {
         inquire_and_send_command(&mut serial, &scheduler_path).unwrap();
         println!("------------------------");
+        std::thread::sleep(Duration::from_millis(100));
     }
 }
 
@@ -130,6 +131,7 @@ fn inquire_and_send_command(edu: &mut impl CommunicationHandle, path: &str) -> R
             match edu.receive_multi_packet() {
                 Ok(data) => {
                     std::fs::write(result_path, data)?;
+                    edu.send_packet(&CEPPacket::Ack)?;
                     println!("Wrote result to file");
                 },
                 Err(e) => println!("Received {:?}", e),
