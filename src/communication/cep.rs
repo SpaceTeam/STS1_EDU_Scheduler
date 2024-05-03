@@ -157,21 +157,17 @@ mod tests {
 
     #[test]
     fn invalid_crc_is_rejected() {
-        assert!(
-            matches!(
-                CEPPacket::try_from(vec![0x8B, 4, 0, 0x0a, 0x0b, 0x05, 0x74, 0x52, 0x27, 0x92, 0xf4]),
-                Err(CEPParseError::InvalidCRC)
-            )
-        )
+        assert!(matches!(
+            CEPPacket::try_from(vec![0x8B, 4, 0, 0x0a, 0x0b, 0x05, 0x74, 0x52, 0x27, 0x92, 0xf4]),
+            Err(CEPParseError::InvalidCRC)
+        ))
     }
 
     #[test]
     fn invalid_length_is_rejected() {
-        assert!(
-            matches!(
-                CEPPacket::try_from(vec![0x8B, 0xff, 0xff]),
-                Err(CEPParseError::InvalidLength)
-            )
-        )
+        assert!(matches!(
+            CEPPacket::try_from(vec![0x8B, 0xff, 0xff]),
+            Err(CEPParseError::InvalidLength)
+        ))
     }
 }

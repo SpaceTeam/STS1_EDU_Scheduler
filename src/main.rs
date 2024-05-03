@@ -20,8 +20,10 @@ struct Configuration {
 }
 
 fn main() -> ! {
-    let config: Configuration =
-        toml::from_str(&std::fs::read_to_string("./config.toml").expect("Could not open config file")).unwrap();
+    let config: Configuration = toml::from_str(
+        &std::fs::read_to_string("./config.toml").expect("Could not open config file"),
+    )
+    .unwrap();
 
     create_directory_if_not_exists("archives").unwrap();
     create_directory_if_not_exists("data").unwrap();
@@ -36,7 +38,8 @@ fn main() -> ! {
     log::info!("Scheduler started");
 
     // construct a wrapper for UART communication
-    let mut com = serialport::new(&config.uart, config.baudrate).open().expect("Could not open serial port");
+    let mut com =
+        serialport::new(&config.uart, config.baudrate).open().expect("Could not open serial port");
     com.set_timeout(<Box<dyn SerialPort> as CommunicationHandle>::UNLIMITED_TIMEOUT);
 
     // construct a wrapper for resources that are shared between different commands

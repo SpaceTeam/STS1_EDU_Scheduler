@@ -82,23 +82,20 @@ impl UpdatePin {
 
 /// This impl is only used when doing tests without hardware
 #[cfg(feature = "mock")]
-pub struct UpdatePin {
-    pub pin: bool,
-}
+pub struct UpdatePin;
 
 #[cfg(feature = "mock")]
 impl UpdatePin {
     pub fn new(_pin: u8) -> Self {
-        let update_pin = UpdatePin { pin: false };
-        return update_pin;
+        Self
     }
 
     pub fn set_high(&mut self) {
-        self.pin = true
+        let _ = std::fs::write("updatepin", b"");
     }
 
     pub fn set_low(&mut self) {
-        self.pin = false
+        let _ = std::fs::remove_file("updatepin");
     }
 }
 
