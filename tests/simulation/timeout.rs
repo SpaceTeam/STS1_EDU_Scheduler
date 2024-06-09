@@ -1,6 +1,6 @@
+use super::{get_status, start_scheduler, SimulationComHandle};
 use std::time::Duration;
-use STS1_EDU_Scheduler::communication::{CommunicationHandle, CEPPacket};
-use super::{SimulationComHandle, start_scheduler, get_status};
+use STS1_EDU_Scheduler::communication::{CEPPacket, CommunicationHandle};
 
 #[test]
 fn integrity_ack_timeout_is_honored() {

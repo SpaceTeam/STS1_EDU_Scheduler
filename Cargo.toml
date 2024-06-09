@@ -28,3 +28,4 @@ rpi = []
 
 [dev-dependencies]
 file-per-thread-logger = "*"
+inquire = "0.7.5"

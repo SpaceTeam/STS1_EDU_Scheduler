@@ -34,8 +34,8 @@ pub trait CommunicationHandle: Read + Write {
                     if i < Self::DATA_PACKET_RETRIES {
                         self.write_all(&bytes)?;
                     }
-                },
-                Err(e) => return Err(e)
+                }
+                Err(e) => return Err(e),
             }
         }
 
@@ -74,7 +74,10 @@ pub trait CommunicationHandle: Read + Write {
             }
         }
 
-        log::error!("Could not receive data packet after {} retries, giving up", Self::DATA_PACKET_RETRIES);
+        log::error!(
+            "Could not receive data packet after {} retries, giving up",
+            Self::DATA_PACKET_RETRIES
+        );
         Err(CommunicationError::PacketInvalidError)
     }
 
@@ -112,12 +115,13 @@ pub trait CommunicationHandle: Read + Write {
     /// Try to receive an ACK packet with a given `timeout`. Resets the timeout to Duration::MAX afterwards
     fn await_ack(&mut self, timeout: Duration) -> ComResult<()> {
         self.set_timeout(timeout);
-        let ret = match self.receive_packet()? {
+        let result = self.receive_packet();
+        self.set_timeout(Self::UNLIMITED_TIMEOUT);
+        let ret = match result? {
             CEPPacket::Ack => Ok(()),
             CEPPacket::Nack => Err(CommunicationError::NotAcknowledged),
             _ => Err(CommunicationError::PacketInvalidError),
         };
-        self.set_timeout(Self::UNLIMITED_TIMEOUT);
         ret
     }
 }
@@ -271,23 +275,33 @@ mod tests {
     #[test]
     fn fail_after_retries_receive_packet() {
         let mut com = TestComHandle::default();
-        com.data_to_read.extend([CEPPacketHeader::Data as u8, 1, 0, 2, 1, 1, 1, 1].repeat(TestComHandle::DATA_PACKET_RETRIES));
+        com.data_to_read.extend(
+            [CEPPacketHeader::Data as u8, 1, 0, 2, 1, 1, 1, 1]
+                .repeat(TestComHandle::DATA_PACKET_RETRIES),
+        );
 
         let err = com.receive_packet().expect_err("Invalid data packet should fail");
         assert!(matches!(err, CommunicationError::PacketInvalidError));
         assert!(com.data_to_read.is_empty(), "Not read: {:?}", com.data_to_read);
-        assert_eq!(com.written_data, CEPPacket::Nack.serialize().repeat(TestComHandle::DATA_PACKET_RETRIES));
+        assert_eq!(
+            com.written_data,
+            CEPPacket::Nack.serialize().repeat(TestComHandle::DATA_PACKET_RETRIES)
+        );
     }
 
     #[test]
     fn receive_packet_retries_correctly() {
         let mut com = TestComHandle::default();
-        com.data_to_read.extend([CEPPacketHeader::Data as u8, 1, 0, 2, 1, 1, 1, 1].repeat(TestComHandle::DATA_PACKET_RETRIES-1));
+        com.data_to_read.extend(
+            [CEPPacketHeader::Data as u8, 1, 0, 2, 1, 1, 1, 1]
+                .repeat(TestComHandle::DATA_PACKET_RETRIES - 1),
+        );
         com.data_to_read.append(&mut CEPPacket::Data(vec![2]).serialize());
 
         assert_eq!(com.receive_packet().unwrap(), CEPPacket::Data(vec![2]));
         assert!(com.data_to_read.is_empty());
-        let mut expected = CEPPacket::Nack.serialize().repeat(TestComHandle::DATA_PACKET_RETRIES-1);
+        let mut expected =
+            CEPPacket::Nack.serialize().repeat(TestComHandle::DATA_PACKET_RETRIES - 1);
         expected.append(&mut CEPPacket::Ack.serialize());
         assert_eq!(com.written_data, expected);
     }
