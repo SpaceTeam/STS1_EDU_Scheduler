@@ -21,15 +21,15 @@ pub fn get_status(
         l_exec.event_vec.as_ref().iter().position(|x| matches!(x, Event::Status(_)))
     {
         let event = l_exec.event_vec[index];
-        com.send_packet(&CEPPacket::Data(event.to_bytes()))?;
+        com.send_packet(&CEPPacket::Data(event.into()))?;
         l_exec.event_vec.remove(index)?;
     } else {
-        let event = *l_exec.event_vec.as_ref().last().unwrap(); // Safe, because we know it is not empty
-        com.send_packet(&CEPPacket::Data(event.to_bytes()))?;
+        let event = *l_exec.event_vec.as_ref().first().unwrap(); // Safe, because we know it is not empty
+        com.send_packet(&CEPPacket::Data(event.into()))?;
 
         if !matches!(event, Event::Result(_)) {
             // Results are removed when deleted
-            l_exec.event_vec.pop()?;
+            l_exec.event_vec.remove(0)?;
         }
     }
 

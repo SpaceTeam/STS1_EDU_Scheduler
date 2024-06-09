@@ -1,5 +1,9 @@
 use std::{
-    error::Error, io::{Read, Write}, path::Path, process::{Child, ChildStdin, ChildStdout, Stdio}, time::Duration
+    error::Error,
+    io::{Read, Write},
+    path::Path,
+    process::{Child, ChildStdin, ChildStdout, Stdio},
+    time::Duration,
 };
 
 use STS1_EDU_Scheduler::communication::{CEPPacket, CommunicationHandle};
@@ -71,7 +75,10 @@ fn write_scheduler_config(path: &str) {
 const COMMANDS: &[&str] =
     &["StoreArchive", "ExecuteProgram", "StopProgram", "GetStatus", "ReturnResult", "UpdateTime"];
 
-fn inquire_and_send_command(edu: &mut impl CommunicationHandle, path: &str) -> Result<(), Box<dyn Error>> {
+fn inquire_and_send_command(
+    edu: &mut impl CommunicationHandle,
+    path: &str,
+) -> Result<(), Box<dyn Error>> {
     let mut select = inquire::Select::new("Select command", COMMANDS.to_vec());
     if Path::new(&format!("{path}/updatepin")).exists() {
         select.help_message = Some("Update Pin is high");
@@ -122,18 +129,20 @@ fn inquire_and_send_command(edu: &mut impl CommunicationHandle, path: &str) -> R
                     n => println!("Unknown event {n}"),
                 }
             }
-        },
+        }
         "ReturnResult" => {
             let program_id = inquire::Text::new("Program id:").prompt()?.parse()?;
             let timestamp = inquire::Text::new("Timestamp:").prompt()?.parse()?;
-            let result_path = inquire::Text::new("File path for returned result:").with_default("./result.tar").prompt()?;
+            let result_path = inquire::Text::new("File path for returned result:")
+                .with_default("./result.tar")
+                .prompt()?;
             edu.send_packet(&CEPPacket::Data(return_result(program_id, timestamp)))?;
             match edu.receive_multi_packet() {
                 Ok(data) => {
                     std::fs::write(result_path, data)?;
                     edu.send_packet(&CEPPacket::Ack)?;
                     println!("Wrote result to file");
-                },
+                }
                 Err(e) => println!("Received {:?}", e),
             }
         }

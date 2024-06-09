@@ -1,11 +1,19 @@
 #![allow(non_snake_case)]
+use command::ExecutionContext;
+use communication::socket::UnixSocketParser;
 use core::time;
 use rppal::gpio::Gpio;
 use serialport::SerialPort;
-use std::thread;
+use std::{
+    io::ErrorKind,
+    sync::{Arc, Mutex},
+    thread,
+};
 use STS1_EDU_Scheduler::communication::CommunicationHandle;
 
 use simplelog as sl;
+
+use crate::command::Event;
 
 mod command;
 mod communication;
@@ -17,6 +25,7 @@ struct Configuration {
     heartbeat_pin: u8,
     update_pin: u8,
     heartbeat_freq: u64,
+    socket: String,
 }
 
 fn main() -> ! {
@@ -45,6 +54,10 @@ fn main() -> ! {
     // construct a wrapper for resources that are shared between different commands
     let mut exec = command::ExecutionContext::new("events".to_string(), config.update_pin).unwrap();
 
+    let socket_rx = communication::socket::UnixSocketParser::new(&config.socket).unwrap();
+    let socket_context = exec.clone();
+    std::thread::spawn(move || event_socket_loop(socket_context, socket_rx));
+
     // start a thread that will update the heartbeat pin
     thread::spawn(move || heartbeat_loop(config.heartbeat_pin, config.heartbeat_freq));
 
@@ -69,6 +82,22 @@ fn heartbeat_loop(heartbeat_pin: u8, freq: u64) -> ! {
         thread::sleep(toogle_time);
         pin.set_low();
         thread::sleep(toogle_time);
+    }
+}
+
+fn event_socket_loop(context: Arc<Mutex<ExecutionContext>>, mut socket: UnixSocketParser) {
+    loop {
+        let s = socket.read_object::<Event>();
+        let event = match s {
+            Ok(e) => e,
+            Err(ref e) if e.kind() == ErrorKind::Other => break,
+            Err(_) => continue,
+        };
+
+        log::info!("Received on socket: {event:?}");
+        let mut context = context.lock().unwrap();
+        context.event_vec.push(event).unwrap();
+        context.check_update_pin();
     }
 }
 

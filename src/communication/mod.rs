@@ -1,6 +1,8 @@
 mod cep;
 pub use cep::CEPPacket;
 
+pub mod socket;
+
 use std::{
     io::{Read, Write},
     time::Duration,
