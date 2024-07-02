@@ -34,11 +34,16 @@ pub fn return_result(
     delete_result(result_id)?;
 
     let mut l_exec = exec.lock().unwrap();
-    let event_index =
-        l_exec.event_vec.as_ref().iter().position(|x| x == &Event::Result(result_id)).unwrap();
-    l_exec.event_vec.remove(event_index)?;
-    l_exec.check_update_pin();
+    if let Some(event_index) =
+        l_exec.event_vec.as_ref().iter().position(|x| x.event == Event::Result(result_id))
+    {
+        l_exec.event_vec.remove(event_index)?;
+    }
+    else {
+        log::error!("Could not find event entry for existing result file {program_id}:{timestamp}");
+    }
 
+    l_exec.configure_update_pin();
     Ok(())
 }
 

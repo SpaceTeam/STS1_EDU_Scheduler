@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-use command::ExecutionContext;
+use command::{ExecutionContext, RetryEvent};
 use communication::socket::UnixSocketParser;
 use core::time;
 use rppal::gpio::Gpio;
@@ -96,8 +96,8 @@ fn event_socket_loop(context: Arc<Mutex<ExecutionContext>>, mut socket: UnixSock
 
         log::info!("Received on socket: {event:?}");
         let mut context = context.lock().unwrap();
-        context.event_vec.push(event).unwrap();
-        context.check_update_pin();
+        context.event_vec.push(RetryEvent::new(event)).unwrap();
+        context.configure_update_pin();
     }
 }
 

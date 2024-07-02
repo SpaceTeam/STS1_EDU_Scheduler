@@ -174,3 +174,18 @@ pub fn return_result(program_id: u16, timestamp: u32) -> Vec<u8> {
     vec.extend(timestamp.to_le_bytes());
     vec
 }
+
+pub fn get_status_program_finished(program_id: u16, timestamp: u32, exit_code: u8) -> Vec<u8> {
+    let mut vec = vec![1];
+    vec.extend(program_id.to_le_bytes());
+    vec.extend(timestamp.to_le_bytes());
+    vec.push(exit_code);
+    vec
+}
+
+pub fn get_status_result_ready(program_id: u16, timestamp: u32) -> Vec<u8> {
+    let mut vec = vec![2];
+    vec.extend(program_id.to_le_bytes());
+    vec.extend(timestamp.to_le_bytes());
+    vec
+}
