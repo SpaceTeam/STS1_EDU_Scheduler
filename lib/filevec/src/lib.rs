@@ -27,8 +27,13 @@
 //! ['MessagePack']: https://msgpack.org/index.html
 
 use serde::{de::DeserializeOwned, Serialize};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::{
+    io::{Read, Seek, SeekFrom, Write},
+    ops::{Deref, DerefMut},
+    path::Path,
+};
 
+#[derive(Debug)]
 pub struct FileVec<T: Serialize + DeserializeOwned> {
     vec: Vec<T>,
     file: std::fs::File,
@@ -39,7 +44,7 @@ impl<T: Serialize + DeserializeOwned> FileVec<T> {
     ///
     /// **Note:** If the file exists and contains invalid data, it is interpreted as
     /// empty and overwritten.
-    pub fn open(path: String) -> Result<Self, std::io::Error> {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, std::io::Error> {
         let mut file =
             std::fs::OpenOptions::new().read(true).write(true).create(true).open(path)?;
         let metadata = file.metadata()?;
@@ -88,6 +93,14 @@ impl<T: Serialize + DeserializeOwned> FileVec<T> {
 
         Ok(t)
     }
+
+    /// Obtain a mutable reference to vector, which only writes to the underlying file
+    /// once this guard is dropped.
+    /// ### Note
+    /// Any io::Error that happens is dropped. Call `self.write_to_file` manually to handle them
+    pub fn as_mut(&mut self) -> FileVecGuard<'_, T> {
+        FileVecGuard(self)
+    }
 }
 
 impl<T: Serialize + DeserializeOwned> AsRef<Vec<T>> for FileVec<T> {
@@ -114,11 +127,34 @@ impl<T: Serialize + DeserializeOwned> Extend<T> for FileVec<T> {
     }
 }
 
+pub struct FileVecGuard<'a, T: Serialize + DeserializeOwned>(&'a mut FileVec<T>);
+
+impl<'a, T: Serialize + DeserializeOwned> Deref for FileVecGuard<'a, T> {
+    type Target = Vec<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0.vec
+    }
+}
+
+impl<'a, T: Serialize + DeserializeOwned> DerefMut for FileVecGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0.vec
+    }
+}
+
+impl<'a, T: Serialize + DeserializeOwned> Drop for FileVecGuard<'a, T> {
+    fn drop(&mut self) {
+        let _ = self.0.write_to_file();
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::{
         fs::File,
         io::{Read, Write},
+        ops::DerefMut,
     };
 
     use super::FileVec;
@@ -208,5 +244,19 @@ mod test {
         assert_eq!(f.pop().unwrap(), Some(2));
 
         let _ = std::fs::remove_file("__pop");
+    }
+
+    #[test]
+    fn as_mut_writes_to_file() {
+        {
+            let mut f = FileVec::open("__as_mut").unwrap();
+            let mut guard = f.as_mut();
+            guard.push(123);
+            guard.push(456);
+        }
+
+        assert_eq!(FileVec::<i32>::open("__as_mut").unwrap().vec, &[123, 456]);
+
+        let _ = std::fs::remove_file("__as_mut");
     }
 }
