@@ -17,17 +17,17 @@ pub struct SimulationComHandle<T: Read, U: Write> {
 }
 
 impl SimulationComHandle<ChildStdout, ChildStdin> {
-    fn with_socat_proc(unique: &str) -> (Self, PoisonedChild) {
+    fn with_socat_proc(socket_path: &str) -> (Self, PoisonedChild) {
         let mut proc = std::process::Command::new("socat")
             .arg("stdio")
-            .arg(format!("pty,raw,echo=0,link=/tmp/ttySTS1-{},b921600,wait-slave", unique))
+            .arg(format!("pty,raw,echo=0,link={},b921600,wait-slave", socket_path))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
             .unwrap();
 
         loop {
-            if std::path::Path::new(&format!("/tmp/ttySTS1-{unique}")).exists() {
+            if std::path::Path::new(socket_path).exists() {
                 break;
             }
             std::thread::sleep(Duration::from_millis(50));
@@ -66,7 +66,7 @@ impl<T: Read, U: Write> CommunicationHandle for SimulationComHandle<T, U> {
 fn get_config_str(unique: &str) -> String {
     format!(
         "
-    uart = \"/tmp/ttySTS1-{unique}\"
+    uart = \"uart\"
     baudrate = 921600
     heartbeat_pin = 34
     update_pin = 35
@@ -85,17 +85,18 @@ impl Drop for PoisonedChild {
     }
 }
 
-fn start_scheduler(unique: &str) -> Result<PoisonedChild, std::io::Error> {
+fn start_scheduler(unique: &str) -> Result<(PoisonedChild, SimulationComHandle<ChildStdout, ChildStdin>, PoisonedChild), std::io::Error> {
     let test_dir = format!("./tests/tmp/{}", unique);
     let scheduler_bin = std::fs::canonicalize("./target/release/STS1_EDU_Scheduler")?;
     let _ = std::fs::remove_dir_all(&test_dir);
     std::fs::create_dir_all(&test_dir)?;
     std::fs::write(format!("{}/config.toml", &test_dir), get_config_str(unique))?;
+    let (handle, socat) = SimulationComHandle::with_socat_proc(&format!("{}/uart", test_dir));
 
     let scheduler =
         std::process::Command::new(scheduler_bin).current_dir(test_dir).spawn().unwrap();
 
-    Ok(PoisonedChild(scheduler))
+    Ok((PoisonedChild(scheduler), handle, socat))
 }
 
 pub fn simulate_test_store_archive(
@@ -170,6 +171,21 @@ pub fn get_status() -> Vec<u8> {
 
 pub fn return_result(program_id: u16, timestamp: u32) -> Vec<u8> {
     let mut vec = vec![5u8];
+    vec.extend(program_id.to_le_bytes());
+    vec.extend(timestamp.to_le_bytes());
+    vec
+}
+
+pub fn get_status_program_finished(program_id: u16, timestamp: u32, exit_code: u8) -> Vec<u8> {
+    let mut vec = vec![1];
+    vec.extend(program_id.to_le_bytes());
+    vec.extend(timestamp.to_le_bytes());
+    vec.push(exit_code);
+    vec
+}
+
+pub fn get_status_result_ready(program_id: u16, timestamp: u32) -> Vec<u8> {
+    let mut vec = vec![2];
     vec.extend(program_id.to_le_bytes());
     vec.extend(timestamp.to_le_bytes());
     vec

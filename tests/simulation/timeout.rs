@@ -1,11 +1,10 @@
-use super::{get_status, start_scheduler, SimulationComHandle};
+use super::{get_status, start_scheduler};
 use std::time::Duration;
 use STS1_EDU_Scheduler::communication::{CEPPacket, CommunicationHandle};
 
 #[test]
 fn integrity_ack_timeout_is_honored() {
-    let (mut cobc, _socat) = SimulationComHandle::with_socat_proc("integrity_timeout");
-    let _sched = start_scheduler("integrity_timeout").unwrap();
+    let (_sched, mut cobc, _socat) = start_scheduler("integrity_timeout").unwrap();
 
     // Check that delayed ACK is allowed
     cobc.send_packet(&CEPPacket::Data(get_status())).unwrap();

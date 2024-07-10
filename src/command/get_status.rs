@@ -17,22 +17,18 @@ pub fn get_status(
         return Ok(());
     }
 
-    if let Some(index) =
-        l_exec.event_vec.as_ref().iter().position(|x| matches!(x, Event::Status(_)))
-    {
-        let event = l_exec.event_vec[index];
-        com.send_packet(&CEPPacket::Data(event.into()))?;
-        l_exec.event_vec.remove(index)?;
-    } else {
-        let event = *l_exec.event_vec.as_ref().first().unwrap(); // Safe, because we know it is not empty
-        com.send_packet(&CEPPacket::Data(event.into()))?;
+    let result = {
+        let mut events = l_exec.event_vec.as_mut();
+        let index = events.iter().position(|x| matches!(x.event, Event::Status(_))).unwrap_or(0);
 
-        if !matches!(event, Event::Result(_)) {
-            // Results are removed when deleted
-            l_exec.event_vec.remove(0)?;
+        events[index].retries -= 1;
+        let result = com.send_packet(&CEPPacket::Data(events[index].event.into()));
+        if !matches!(events[index].event, Event::Result(_)) || events[index].retries == 0 {
+            events.remove(index);
         }
-    }
+        result
+    };
 
-    l_exec.check_update_pin();
-    Ok(())
+    l_exec.configure_update_pin();
+    Ok(result?)
 }

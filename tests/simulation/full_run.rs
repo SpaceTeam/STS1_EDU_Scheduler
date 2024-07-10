@@ -3,8 +3,7 @@ use std::{io::Cursor, time::Duration};
 
 #[test]
 fn full_run() {
-    let (mut com, _socat) = SimulationComHandle::with_socat_proc("full_run");
-    let _sched = start_scheduler("full_run").unwrap();
+    let (_sched, mut com, _socat) = start_scheduler("full_run").unwrap();
 
     // store and execute program
     simulate_test_store_archive(&mut com, 1).unwrap();

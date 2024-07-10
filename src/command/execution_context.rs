@@ -1,10 +1,11 @@
+use filevec::FileVec;
 use std::{
     str::FromStr,
     sync::{Arc, Mutex},
     thread,
 };
 
-use filevec::FileVec;
+const EVENT_SEND_TRIES: u32 = 5;
 
 /// This type makes the ExecutionContext thread-safe
 pub type SyncExecutionContext = Arc<Mutex<ExecutionContext>>;
@@ -20,7 +21,7 @@ pub struct ExecutionContext {
     /// This integer is the pin number of the EDU_Update pin
     pub update_pin: UpdatePin,
     /// Vector containing events that should be sent to the COBC
-    pub event_vec: FileVec<Event>,
+    pub event_vec: FileVec<RetryEvent<Event>>,
 }
 
 impl ExecutionContext {
@@ -35,13 +36,13 @@ impl ExecutionContext {
             event_vec: FileVec::open(event_file_path).unwrap(),
         };
 
-        ec.check_update_pin();
+        ec.configure_update_pin();
 
         Ok(Arc::new(Mutex::new(ec)))
     }
 
     /// Checks and sets/resets the update pin accordingly
-    pub fn check_update_pin(&mut self) {
+    pub fn configure_update_pin(&mut self) {
         if self.has_data_ready() {
             self.update_pin.set_high();
         } else {
@@ -121,6 +122,18 @@ pub enum Event {
     Result(ResultId),
     EnableDosimeter,
     DisableDosimeter,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct RetryEvent<T> {
+    pub retries: u32,
+    pub event: T,
+}
+
+impl<T> RetryEvent<T> {
+    pub fn new(event: T) -> Self {
+        Self { retries: EVENT_SEND_TRIES, event }
+    }
 }
 
 impl From<Event> for Vec<u8> {

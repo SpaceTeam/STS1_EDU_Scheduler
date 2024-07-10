@@ -2,12 +2,12 @@ use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
-use super::{simulate_get_status, start_scheduler, SimulationComHandle};
+use super::{simulate_get_status, start_scheduler};
 
 #[test]
 fn dosimeter_events_are_added() {
-    let (mut com, _socat) = SimulationComHandle::with_socat_proc("dosimeter");
-    let _sched = start_scheduler("dosimeter").unwrap();
+    let (_sched, mut com, _socat) = start_scheduler("dosimeter").unwrap();
+
     std::thread::sleep(Duration::from_millis(200));
 
     {
@@ -21,11 +21,11 @@ fn dosimeter_events_are_added() {
 
 #[test]
 fn multiple_dosimeter_events() {
-    let (mut com, _socat) = SimulationComHandle::with_socat_proc("dosimeter-multi");
-    let _sched = start_scheduler("dosimeter-multi").unwrap();
+    let (_sched, mut com, _socat) = start_scheduler("dosimeter_multi").unwrap();
+
     std::thread::sleep(Duration::from_millis(200));
 
-    let mut socket = UnixStream::connect("/tmp/STS1_EDU_Scheduler_SIM_dosimeter-multi").unwrap();
+    let mut socket = UnixStream::connect("/tmp/STS1_EDU_Scheduler_SIM_dosimeter_multi").unwrap();
     for _ in 0..10 {
         writeln!(socket, "dosimeter/on").unwrap();
         writeln!(socket, "dosimeter/off").unwrap();

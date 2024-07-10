@@ -8,7 +8,7 @@ use subprocess::Popen;
 
 use crate::{
     command::{
-        check_length, terminate_student_program, truncate_to_size, Event, ProgramStatus, ResultId,
+        check_length, terminate_student_program, truncate_to_size, Event, ProgramStatus, ResultId, RetryEvent,
     },
     communication::{CEPPacket, CommunicationHandle},
 };
@@ -51,8 +51,8 @@ pub fn execute_program(
         build_result_archive(rid).unwrap(); // create the tar file with result and log
 
         let mut context = wd_context.lock().unwrap();
-        context.event_vec.push(Event::Status(sid)).unwrap();
-        context.event_vec.push(Event::Result(rid)).unwrap();
+        context.event_vec.push(RetryEvent::new(Event::Status(sid))).unwrap();
+        context.event_vec.push(RetryEvent::new(Event::Result(rid))).unwrap();
         context.running_flag = false;
         context.update_pin.set_high();
         drop(context);
