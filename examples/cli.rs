@@ -38,7 +38,7 @@ impl SocatSerialPort<ChildStdout, ChildStdin> {
     fn new(path: &str) -> Self {
         let mut child = std::process::Command::new("socat")
             .arg("stdio")
-            .arg(format!("pty,raw,echo=0,link={},b921600,wait-slave", path))
+            .arg(format!("pty,raw,echo=0,link={path},b921600,wait-slave"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -111,7 +111,7 @@ fn inquire_and_send_command(
         "GetStatus" => {
             edu.send_packet(&CEPPacket::Data(get_status()))?;
             if let CEPPacket::Data(status) = edu.receive_packet()? {
-                match status[0] {
+                match status.first().unwrap() {
                     0 => println!("No Event"),
                     1 => println!(
                         "Program Finished with ID: {} Timestamp: {} Exit Code: {}",
@@ -143,7 +143,7 @@ fn inquire_and_send_command(
                     edu.send_packet(&CEPPacket::Ack)?;
                     println!("Wrote result to file");
                 }
-                Err(e) => println!("Received {:?}", e),
+                Err(e) => println!("Received {e:?}"),
             }
         }
         _ => (),
@@ -188,12 +188,14 @@ impl Drop for PoisonedChild {
     }
 }
 
+#[must_use]
 pub fn store_archive(program_id: u16) -> Vec<u8> {
     let mut vec = vec![1u8];
     vec.extend(program_id.to_le_bytes());
     vec
 }
 
+#[must_use]
 pub fn execute_program(program_id: u16, timestamp: u32, timeout: u16) -> Vec<u8> {
     let mut vec = vec![2u8];
     vec.extend(program_id.to_le_bytes());
@@ -202,14 +204,17 @@ pub fn execute_program(program_id: u16, timestamp: u32, timeout: u16) -> Vec<u8>
     vec
 }
 
+#[must_use]
 pub fn stop_program() -> Vec<u8> {
     vec![3u8]
 }
 
+#[must_use]
 pub fn get_status() -> Vec<u8> {
     vec![4u8]
 }
 
+#[must_use]
 pub fn return_result(program_id: u16, timestamp: u32) -> Vec<u8> {
     let mut vec = vec![5u8];
     vec.extend(program_id.to_le_bytes());

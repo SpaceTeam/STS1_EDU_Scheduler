@@ -86,12 +86,12 @@ mod tests {
 
     #[test]
     fn can_parse_multiple_values() {
+        const REPS: usize = 100;
+
         let path = get_unique_tmp_path();
         let mut rx = UnixSocketParser::new(&path).unwrap();
 
         let mut stream = UnixStream::connect(&path).unwrap();
-
-        const REPS: usize = 100;
         for i in 0..REPS {
             writeln!(stream, "{i}").unwrap();
         }

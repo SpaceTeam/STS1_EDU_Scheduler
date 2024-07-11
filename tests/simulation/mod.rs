@@ -20,7 +20,7 @@ impl SimulationComHandle<ChildStdout, ChildStdin> {
     fn with_socat_proc(socket_path: &str) -> (Self, PoisonedChild) {
         let mut proc = std::process::Command::new("socat")
             .arg("stdio")
-            .arg(format!("pty,raw,echo=0,link={},b921600,wait-slave", socket_path))
+            .arg(format!("pty,raw,echo=0,link={socket_path},b921600,wait-slave"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -85,13 +85,18 @@ impl Drop for PoisonedChild {
     }
 }
 
-fn start_scheduler(unique: &str) -> Result<(PoisonedChild, SimulationComHandle<ChildStdout, ChildStdin>, PoisonedChild), std::io::Error> {
-    let test_dir = format!("./tests/tmp/{}", unique);
+fn start_scheduler(
+    unique: &str,
+) -> Result<
+    (PoisonedChild, SimulationComHandle<ChildStdout, ChildStdin>, PoisonedChild),
+    std::io::Error,
+> {
+    let test_dir = format!("./tests/tmp/{unique}");
     let scheduler_bin = std::fs::canonicalize("./target/release/STS1_EDU_Scheduler")?;
     let _ = std::fs::remove_dir_all(&test_dir);
     std::fs::create_dir_all(&test_dir)?;
     std::fs::write(format!("{}/config.toml", &test_dir), get_config_str(unique))?;
-    let (handle, socat) = SimulationComHandle::with_socat_proc(&format!("{}/uart", test_dir));
+    let (handle, socat) = SimulationComHandle::with_socat_proc(&format!("{test_dir}/uart"));
 
     let scheduler =
         std::process::Command::new(scheduler_bin).current_dir(test_dir).spawn().unwrap();

@@ -12,25 +12,25 @@ use STS1_EDU_Scheduler::{
 
 pub enum ComEvent {
     /// EDU shall want to receive the given packet
-    COBC(CEPPacket),
+    Cobc(CEPPacket),
     /// EDU shall send the given packet
-    EDU(CEPPacket),
+    Edu(CEPPacket),
     /// Makes the thread sleep for the given duration. Can be used to wait for execution to complete
-    SLEEP(std::time::Duration),
+    Sleep(std::time::Duration),
     /// Allow the EDU to send any packet
-    ANY,
+    Any,
     /// EDU shall send a packet, which is then passed to a given function (e.g. to allow for further checks on data)
-    ACTION(Box<dyn Fn(&CEPPacket)>),
+    Action(Box<dyn Fn(&CEPPacket)>),
 }
 
 impl Debug for ComEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::COBC(arg0) => f.debug_tuple("COBC").field(arg0).finish(),
-            Self::EDU(arg0) => f.debug_tuple("EDU").field(arg0).finish(),
-            Self::SLEEP(arg0) => f.debug_tuple("SLEEP").field(arg0).finish(),
-            Self::ANY => write!(f, "ANY"),
-            Self::ACTION(_) => f.debug_tuple("ACTION").finish(),
+            Self::Cobc(arg0) => f.debug_tuple("COBC").field(arg0).finish(),
+            Self::Edu(arg0) => f.debug_tuple("EDU").field(arg0).finish(),
+            Self::Sleep(arg0) => f.debug_tuple("SLEEP").field(arg0).finish(),
+            Self::Any => write!(f, "ANY"),
+            Self::Action(_) => f.debug_tuple("ACTION").finish(),
         }
     }
 }
@@ -45,11 +45,11 @@ impl CommunicationHandle for TestCom {
     fn send_packet(&mut self, packet: &CEPPacket) -> ComResult<()> {
         println!("Sent {packet:?}");
         match self.expected_events.pop_front().unwrap() {
-            ComEvent::EDU(p) => assert_eq!(&p, packet),
-            ComEvent::SLEEP(d) => std::thread::sleep(d),
-            ComEvent::ANY => (),
-            ComEvent::ACTION(f) => f(packet),
-            event => panic!("Expected {event:?} instead of send_packet"),
+            ComEvent::Edu(p) => assert_eq!(&p, packet),
+            ComEvent::Sleep(d) => std::thread::sleep(d),
+            ComEvent::Any => (),
+            ComEvent::Action(f) => f(packet),
+            event @ ComEvent::Cobc(_) => panic!("Expected {event:?} instead of send_packet"),
         }
 
         if matches!(packet, CEPPacket::Data(_)) {
@@ -61,14 +61,14 @@ impl CommunicationHandle for TestCom {
 
     fn receive_packet(&mut self) -> ComResult<CEPPacket> {
         match self.expected_events.pop_front().unwrap() {
-            ComEvent::COBC(p) => {
+            ComEvent::Cobc(p) => {
                 println!("Received {p:?}");
                 if matches!(p, CEPPacket::Data(_)) {
                     self.send_packet(&CEPPacket::Ack)?;
                 }
                 Ok(p)
             }
-            ComEvent::SLEEP(d) => {
+            ComEvent::Sleep(d) => {
                 std::thread::sleep(d);
                 self.receive_packet()
             }
@@ -107,24 +107,20 @@ impl Write for TestCom {
 }
 
 /// Copy the mockup student program from `tests/test_data/main.py` into `archives/{path}`. This absolves the need
-/// to include an extra store_archive command.
+/// to include an extra `store_archive` command.
 pub fn prepare_program(path: &str) {
-    let ret = std::fs::create_dir(format!("./archives/{}", path));
+    let ret = std::fs::create_dir(format!("./archives/{path}"));
     if let Err(e) = ret {
-        if e.kind() != std::io::ErrorKind::AlreadyExists {
-            panic!("Setup Error: {}", e);
-        }
+        assert!(e.kind() == std::io::ErrorKind::AlreadyExists, "Setup Error: {e}");
     }
-    let ret = std::fs::copy("./tests/test_data/main.py", format!("./archives/{}/main.py", path));
+    let ret = std::fs::copy("./tests/test_data/main.py", format!("./archives/{path}/main.py"));
     if let Err(e) = ret {
-        if e.kind() != std::io::ErrorKind::AlreadyExists {
-            panic!("Setup Error: {}", e);
-        }
+        assert!(e.kind() == std::io::ErrorKind::AlreadyExists, "Setup Error: {e}");
     }
 }
 
 /// Construct a communication and execution handle for testing.
-/// * `packets` is a vector of expected communication see [ComEvent] for documentation
+/// * `packets` is a vector of expected communication see [`ComEvent`] for documentation
 /// * `unique` A string that is unique among other tests. Can be a simple incrementing number
 pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, SyncExecutionContext) {
     let _ = std::fs::create_dir("tests/tmp");
@@ -137,9 +133,9 @@ pub fn prepare_handles(packets: Vec<ComEvent>, unique: &str) -> (TestCom, SyncEx
 }
 
 pub fn cleanup(unique: &str) {
-    let _ = std::fs::remove_dir_all(format!("./archives/{}", unique));
-    let _ = std::fs::remove_file(format!("tests/tmp/{}_s", unique));
-    let _ = std::fs::remove_file(format!("tests/tmp/{}_r", unique));
+    let _ = std::fs::remove_dir_all(format!("./archives/{unique}"));
+    let _ = std::fs::remove_file(format!("tests/tmp/{unique}_s"));
+    let _ = std::fs::remove_file(format!("tests/tmp/{unique}_r"));
 }
 
 pub fn store_archive(program_id: u16) -> Vec<u8> {

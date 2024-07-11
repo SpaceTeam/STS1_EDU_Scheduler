@@ -1,14 +1,11 @@
 mod cep;
 pub use cep::CEPPacket;
-
 pub mod socket;
-
+use self::cep::CEPParseError;
 use std::{
     io::{Read, Write},
     time::Duration,
 };
-
-use self::cep::CEPParseError;
 
 pub type ComResult<T> = Result<T, CommunicationError>;
 
@@ -114,27 +111,27 @@ pub trait CommunicationHandle: Read + Write {
         Ok(buffer)
     }
 
-    /// Try to receive an ACK packet with a given `timeout`. Resets the timeout to Duration::MAX afterwards
+    /// Try to receive an ACK packet with a given `timeout`. Resets the timeout to `Duration::MAX` afterwards
     fn await_ack(&mut self, timeout: Duration) -> ComResult<()> {
         self.set_timeout(timeout);
         let result = self.receive_packet();
         self.set_timeout(Self::UNLIMITED_TIMEOUT);
-        let ret = match result? {
+
+        match result? {
             CEPPacket::Ack => Ok(()),
             CEPPacket::Nack => Err(CommunicationError::NotAcknowledged),
             _ => Err(CommunicationError::PacketInvalidError),
-        };
-        ret
+        }
     }
 }
 
 impl CommunicationHandle for Box<dyn serialport::SerialPort> {
     const INTEGRITY_ACK_TIMEOUT: Duration = Duration::from_millis(1000);
     /// Equivalent to 106 days, maximum allowed value due to library limitations (of all serialport libraries I found)
-    const UNLIMITED_TIMEOUT: Duration = Duration::from_millis(9223372035);
+    const UNLIMITED_TIMEOUT: Duration = Duration::from_millis(9_223_372_035);
 
     fn set_timeout(&mut self, timeout: Duration) {
-        serialport::SerialPort::set_timeout(self.as_mut(), timeout).unwrap()
+        serialport::SerialPort::set_timeout(self.as_mut(), timeout).unwrap();
     }
 }
 
@@ -154,7 +151,7 @@ pub enum CommunicationError {
 
 impl std::fmt::Display for CommunicationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -179,6 +176,7 @@ impl From<CEPParseError> for CommunicationError {
 
 impl std::error::Error for CommunicationError {}
 
+#[allow(clippy::needless_pass_by_value)]
 #[cfg(test)]
 mod tests {
     use self::cep::CEPPacketHeader;
@@ -341,6 +339,6 @@ mod tests {
 
         assert_eq!(com.receive_multi_packet().unwrap(), data);
         assert!(com.data_to_read.is_empty());
-        assert_eq!(com.written_data, CEPPacket::Ack.serialize().repeat(chunks.len() + 1))
+        assert_eq!(com.written_data, CEPPacket::Ack.serialize().repeat(chunks.len() + 1));
     }
 }
