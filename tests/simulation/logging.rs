@@ -1,13 +1,12 @@
 use crate::simulation::*;
 
 #[test]
-fn logfile_is_created() -> Result<(), std::io::Error> {
+fn logfile_is_created() {
     let (_sched, _com, _socat) = start_scheduler("log_created").unwrap();
 
     std::thread::sleep(std::time::Duration::from_millis(400));
 
     assert!(std::path::Path::new("./tests/tmp/log_created/log").exists());
-    Ok(())
 }
 
 #[test]

@@ -1,6 +1,5 @@
-use std::io::Read;
-
 use crc::{Crc, CRC_32_MPEG_2};
+use std::io::Read;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CEPPacket {
@@ -24,7 +23,8 @@ impl CEPPacket {
 
     const CRC: Crc<u32> = Crc::<u32>::new(&CRC_32_MPEG_2);
 
-    /// Calculates the CRC32 MPEG-2 checksum for the contained data. For variants other than Self::Data, 0 is returned
+    /// Calculates the CRC32 MPEG-2 checksum for the contained data. For variants other than `Self::Data`, 0 is returned
+    #[must_use]
     pub fn checksum(&self) -> u32 {
         if let Self::Data(data) = self {
             Self::CRC.checksum(data)
@@ -33,14 +33,15 @@ impl CEPPacket {
         }
     }
 
-    pub fn serialize(self) -> Vec<u8> {
+    #[must_use]
+    pub fn serialize(&self) -> Vec<u8> {
         let header = self.header();
         match self {
             CEPPacket::Data(bytes) => {
                 let mut v = Vec::with_capacity(7 + bytes.len());
-                let crc32 = CEPPacket::CRC.checksum(&bytes);
+                let crc32 = CEPPacket::CRC.checksum(bytes);
                 v.push(header);
-                v.extend((bytes.len() as u16).to_le_bytes());
+                v.extend(u16::try_from(bytes.len()).unwrap().to_le_bytes());
                 v.extend(bytes);
                 v.extend(crc32.to_le_bytes());
                 v
@@ -49,10 +50,12 @@ impl CEPPacket {
         }
     }
 
+    #[must_use]
     pub fn crc_is_valid(data: &[u8], checksum: u32) -> bool {
         CEPPacket::CRC.checksum(data) == checksum
     }
 
+    #[must_use]
     pub const fn header(&self) -> u8 {
         let header = match self {
             CEPPacket::Ack => CEPPacketHeader::Ack,
@@ -101,18 +104,7 @@ impl CEPPacket {
 
 impl From<&CEPPacket> for Vec<u8> {
     fn from(value: &CEPPacket) -> Self {
-        match value {
-            CEPPacket::Data(bytes) => {
-                let mut v = Vec::with_capacity(7 + bytes.len());
-                v.push(value.header());
-                let crc32 = CEPPacket::CRC.checksum(bytes);
-                v.extend((bytes.len() as u16).to_le_bytes());
-                v.extend(bytes);
-                v.extend(crc32.to_le_bytes());
-                v
-            }
-            _ => vec![value.header()],
-        }
+        value.serialize()
     }
 }
 
@@ -145,6 +137,7 @@ mod tests {
     use super::*;
     use test_case::test_case;
 
+    #[allow(clippy::needless_pass_by_value)]
     #[test_case(vec![0xD7], CEPPacket::Ack)]
     #[test_case(vec![0x27], CEPPacket::Nack)]
     #[test_case(vec![0x59], CEPPacket::Eof)]
@@ -160,7 +153,7 @@ mod tests {
         assert!(matches!(
             CEPPacket::try_from(vec![0x8B, 4, 0, 0x0a, 0x0b, 0x05, 0x74, 0x52, 0x27, 0x92, 0xf4]),
             Err(CEPParseError::InvalidCRC)
-        ))
+        ));
     }
 
     #[test]
@@ -168,6 +161,6 @@ mod tests {
         assert!(matches!(
             CEPPacket::try_from(vec![0x8B, 0xff, 0xff]),
             Err(CEPParseError::InvalidLength)
-        ))
+        ));
     }
 }

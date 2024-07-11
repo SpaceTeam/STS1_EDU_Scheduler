@@ -9,13 +9,13 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 fn store_archive() -> TestResult {
     // Define what should happen during communication. How this should look is defined in the PDD
     let packets = vec![
-        COBC(Data(vec![0x01, 0x00, 0x00])), // COBC sends Store Archive Command (0x01 -> Header, [0x00, 0x00] -> Program Id)
-        EDU(Ack),                           // EDU acknowledges packet integrity
-        COBC(Data(std::fs::read("./tests/student_program.zip")?)), // COBC sends the archive
-        EDU(Ack),                           // EDU acknowledges packet integrity
-        COBC(Eof),                          // COBC signals end of packets
-        EDU(Ack),                           // EDU acknowledges Eof
-        EDU(Ack),                           // EDU signals successful Store Archive
+        Cobc(Data(vec![0x01, 0x00, 0x00])), // COBC sends Store Archive Command (0x01 -> Header, [0x00, 0x00] -> Program Id)
+        Edu(Ack),                           // EDU acknowledges packet integrity
+        Cobc(Data(std::fs::read("./tests/student_program.zip")?)), // COBC sends the archive
+        Edu(Ack),                           // EDU acknowledges packet integrity
+        Cobc(Eof),                          // COBC signals end of packets
+        Edu(Ack),                           // EDU acknowledges Eof
+        Edu(Ack),                           // EDU signals successful Store Archive
     ];
 
     // Setup testing environment

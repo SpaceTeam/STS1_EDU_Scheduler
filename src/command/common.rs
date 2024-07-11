@@ -4,18 +4,17 @@ use std::time::Duration;
 
 pub fn check_length(
     com: &mut impl CommunicationHandle,
-    vec: &Vec<u8>,
+    vec: &[u8],
     n: usize,
 ) -> Result<(), CommandError> {
     let actual_len = vec.len();
-    if actual_len != n {
-        log::error!("Command came with {actual_len} bytes, should have {n}");
+    if actual_len == n {
+        Ok(())
+    } else {
         com.send_packet(&CEPPacket::Nack)?;
         Err(CommandError::ProtocolViolation(
             format!("Received command with {actual_len} bytes, expected {n}").into(),
         ))
-    } else {
-        Ok(())
     }
 }
 

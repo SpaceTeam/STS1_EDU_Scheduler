@@ -1,15 +1,14 @@
-use crate::communication::{CEPPacket, CommunicationHandle};
-
 use super::{check_length, CommandResult, Event, SyncExecutionContext};
+use crate::communication::{CEPPacket, CommunicationHandle};
 
 /// The function handles the get status command, by checking if either a status or result is enqueued.
 /// A status always has priority over a result.
 pub fn get_status(
-    data: Vec<u8>,
+    data: &[u8],
     com: &mut impl CommunicationHandle,
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
-    check_length(com, &data, 1)?;
+    check_length(com, data, 1)?;
 
     let mut l_exec = exec.lock().unwrap();
     if !l_exec.has_data_ready() {

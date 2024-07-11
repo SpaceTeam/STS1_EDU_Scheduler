@@ -1,24 +1,21 @@
-use std::time::Duration;
-
-use crate::communication::{CEPPacket, CommunicationHandle};
-
 mod common;
-pub use common::*;
-mod execution_context;
-pub use execution_context::*;
 mod error;
-pub use error::CommandError;
-
 mod execute_program;
+mod execution_context;
 mod get_status;
 mod return_result;
 mod stop_program;
 mod store_archive;
 mod update_time;
 
+use crate::communication::{CEPPacket, CommunicationHandle};
+pub use common::*;
+pub use error::CommandError;
 use execute_program::execute_program;
+pub use execution_context::*;
 use get_status::get_status;
 use return_result::return_result;
+use std::time::Duration;
 use stop_program::stop_program;
 use store_archive::store_archive;
 use update_time::update_time;
@@ -32,7 +29,7 @@ pub fn handle_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecuti
     let ret = process_command(com, exec);
 
     match ret {
-        Ok(_) => log::info!("Command executed successfully"),
+        Ok(()) => log::info!("Command executed successfully"),
 
         Err(CommandError::NonRecoverable(e)) => {
             log::error!("Non-Recoverable error: {e}");
@@ -52,30 +49,25 @@ pub fn process_command(
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
     let packet = com.receive_packet()?;
-    let data = match packet {
-        CEPPacket::Data(data) => data,
-        _ => {
-            return Err(CommandError::NonRecoverable(
-                format!("Received {:?} as command start, expected Data", packet).into(),
-            ));
-        }
+    let CEPPacket::Data(data) = packet else {
+        return Err(CommandError::NonRecoverable(
+            format!("Received {packet:?} as command start, expected Data").into(),
+        ));
     };
 
     if data.is_empty() {
         return Err(CommandError::ProtocolViolation("No data sent with data packet".into()));
     }
 
-    match data[0] {
-        0x01 => store_archive(data, com, exec)?,
-        0x02 => execute_program(data, com, exec)?,
-        0x03 => stop_program(data, com, exec)?,
-        0x04 => get_status(data, com, exec)?,
-        0x05 => return_result(data, com, exec)?,
-        0x06 => update_time(data, com, exec)?,
+    match data.first().unwrap() {
+        0x01 => store_archive(&data, com, exec)?,
+        0x02 => execute_program(&data, com, exec)?,
+        0x03 => stop_program(&data, com, exec)?,
+        0x04 => get_status(&data, com, exec)?,
+        0x05 => return_result(&data, com, exec)?,
+        0x06 => update_time(&data, com, exec)?,
         b => {
-            return Err(CommandError::ProtocolViolation(
-                format!("Unknown command {:#x}", b).into(),
-            ));
+            return Err(CommandError::ProtocolViolation(format!("Unknown command {b:#x}").into()));
         }
     };
 

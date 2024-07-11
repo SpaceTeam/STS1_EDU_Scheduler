@@ -25,17 +25,17 @@ impl From<CommunicationError> for CommandError {
     fn from(e: CommunicationError) -> Self {
         match e {
             CommunicationError::PacketInvalidError => CommandError::External(e.into()),
-            CommunicationError::CepParsing(_) => CommandError::ProtocolViolation(e.into()),
+            CommunicationError::TimedOut
+            | CommunicationError::NotAcknowledged
+            | CommunicationError::CepParsing(_) => CommandError::ProtocolViolation(e.into()),
             CommunicationError::Io(_) => CommandError::NonRecoverable(e.into()),
-            CommunicationError::NotAcknowledged => CommandError::ProtocolViolation(e.into()),
-            CommunicationError::TimedOut => CommandError::ProtocolViolation(e.into()),
         }
     }
 }
 
 impl std::fmt::Display for CommandError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CommandError::{:?}", self)
+        write!(f, "CommandError::{self:?}")
     }
 }
 

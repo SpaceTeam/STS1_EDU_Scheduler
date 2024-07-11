@@ -1,19 +1,17 @@
 #![allow(non_snake_case)]
+use crate::command::Event;
 use command::{ExecutionContext, RetryEvent};
 use communication::socket::UnixSocketParser;
 use core::time;
 use rppal::gpio::Gpio;
 use serialport::SerialPort;
+use simplelog as sl;
 use std::{
     io::ErrorKind,
     sync::{Arc, Mutex},
     thread,
 };
 use STS1_EDU_Scheduler::communication::CommunicationHandle;
-
-use simplelog as sl;
-
-use crate::command::Event;
 
 mod command;
 mod communication;
@@ -29,6 +27,12 @@ struct Configuration {
 }
 
 fn main() -> ! {
+    let _ = sl::WriteLogger::init(
+        sl::LevelFilter::Info,
+        sl::Config::default(),
+        std::fs::OpenOptions::new().create(true).append(true).open("log").unwrap(),
+    );
+
     let config: Configuration = toml::from_str(
         &std::fs::read_to_string("./config.toml").expect("Could not open config file"),
     )
@@ -36,13 +40,6 @@ fn main() -> ! {
 
     create_directory_if_not_exists("archives").unwrap();
     create_directory_if_not_exists("data").unwrap();
-
-    // write all logging into a file
-    let _ = sl::WriteLogger::init(
-        sl::LevelFilter::Info,
-        sl::Config::default(),
-        std::fs::OpenOptions::new().create(true).append(true).open("log").unwrap(),
-    );
 
     log::info!("Scheduler started");
 
@@ -56,7 +53,7 @@ fn main() -> ! {
 
     let socket_rx = communication::socket::UnixSocketParser::new(&config.socket).unwrap();
     let socket_context = exec.clone();
-    std::thread::spawn(move || event_socket_loop(socket_context, socket_rx));
+    std::thread::spawn(move || event_socket_loop(&socket_context, socket_rx));
 
     // start a thread that will update the heartbeat pin
     thread::spawn(move || heartbeat_loop(config.heartbeat_pin, config.heartbeat_freq));
@@ -85,7 +82,7 @@ fn heartbeat_loop(heartbeat_pin: u8, freq: u64) -> ! {
     }
 }
 
-fn event_socket_loop(context: Arc<Mutex<ExecutionContext>>, mut socket: UnixSocketParser) {
+fn event_socket_loop(context: &Arc<Mutex<ExecutionContext>>, mut socket: UnixSocketParser) {
     loop {
         let s = socket.read_object::<Event>();
         let event = match s {
@@ -104,7 +101,7 @@ fn event_socket_loop(context: Arc<Mutex<ExecutionContext>>, mut socket: UnixSock
 /// Tries to create a directory, but only returns an error if the path does not already exists
 fn create_directory_if_not_exists(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
     match std::fs::create_dir(path) {
-        Ok(_) => Ok(()),
+        Ok(()) => Ok(()),
         Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
         Err(e) => Err(e),
     }

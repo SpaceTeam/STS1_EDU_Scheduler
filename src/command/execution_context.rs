@@ -7,18 +7,18 @@ use std::{
 
 const EVENT_SEND_TRIES: u32 = 5;
 
-/// This type makes the ExecutionContext thread-safe
+/// This type makes the `ExecutionContext` thread-safe
 pub type SyncExecutionContext = Arc<Mutex<ExecutionContext>>;
 
 /// This struct is used to store the relevant handles for when a student program is executed
 pub struct ExecutionContext {
-    /// Contains the JoinHandle of the watchdog thread
+    /// Contains the `JoinHandle` of the watchdog thread
     pub thread_handle: Option<thread::JoinHandle<()>>,
     /// Through this value, the watchdog thread indicates, wether a student program is currently
     /// running. Changing it from true to false, indicates to the watchdog thread, that the
     /// program should be stopped
     pub running_flag: bool,
-    /// This integer is the pin number of the EDU_Update pin
+    /// This integer is the pin number of the `EDU_Update` pin
     pub update_pin: UpdatePin,
     /// Vector containing events that should be sent to the COBC
     pub event_vec: FileVec<RetryEvent<Event>>,
@@ -33,7 +33,7 @@ impl ExecutionContext {
             thread_handle: None,
             running_flag: false,
             update_pin: UpdatePin::new(update_pin),
-            event_vec: FileVec::open(event_file_path).unwrap(),
+            event_vec: FileVec::open(event_file_path)?,
         };
 
         ec.configure_update_pin();
@@ -50,10 +50,12 @@ impl ExecutionContext {
         }
     }
 
+    #[must_use]
     pub fn is_student_program_running(&self) -> bool {
         self.thread_handle.is_some()
     }
 
+    #[must_use]
     pub fn has_data_ready(&self) -> bool {
         !self.event_vec.as_ref().is_empty()
     }
@@ -66,6 +68,7 @@ pub struct UpdatePin {
 
 #[cfg(not(feature = "mock"))]
 impl UpdatePin {
+    #[must_use]
     pub fn new(pin: u8) -> Self {
         let mut update_pin =
             UpdatePin { pin: rppal::gpio::Gpio::new().unwrap().get(pin).unwrap().into_output() };

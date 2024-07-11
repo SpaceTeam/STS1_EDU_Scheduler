@@ -1,29 +1,29 @@
+use super::{CommandError, CommandResult, SyncExecutionContext};
+use crate::{
+    command::{
+        check_length, terminate_student_program, truncate_to_size, Event, ProgramStatus, ResultId,
+        RetryEvent,
+    },
+    communication::{CEPPacket, CommunicationHandle},
+};
 use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
     time::Duration,
 };
-
 use subprocess::Popen;
 
-use crate::{
-    command::{
-        check_length, terminate_student_program, truncate_to_size, Event, ProgramStatus, ResultId, RetryEvent,
-    },
-    communication::{CEPPacket, CommunicationHandle},
-};
-
-use super::{CommandError, CommandResult, SyncExecutionContext};
+const MAXIMUM_FILE_SIZE: u64 = 1_000_000;
 
 /// Executes a students program and starts a watchdog for it. The watchdog also creates entries in the
 /// status and result queue found in `context`. The result, including logs, is packed into
 /// `./data/{program_id}_{timestamp}`
 pub fn execute_program(
-    data: Vec<u8>,
+    data: &[u8],
     com: &mut impl CommunicationHandle,
     exec: &mut SyncExecutionContext,
 ) -> CommandResult {
-    check_length(com, &data, 9)?;
+    check_length(com, data, 9)?;
 
     let program_id = u16::from_le_bytes([data[1], data[2]]);
     let timestamp = u32::from_le_bytes([data[3], data[4], data[5], data[6]]);
@@ -71,15 +71,15 @@ pub fn execute_program(
 /// This function creates and executes a student process. Its stdout/stderr is written into
 /// `./data/[program_id]_[timestamp].log`
 fn create_student_process(program_id: u16, timestamp: u32) -> Result<Popen, CommandError> {
-    let program_path = format!("./archives/{}/main.py", program_id);
+    let program_path = format!("./archives/{program_id}/main.py");
     if !Path::new(&program_path).exists() {
         return Err(CommandError::ProtocolViolation("Could not find matching program".into()));
     }
 
     // TODO run the program from a student user (setuid)
-    let output_file = std::fs::File::create(format!("./data/{}_{}.log", program_id, timestamp))?; // will contain the stdout and stderr of the execute program
+    let output_file = std::fs::File::create(format!("./data/{program_id}_{timestamp}.log"))?; // will contain the stdout and stderr of the execute program
     let config = subprocess::PopenConfig {
-        cwd: Some(format!("./archives/{}", program_id).into()),
+        cwd: Some(format!("./archives/{program_id}").into()),
         detached: false, // do not spawn as separate process
         stdout: subprocess::Redirection::File(output_file),
         stderr: subprocess::Redirection::Merge,
@@ -97,17 +97,16 @@ fn supervise_process(
     timeout: Duration,
     exec: &mut SyncExecutionContext,
 ) -> Result<u8, ()> {
-    match run_until_timeout(&mut process, timeout, exec) {
-        Ok(code) => Ok(code),
-        Err(()) => {
-            log::warn!("Student Process timed out or is stopped");
-            process.kill().unwrap(); // send SIGKILL
-            process
-                .wait_timeout(Duration::from_millis(200)) // wait for it to do its magic
-                .unwrap()
-                .unwrap(); // Panic if not stopped
-            Err(())
-        }
+    if let Ok(code) = run_until_timeout(&mut process, timeout, exec) {
+        Ok(code)
+    } else {
+        log::warn!("Student Process timed out or is stopped");
+        process.kill().unwrap(); // send SIGKILL
+        process
+            .wait_timeout(Duration::from_millis(200)) // wait for it to do its magic
+            .unwrap()
+            .unwrap(); // Panic if not stopped
+        Err(())
     }
 }
 
@@ -126,10 +125,10 @@ fn run_until_timeout(
             .unwrap()
         {
             if let subprocess::ExitStatus::Exited(n) = status {
+                #[allow(clippy::cast_possible_truncation)]
                 return Ok(n as u8);
-            } else {
-                return Ok(0);
             }
+            return Ok(0);
         }
 
         if !exec.lock().unwrap().running_flag {
@@ -154,7 +153,6 @@ fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
     let out_path = PathBuf::from(&format!("./data/{}_{}.tar", res.program_id, res.timestamp));
     let mut archive = tar::Builder::new(std::fs::File::create(out_path)?);
 
-    const MAXIMUM_FILE_SIZE: u64 = 1_000_000;
     for path in &[res_path, student_log_path, log_path] {
         let mut file = match std::fs::File::options().read(true).write(true).open(path) {
             Ok(f) => f,
