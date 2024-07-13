@@ -26,6 +26,19 @@ struct Configuration {
     socket: String,
 }
 
+impl Default for Configuration {
+    fn default() -> Self {
+        Self {
+            uart: "/dev/serial0".to_string(),
+            baudrate: 921_600,
+            heartbeat_pin: 34,
+            update_pin: 35,
+            heartbeat_freq: 10,
+            socket: "/tmp/scheduler_socket".to_string(),
+        }
+    }
+}
+
 fn main() -> ! {
     let _ = sl::WriteLogger::init(
         sl::LevelFilter::Info,
@@ -33,10 +46,14 @@ fn main() -> ! {
         std::fs::OpenOptions::new().create(true).append(true).open("log").unwrap(),
     );
 
-    let config: Configuration = toml::from_str(
-        &std::fs::read_to_string("./config.toml").expect("Could not open config file"),
-    )
-    .unwrap();
+    let config: Configuration = if let Ok(s) = std::fs::read_to_string("./config.toml") {
+        toml::from_str(&s)
+            .map_err(|e| log::error!("Could not parse config {e:?}, using default"))
+            .unwrap_or_default()
+    } else {
+        log::error!("Could not open config.toml, using default");
+        Configuration::default()
+    };
 
     create_directory_if_not_exists("archives").unwrap();
     create_directory_if_not_exists("data").unwrap();
