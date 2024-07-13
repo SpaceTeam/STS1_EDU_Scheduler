@@ -16,7 +16,7 @@ packs:
 
 clean:
 	rm -rf *.profraw
-	rm -f ThreadId*
+	rm -f ThreadId* updatepin
 	rm -f data/*
 	rm -rf archives/*
 	rm -rf tests/tmp
