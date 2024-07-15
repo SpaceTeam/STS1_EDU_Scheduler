@@ -19,6 +19,7 @@ serialport = "4.2.2"
 test-case = "3.3.1"
 tar = "0.4.40"
 thiserror = "1.0.62"
+anyhow = { version = "1.0.86", features = ["backtrace"] }
 
 [dependencies.filevec]
 path = "lib/filevec"

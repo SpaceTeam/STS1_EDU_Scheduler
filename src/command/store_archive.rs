@@ -3,6 +3,7 @@ use crate::{
     command::check_length,
     communication::{CEPPacket, CommunicationHandle},
 };
+use anyhow::anyhow;
 use std::{io::Write, process::Command};
 
 /// This function implements the Store Archive command, including the reception of the archive itself
@@ -49,7 +50,7 @@ fn unpack_archive(folder: &str, bytes: &[u8]) -> CommandResult {
     match exit_status {
         Ok(status) => {
             if !status.success() {
-                return Err(CommandError::NonRecoverable("unzip failed".into()));
+                return Err(CommandError::NonRecoverable(anyhow!("unzip failed")));
             }
         }
         Err(err) => {

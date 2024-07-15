@@ -1,5 +1,6 @@
 use super::{CommandError, CommandResult, SyncExecutionContext};
 use crate::communication::{CEPPacket, CommunicationHandle};
+use anyhow::anyhow;
 use std::time::Duration;
 
 pub fn check_length(
@@ -12,9 +13,9 @@ pub fn check_length(
         Ok(())
     } else {
         com.send_packet(&CEPPacket::Nack)?;
-        Err(CommandError::ProtocolViolation(
-            format!("Received command with {actual_len} bytes, expected {n}").into(),
-        ))
+        Err(CommandError::ProtocolViolation(anyhow!(
+            "Received command with {actual_len} bytes, expected {n}"
+        )))
     }
 }
 
@@ -48,10 +49,10 @@ pub fn terminate_student_program(exec: &mut SyncExecutionContext) -> CommandResu
                 .take()
                 .unwrap()
                 .join()
-                .or(Err(CommandError::NonRecoverable("Supervisor thread panicked".into())))?;
+                .or(Err(CommandError::NonRecoverable(anyhow!("Supervisor thread panicked"))))?;
             return Ok(());
         }
     }
 
-    Err(CommandError::NonRecoverable("Supervisor thread did not finish in time".into()))
+    Err(CommandError::NonRecoverable(anyhow!("Supervisor thread did not finish in time")))
 }

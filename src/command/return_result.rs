@@ -3,6 +3,7 @@ use crate::{
     command::{check_length, CommandError, Event, ResultId, COMMAND_TIMEOUT},
     communication::{CEPPacket, CommunicationHandle},
 };
+use anyhow::anyhow;
 
 /// Handles a complete return result command. The result tar file is only deleted if a final Ack is
 /// received.
@@ -19,9 +20,9 @@ pub fn return_result(
 
     if !std::path::Path::new(&result_path).exists() {
         com.send_packet(&CEPPacket::Nack)?;
-        return Err(CommandError::ProtocolViolation(
-            format!("Result {program_id}:{timestamp} does not exist").into(),
-        ));
+        return Err(CommandError::ProtocolViolation(anyhow!(
+            "Result {program_id}:{timestamp} does not exist"
+        )));
     }
 
     let bytes = std::fs::read(result_path)?;

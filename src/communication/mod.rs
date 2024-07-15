@@ -173,7 +173,6 @@ impl From<CEPParseError> for CommunicationError {
     }
 }
 
-
 #[allow(clippy::needless_pass_by_value)]
 #[cfg(test)]
 mod tests {
