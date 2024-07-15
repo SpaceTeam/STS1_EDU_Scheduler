@@ -1,5 +1,6 @@
 use super::{check_length, CommandError, CommandResult, SyncExecutionContext};
 use crate::communication::{CEPPacket, CommunicationHandle};
+use anyhow::anyhow;
 use std::process::Command;
 
 /// Handles the update time command
@@ -20,7 +21,7 @@ pub fn update_time(
 fn set_system_time(s_since_epoch: i32) -> CommandResult {
     let exit_status = Command::new("date").arg("-s").arg(format!("@{s_since_epoch}")).status()?;
     if !exit_status.success() {
-        return Err(CommandError::NonRecoverable("date utility failed".into()));
+        return Err(CommandError::NonRecoverable(anyhow!("date utility failed")));
     }
 
     Ok(())

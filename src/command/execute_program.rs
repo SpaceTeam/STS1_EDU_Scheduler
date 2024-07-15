@@ -6,6 +6,7 @@ use crate::{
     },
     communication::{CEPPacket, CommunicationHandle},
 };
+use anyhow::anyhow;
 use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
@@ -73,7 +74,7 @@ pub fn execute_program(
 fn create_student_process(program_id: u16, timestamp: u32) -> Result<Popen, CommandError> {
     let program_path = format!("./archives/{program_id}/main.py");
     if !Path::new(&program_path).exists() {
-        return Err(CommandError::ProtocolViolation("Could not find matching program".into()));
+        return Err(CommandError::ProtocolViolation(anyhow!("Could not find matching program")));
     }
 
     // TODO run the program from a student user (setuid)

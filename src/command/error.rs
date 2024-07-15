@@ -1,15 +1,13 @@
 use crate::communication::CommunicationError;
 
-type BoxedError = Box<dyn std::error::Error>;
-
 #[derive(Debug, thiserror::Error)]
 pub enum CommandError {
-    #[error("Non-recoverable: {0}")]
-    NonRecoverable(BoxedError),
-    #[error("External: {0}")]
-    External(BoxedError),
-    #[error("Protocol Violation: {0}")]
-    ProtocolViolation(BoxedError),
+    #[error("Non-recoverable: {0:?}")]
+    NonRecoverable(anyhow::Error),
+    #[error("External: {0:?}")]
+    External(anyhow::Error),
+    #[error("Protocol Violation: {0:?}")]
+    ProtocolViolation(anyhow::Error),
 }
 
 impl From<std::io::Error> for CommandError {

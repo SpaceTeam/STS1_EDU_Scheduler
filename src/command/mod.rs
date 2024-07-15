@@ -9,6 +9,7 @@ mod store_archive;
 mod update_time;
 
 use crate::communication::{CEPPacket, CommunicationHandle};
+use anyhow::anyhow;
 pub use common::*;
 pub use error::CommandError;
 use execute_program::execute_program;
@@ -50,13 +51,13 @@ pub fn process_command(
 ) -> CommandResult {
     let packet = com.receive_packet()?;
     let CEPPacket::Data(data) = packet else {
-        return Err(CommandError::NonRecoverable(
-            format!("Received {packet:?} as command start, expected Data").into(),
-        ));
+        return Err(CommandError::NonRecoverable(anyhow!(
+            "Received {packet:?} as command start, expected Data"
+        )));
     };
 
     if data.is_empty() {
-        return Err(CommandError::ProtocolViolation("No data sent with data packet".into()));
+        return Err(CommandError::ProtocolViolation(anyhow!("Received empty data packet")));
     }
 
     match data.first().unwrap() {
@@ -67,7 +68,7 @@ pub fn process_command(
         0x05 => return_result(&data, com, exec)?,
         0x06 => update_time(&data, com, exec)?,
         b => {
-            return Err(CommandError::ProtocolViolation(format!("Unknown command {b:#x}").into()));
+            return Err(CommandError::ProtocolViolation(anyhow!("Unknown command {b:#x}")));
         }
     };
 
