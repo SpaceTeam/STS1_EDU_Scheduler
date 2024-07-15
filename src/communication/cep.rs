@@ -71,7 +71,7 @@ impl CEPPacket {
         reader.read_exact(&mut header_buffer)?;
 
         let header = CEPPacketHeader::from_repr(header_buffer[0] as usize)
-            .ok_or(CEPParseError::InvalidLength)?;
+            .ok_or(CEPParseError::InvalidHeader(header_buffer[0]))?;
         let packet = match header {
             CEPPacketHeader::Ack => CEPPacket::Ack,
             CEPPacketHeader::Nack => CEPPacket::Nack,
@@ -82,7 +82,7 @@ impl CEPPacket {
                 let length = u16::from_le_bytes(length_buffer);
 
                 if length as usize > Self::MAXIMUM_DATA_LENGTH {
-                    return Err(CEPParseError::InvalidLength);
+                    return Err(CEPParseError::InvalidLength(length));
                 }
 
                 let mut data_buffer = vec![0; length as usize];
@@ -108,20 +108,16 @@ impl From<&CEPPacket> for Vec<u8> {
     }
 }
 
-#[derive(Debug, strum::Display)]
+#[derive(Debug, thiserror::Error)]
 pub enum CEPParseError {
-    InvalidLength,
-    InvalidHeader,
+    #[error("Length field exceeded maximum length with {0}")]
+    InvalidLength(u16),
+    #[error("Invalid packet header {0:#02x}")]
+    InvalidHeader(u8),
+    #[error("Invalid CRC checksum")]
     InvalidCRC,
-    Io(std::io::Error),
-}
-
-impl std::error::Error for CEPParseError {}
-
-impl From<std::io::Error> for CEPParseError {
-    fn from(value: std::io::Error) -> Self {
-        CEPParseError::Io(value)
-    }
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 }
 
 impl TryFrom<Vec<u8>> for CEPPacket {
@@ -160,7 +156,12 @@ mod tests {
     fn invalid_length_is_rejected() {
         assert!(matches!(
             CEPPacket::try_from(vec![0x8B, 0xff, 0xff]),
-            Err(CEPParseError::InvalidLength)
+            Err(CEPParseError::InvalidLength(0xffff))
         ));
+    }
+
+    #[test]
+    fn invalid_header_is_rejected() {
+        assert!(matches!(CEPPacket::try_from(vec![0x00]), Err(CEPParseError::InvalidHeader(0x00))));
     }
 }
