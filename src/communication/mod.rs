@@ -135,24 +135,23 @@ impl CommunicationHandle for Box<dyn serialport::SerialPort> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum CommunicationError {
     /// Signals that an unknown command packet was received
+    #[error("Received invalid packet")]
     PacketInvalidError,
     /// Relays an error from trying to parse a CEP packet
+    #[error(transparent)]
     CepParsing(CEPParseError),
     /// Signals that the underlying sending or receiving failed. Not recoverable on its own.
+    #[error(transparent)]
     Io(std::io::Error),
     /// Signals that a receive timed out
+    #[error("Timed out")]
     TimedOut,
     /// Nack was received when Ack was expected
+    #[error("Received NACK")]
     NotAcknowledged,
-}
-
-impl std::fmt::Display for CommunicationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
 }
 
 impl From<std::io::Error> for CommunicationError {
@@ -174,7 +173,6 @@ impl From<CEPParseError> for CommunicationError {
     }
 }
 
-impl std::error::Error for CommunicationError {}
 
 #[allow(clippy::needless_pass_by_value)]
 #[cfg(test)]

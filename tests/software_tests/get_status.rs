@@ -4,8 +4,6 @@ use common::*;
 use STS1_EDU_Scheduler::command::{self};
 use STS1_EDU_Scheduler::communication::CEPPacket::*;
 
-type TestResult = Result<(), Box<dyn std::error::Error>>;
-
 #[test]
 fn get_status_none() {
     let packets = vec![Cobc(Data(vec![4])), Edu(Ack), Edu(Data(vec![0])), Cobc(Ack)];

@@ -2,10 +2,13 @@ use crate::communication::CommunicationError;
 
 type BoxedError = Box<dyn std::error::Error>;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum CommandError {
+    #[error("Non-recoverable: {0}")]
     NonRecoverable(BoxedError),
+    #[error("External: {0}")]
     External(BoxedError),
+    #[error("Protocol Violation: {0}")]
     ProtocolViolation(BoxedError),
 }
 
@@ -32,11 +35,3 @@ impl From<CommunicationError> for CommandError {
         }
     }
 }
-
-impl std::fmt::Display for CommandError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CommandError::{self:?}")
-    }
-}
-
-impl std::error::Error for CommandError {}
