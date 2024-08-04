@@ -109,10 +109,12 @@ impl Write for TestCom {
 /// Copy the mockup student program from `tests/test_data/main.py` into `archives/{path}`. This absolves the need
 /// to include an extra `store_archive` command.
 pub fn prepare_program(path: &str) {
-    let ret = std::fs::create_dir(format!("./archives/{path}"));
+    let ret = std::fs::create_dir_all(format!("./archives/{path}"));
     if let Err(e) = ret {
         assert!(e.kind() == std::io::ErrorKind::AlreadyExists, "Setup Error: {e}");
     }
+    let _ = std::fs::create_dir_all("./data");
+
     let ret = std::fs::copy("./tests/test_data/main.py", format!("./archives/{path}/main.py"));
     if let Err(e) = ret {
         assert!(e.kind() == std::io::ErrorKind::AlreadyExists, "Setup Error: {e}");

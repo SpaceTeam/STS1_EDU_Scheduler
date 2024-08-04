@@ -92,7 +92,7 @@ fn start_scheduler(
     std::io::Error,
 > {
     let test_dir = format!("./tests/tmp/{unique}");
-    let scheduler_bin = std::fs::canonicalize("./target/release/STS1_EDU_Scheduler")?;
+    let scheduler_bin = std::fs::canonicalize("../target/release/STS1_EDU_Scheduler")?;
     let _ = std::fs::remove_dir_all(&test_dir);
     std::fs::create_dir_all(&test_dir)?;
     std::fs::write(format!("{}/config.toml", &test_dir), get_config_str(unique))?;
