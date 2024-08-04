@@ -4,8 +4,8 @@ __pycache__/
 venv
 .vscode
 log
-archives/
-data/
+archives/*
+data/*
 tests/tmp/
 lib/**/target
 

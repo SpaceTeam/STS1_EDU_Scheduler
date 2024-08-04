@@ -1,0 +1,33 @@
+[package]
+name = "STS1_EDU_Scheduler"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = "0.4.22"
+simplelog = "0.12.2"
+subprocess = "0.2.9"
+crc = "3.2.1"
+toml = "0.8.19"
+rppal = "0.18.0"
+serde = { version = "1.0.204", features = ["derive"] }
+strum = { version = "0.26.3", features = ["derive"] }
+serialport = "4.4.0"
+test-case = "3.3.1"
+tar = "0.4.41"
+thiserror = "1.0.63"
+anyhow = { version = "1.0.86", features = ["backtrace"] }
+
+[dependencies.filevec]
+path = "../filevec"
+
+[features]
+mock = []
+rpi = []
+
+[dev-dependencies]
+file-per-thread-logger = "0.2.0"
+inquire = "0.7.5"
+
+[lints]
+workspace = true

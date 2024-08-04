@@ -16,11 +16,11 @@ packs:
 
 clean:
 	rm -rf *.profraw
-	rm -f ThreadId* updatepin
-	rm -f data/*
-	rm -rf archives/*
-	rm -rf tests/tmp
-	rm -f tests/*.pack
+	rm -f scheduler/ThreadId* scheduler/updatepin
+	rm -f scheduler/data/*
+	rm -rf scheduler/archives/*
+	rm -rf scheduler/tests/tmp
+	rm -f scheduler/tests/*.pack
 
 rebuild_student_archive:
 	rm -f tests/student_program.zip
