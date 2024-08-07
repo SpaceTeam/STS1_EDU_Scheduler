@@ -1,0 +1,12 @@
+[package]
+name = "simple-archive"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+flate2 = "1.0.33"
+libflate = "2.1.0"
+zopfli = "0.8.1"
+
+[lints]
+workspace = true
