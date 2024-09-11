@@ -7,14 +7,16 @@ use crate::{
     communication::{CEPPacket, CommunicationHandle},
 };
 use anyhow::anyhow;
+use simple_archive::Compression;
 use std::{
-    io::ErrorKind,
+    fs::File,
+    io::{ErrorKind, Read, Write},
     path::{Path, PathBuf},
     time::Duration,
 };
 use subprocess::Popen;
 
-const MAXIMUM_FILE_SIZE: u64 = 1_000_000;
+const MAXIMUM_FILE_SIZE: usize = 1_000_000;
 
 /// Executes a students program and starts a watchdog for it. The watchdog also creates entries in the
 /// status and result queue found in `context`. The result, including logs, is packed into
@@ -145,27 +147,35 @@ fn run_until_timeout(
 /// the programs stdout/stderr and the schedulers log file. If any of the files is missing, the archive
 /// is created without them.
 fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
+    let out_path = PathBuf::from(&format!("./data/{res}"));
+    let mut archive = simple_archive::Writer::new(std::fs::File::create(out_path)?);
+
     let res_path =
         PathBuf::from(format!("./archives/{}/results/{}", res.program_id, res.timestamp));
     let student_log_path =
-        PathBuf::from(format!("./data/{}_{}.log", res.program_id, res.timestamp));
-    let log_path = PathBuf::from("log");
+        PathBuf::from(format!("./data/{res}.log"));
+    let log_path = PathBuf::from("./log");
 
-    let out_path = PathBuf::from(&format!("./data/{}_{}.tar", res.program_id, res.timestamp));
-    let mut archive = tar::Builder::new(std::fs::File::create(out_path)?);
-
-    for path in &[res_path, student_log_path, log_path] {
-        let mut file = match std::fs::File::options().read(true).write(true).open(path) {
-            Ok(f) => f,
-            Err(e) if e.kind() == ErrorKind::NotFound => continue,
-            Err(e) => return Err(e),
-        };
-
-        truncate_to_size(&mut file, MAXIMUM_FILE_SIZE)?;
-        archive.append_file(path.file_name().unwrap(), &mut file)?;
-    }
-
-    archive.finish()?;
+    add_to_archive_if_exists(&mut archive, &res.to_string(), res_path, Compression::None)?;
+    add_to_archive_if_exists(&mut archive, "student_log", student_log_path, Compression::Zopfli)?;
+    add_to_archive_if_exists(&mut archive, "log", log_path, Compression::Zopfli)?;
 
     Ok(())
+}
+
+fn add_to_archive_if_exists<T: Write>(
+    archive: &mut simple_archive::Writer<T>,
+    name: &str,
+    path: impl AsRef<Path>,
+    compression: simple_archive::Compression,
+) -> std::io::Result<()> {
+    match std::fs::read(path) {
+        Ok(mut data) => {
+            data.truncate(MAXIMUM_FILE_SIZE);
+            archive.append_data(name, &data, compression)?;
+            Ok(())
+        }
+        Err(ref e) if e.kind() == ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
 }

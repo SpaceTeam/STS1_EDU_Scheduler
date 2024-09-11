@@ -16,7 +16,7 @@ pub fn return_result(
 
     let program_id = u16::from_le_bytes([data[1], data[2]]);
     let timestamp = u32::from_le_bytes([data[3], data[4], data[5], data[6]]);
-    let result_path = format!("./data/{program_id}_{timestamp}.tar");
+    let result_path = format!("./data/{program_id}_{timestamp}");
 
     if !std::path::Path::new(&result_path).exists() {
         com.send_packet(&CEPPacket::Nack)?;
@@ -51,7 +51,7 @@ pub fn return_result(
 fn delete_result(res: ResultId) -> CommandResult {
     let res_path = format!("./archives/{}/results/{}", res.program_id, res.timestamp);
     let log_path = format!("./data/{}_{}.log", res.program_id, res.timestamp);
-    let out_path = format!("./data/{}_{}.tar", res.program_id, res.timestamp);
+    let out_path = format!("./data/{}_{}", res.program_id, res.timestamp);
     let _ = std::fs::remove_file(res_path);
     let _ = std::fs::remove_file(log_path);
     let _ = std::fs::remove_file(out_path);

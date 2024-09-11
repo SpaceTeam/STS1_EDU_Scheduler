@@ -1,8 +1,6 @@
 use filevec::FileVec;
 use std::{
-    str::FromStr,
-    sync::{Arc, Mutex},
-    thread,
+    fmt::Display, str::FromStr, sync::{Arc, Mutex}, thread
 };
 
 const EVENT_SEND_TRIES: u32 = 5;
@@ -117,6 +115,12 @@ pub struct ProgramStatus {
 pub struct ResultId {
     pub program_id: u16,
     pub timestamp: u32,
+}
+
+impl Display for ResultId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}_{}", self.program_id, self.timestamp)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug)]

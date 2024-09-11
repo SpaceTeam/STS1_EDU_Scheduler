@@ -1,6 +1,7 @@
 use crate::software_tests::common;
 use crate::software_tests::common::ComEvent::*;
 use common::*;
+use simple_archive::Entry;
 use STS1_EDU_Scheduler::command::{self};
 use STS1_EDU_Scheduler::communication::CEPPacket::*;
 
@@ -25,7 +26,7 @@ fn returns_result_correctly() -> TestResult {
         Edu(Ack),
         Action(Box::new(|packet| {
             let bytes = packet.clone().serialize();
-            std::fs::write("tests/tmp/7.tar", &bytes[3..bytes.len() - 4]).unwrap();
+            std::fs::write("tests/tmp/7_3", &bytes[3..bytes.len() - 4]).unwrap();
         })),
         Cobc(Ack),
         Edu(Eof),
@@ -42,15 +43,12 @@ fn returns_result_correctly() -> TestResult {
     command::handle_command(&mut com, &mut exec);
     assert!(com.is_complete());
 
-    let _ = std::fs::create_dir("./tests/tmp/7_unpack");
-    std::process::Command::new("tar")
-        .current_dir("./tests/tmp/7_unpack")
-        .arg("xf")
-        .arg("../7.tar")
-        .status()?;
-
-    assert_eq!(std::fs::read("./tests/tmp/7_unpack/3")?, vec![0xde, 0xad]);
-    assert!(std::fs::read("./tests/tmp/7_unpack/7_3.log").is_ok());
+    let results = simple_archive::Reader::new(std::fs::File::open("tests/tmp/7_3")?)
+        .map(Result::unwrap)
+        .collect::<Vec<_>>();
+    dbg!(&results);
+    assert!(results.contains(&Entry { path: "7_3".to_string(), data: vec![0xde, 0xad] }));
+    assert!(results.iter().any(|e| e.path == "student_log"));
 
     common::cleanup("7");
     Ok(())
@@ -77,7 +75,7 @@ fn truncate_result() -> TestResult {
     command::handle_command(&mut com, &mut exec);
     assert!(com.is_complete());
 
-    assert!(std::fs::File::open("./data/8_5.tar")?.metadata()?.len() < 1_005_000);
+    assert!(std::fs::File::open("./data/8_5")?.metadata()?.len() < 1_005_000);
 
     common::cleanup("8");
     Ok(())
@@ -116,7 +114,7 @@ fn result_is_not_deleted_after_corrupted_transfer() {
     command::handle_command(&mut com, &mut exec);
     assert!(com.is_complete());
 
-    assert!(std::fs::File::open("./data/50_0.tar").is_ok());
+    assert!(std::fs::File::open("./data/50_0").is_ok());
 
     common::cleanup("50");
 }

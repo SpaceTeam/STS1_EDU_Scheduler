@@ -134,7 +134,7 @@ fn inquire_and_send_command(
             let program_id = inquire::Text::new("Program id:").prompt()?.parse()?;
             let timestamp = inquire::Text::new("Timestamp:").prompt()?.parse()?;
             let result_path = inquire::Text::new("File path for returned result:")
-                .with_default("./result.tar")
+                .with_default("./result")
                 .prompt()?;
             edu.send_packet(&CEPPacket::Data(return_result(program_id, timestamp)))?;
             match edu.receive_multi_packet() {
