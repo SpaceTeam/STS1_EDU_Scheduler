@@ -166,6 +166,7 @@ pub fn execute_program(program_id: u16, timestamp: u32, timeout: u16) -> Vec<u8>
     vec
 }
 
+#[allow(dead_code)]
 pub fn stop_program() -> Vec<u8> {
     vec![3u8]
 }

@@ -1,16 +1,14 @@
 use super::{CommandError, CommandResult, SyncExecutionContext};
 use crate::{
     command::{
-        check_length, terminate_student_program, truncate_to_size, Event, ProgramStatus, ResultId,
-        RetryEvent,
+        check_length, terminate_student_program, Event, ProgramStatus, ResultId, RetryEvent,
     },
     communication::{CEPPacket, CommunicationHandle},
 };
 use anyhow::anyhow;
 use simple_archive::Compression;
 use std::{
-    fs::File,
-    io::{ErrorKind, Read, Write},
+    io::{ErrorKind, Write},
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -152,8 +150,7 @@ fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
 
     let res_path =
         PathBuf::from(format!("./archives/{}/results/{}", res.program_id, res.timestamp));
-    let student_log_path =
-        PathBuf::from(format!("./data/{res}.log"));
+    let student_log_path = PathBuf::from(format!("./data/{res}.log"));
     let log_path = PathBuf::from("./log");
 
     add_to_archive_if_exists(&mut archive, &res.to_string(), res_path, Compression::None)?;

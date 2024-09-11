@@ -1,6 +1,9 @@
 use filevec::FileVec;
 use std::{
-    fmt::Display, str::FromStr, sync::{Arc, Mutex}, thread
+    fmt::Display,
+    str::FromStr,
+    sync::{Arc, Mutex},
+    thread,
 };
 
 const EVENT_SEND_TRIES: u32 = 5;
