@@ -140,6 +140,7 @@ pub fn cleanup(unique: &str) {
     let _ = std::fs::remove_file(format!("tests/tmp/{unique}_r"));
 }
 
+#[allow(dead_code)]
 pub fn store_archive(program_id: u16) -> Vec<u8> {
     let mut vec = vec![1u8];
     vec.extend(program_id.to_le_bytes());
