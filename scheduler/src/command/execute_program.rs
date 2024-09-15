@@ -153,9 +153,13 @@ fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
     let student_log_path = PathBuf::from(format!("./data/{res}.log"));
     let log_path = PathBuf::from("./log");
 
-    add_to_archive_if_exists(&mut archive, &res.to_string(), res_path, Compression::None)?;
-    add_to_archive_if_exists(&mut archive, "student_log", student_log_path, Compression::Zopfli)?;
-    add_to_archive_if_exists(&mut archive, "log", log_path, Compression::Zopfli)?;
+    add_to_archive_if_exists(&mut archive, &res.to_string(), &res_path, Compression::None)?;
+    add_to_archive_if_exists(&mut archive, "student_log", &student_log_path, Compression::Zopfli)?;
+    add_to_archive_if_exists(&mut archive, "log", &log_path, Compression::Zopfli)?;
+
+    let _ = std::fs::remove_file(res_path);
+    let _ = std::fs::remove_file(student_log_path);
+    let _ = std::fs::OpenOptions::new().write(true).truncate(true).open(log_path);
 
     Ok(())
 }
