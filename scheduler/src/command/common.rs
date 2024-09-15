@@ -19,17 +19,6 @@ pub fn check_length(
     }
 }
 
-/// Truncates the files to at most `n_bytes`
-pub fn truncate_to_size(file: &mut std::fs::File, n_bytes: u64) -> Result<(), std::io::Error> {
-    let size = file.metadata()?.len();
-    if size > n_bytes {
-        file.set_len(n_bytes)?;
-        file.sync_all()?;
-    }
-
-    Ok(())
-}
-
 /// If no program is currently running, this function simply returns. Otherwise it signals the
 /// supervisor thread to kill the student program and waits for a maximum of 2s before returning
 /// and error

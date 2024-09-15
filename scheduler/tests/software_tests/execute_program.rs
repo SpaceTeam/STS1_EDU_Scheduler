@@ -1,8 +1,7 @@
-use std::io::Read;
-
 use crate::software_tests::common;
 use crate::software_tests::common::ComEvent::*;
 use common::*;
+use std::io::Read;
 use STS1_EDU_Scheduler::command::{self};
 use STS1_EDU_Scheduler::communication::CEPPacket::*;
 
@@ -22,10 +21,8 @@ fn execute_program_normal() -> TestResult {
     assert!(com.is_complete());
 
     std::thread::sleep(std::time::Duration::from_millis(500));
-    let mut res = String::new();
-    std::fs::File::open("./archives/1/results/0")?.read_to_string(&mut res)?;
-
-    assert_eq!(res.replace('\r', ""), *"Some test results\nWith multiple lines\n".to_string());
+    let result_file = std::fs::read("./data/1_0")?;
+    assert!(result_file.windows(38).any(|w| w == b"Some test results\nWith multiple lines\n"));
 
     common::cleanup("1");
     Ok(())

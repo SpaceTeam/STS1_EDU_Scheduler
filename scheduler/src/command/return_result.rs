@@ -1,4 +1,4 @@
-use super::{truncate_to_size, CommandResult, SyncExecutionContext};
+use super::{CommandResult, SyncExecutionContext};
 use crate::{
     command::{check_length, CommandError, Event, ResultId, COMMAND_TIMEOUT},
     communication::{CEPPacket, CommunicationHandle},
@@ -31,7 +31,7 @@ pub fn return_result(
 
     com.await_ack(COMMAND_TIMEOUT)?;
     let result_id = ResultId { program_id, timestamp };
-    delete_result(result_id)?;
+    let _ = std::fs::remove_file(format!("./data/{result_id}"));
 
     let mut l_exec = exec.lock().unwrap();
     if let Some(event_index) =
@@ -43,22 +43,5 @@ pub fn return_result(
     }
 
     l_exec.configure_update_pin();
-    Ok(())
-}
-
-/// Deletes the result archive corresponding to the next element in the result queue and removes
-/// that element from the queue. The update pin is updated accordingly
-fn delete_result(res: ResultId) -> CommandResult {
-    let res_path = format!("./archives/{}/results/{}", res.program_id, res.timestamp);
-    let log_path = format!("./data/{}_{}.log", res.program_id, res.timestamp);
-    let out_path = format!("./data/{}_{}", res.program_id, res.timestamp);
-    let _ = std::fs::remove_file(res_path);
-    let _ = std::fs::remove_file(log_path);
-    let _ = std::fs::remove_file(out_path);
-
-    if let Ok(mut file) = std::fs::File::options().write(true).open("log") {
-        truncate_to_size(&mut file, 0)?;
-    }
-
     Ok(())
 }

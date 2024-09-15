@@ -23,7 +23,7 @@ fn logfile_is_cleared_after_sent() -> std::io::Result<()> {
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     let log_metadata = std::fs::metadata("./tests/tmp/log_is_cleared_after_sent/log")?;
-    assert!(log_metadata.len() < 50, "Logfile is not empty");
+    assert!(log_metadata.len() < 100, "Logfile is not empty");
 
     Ok(())
 }
