@@ -28,7 +28,8 @@ impl From<CommunicationError> for CommandError {
             CommunicationError::PacketInvalidError => CommandError::External(e.into()),
             CommunicationError::TimedOut
             | CommunicationError::NotAcknowledged
-            | CommunicationError::CepParsing(_) => CommandError::ProtocolViolation(e.into()),
+            | CommunicationError::CepParsing(_)
+            | CommunicationError::TooManyBytes => CommandError::ProtocolViolation(e.into()),
             CommunicationError::Io(_) => CommandError::NonRecoverable(e.into()),
         }
     }

@@ -1,7 +1,6 @@
 use crate::software_tests::common;
 use crate::software_tests::common::ComEvent::*;
 use common::*;
-use std::io::Read;
 use STS1_EDU_Scheduler::command::{self};
 use STS1_EDU_Scheduler::communication::CEPPacket::*;
 

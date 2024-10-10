@@ -14,6 +14,8 @@ pub trait CommunicationHandle: Read + Write {
     const UNLIMITED_TIMEOUT: Duration;
 
     const DATA_PACKET_RETRIES: usize = 4;
+    const MAXIMUM_MULTI_PACKETS: usize = 100;
+    const MAXIMUM_DATA_LENGTH: usize = Self::MAXIMUM_MULTI_PACKETS * CEPPacket::MAXIMUM_DATA_LENGTH;
 
     fn set_timeout(&mut self, timeout: Duration);
 
@@ -43,6 +45,10 @@ pub trait CommunicationHandle: Read + Write {
     }
 
     fn send_multi_packet(&mut self, bytes: &[u8]) -> ComResult<()> {
+        if bytes.len() > Self::MAXIMUM_DATA_LENGTH {
+            return Err(CommunicationError::TooManyBytes);
+        }
+
         let chunks = bytes.chunks(CEPPacket::MAXIMUM_DATA_LENGTH);
         for chunk in chunks {
             self.send_packet(&CEPPacket::Data(chunk.into()))?;
@@ -152,6 +158,8 @@ pub enum CommunicationError {
     /// Nack was received when Ack was expected
     #[error("Received NACK")]
     NotAcknowledged,
+    #[error("Cannot send more than 1.1 MB")]
+    TooManyBytes,
 }
 
 impl From<std::io::Error> for CommunicationError {
@@ -337,5 +345,15 @@ mod tests {
         assert_eq!(com.receive_multi_packet().unwrap(), data);
         assert!(com.data_to_read.is_empty());
         assert_eq!(com.written_data, CEPPacket::Ack.serialize().repeat(chunks.len() + 1));
+    }
+
+    #[test]
+    fn too_large_multi_packet_data_is_err() {
+        let mut com = TestComHandle::default();
+        assert!(matches!(
+            com.send_multi_packet(&vec![0; 1_100_001]).unwrap_err(),
+            CommunicationError::TooManyBytes
+        ));
+        assert!(com.written_data.is_empty());
     }
 }
