@@ -17,6 +17,7 @@ strum = { version = "0.26.3", features = ["derive"] }
 subprocess = "0.2.9"
 thiserror = "1.0.63"
 toml = "0.8.19"
+zopfli = "0.8.1"
 
 [features]
 mock = []

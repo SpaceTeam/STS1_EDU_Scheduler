@@ -75,7 +75,7 @@ fn truncate_result() -> TestResult {
     command::handle_command(&mut com, &mut exec);
     assert!(com.is_complete());
 
-    assert!(std::fs::File::open("./data/8_5")?.metadata()?.len() < 1_005_000);
+    assert!(std::fs::File::open("./data/8_5")?.metadata()?.len() < 1_100_000);
 
     common::cleanup("8");
     Ok(())

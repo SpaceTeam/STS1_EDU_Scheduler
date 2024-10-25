@@ -3,18 +3,16 @@ use crate::{
     command::{
         check_length, terminate_student_program, Event, ProgramStatus, ResultId, RetryEvent,
     },
-    communication::{CEPPacket, CommunicationHandle},
+    communication::{self, CEPPacket, CommunicationHandle},
 };
 use anyhow::anyhow;
-use simple_archive::Compression;
 use std::{
-    io::{ErrorKind, Write},
+    io::ErrorKind,
     path::{Path, PathBuf},
     time::Duration,
 };
 use subprocess::Popen;
-
-const MAXIMUM_FILE_SIZE: usize = 1_000_000;
+use zopfli::Options;
 
 /// Executes a students program and starts a watchdog for it. The watchdog also creates entries in the
 /// status and result queue found in `context`. The result, including logs, is packed into
@@ -141,21 +139,34 @@ fn run_until_timeout(
     Err(())
 }
 
-/// The function uses `tar` to create an uncompressed archive that includes the result file specified, as well as
-/// the programs stdout/stderr and the schedulers log file. If any of the files is missing, the archive
-/// is created without them.
+const RESULT_SIZE_LIMIT: usize = 1_000_000;
+
 fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
     let out_path = PathBuf::from(&format!("./data/{res}"));
-    let mut archive = simple_archive::Writer::new(std::fs::File::create(out_path)?);
+    let mut archive = simple_archive::Writer::new(Vec::new());
 
     let res_path =
         PathBuf::from(format!("./archives/{}/results/{}", res.program_id, res.timestamp));
     let student_log_path = PathBuf::from(format!("./data/{res}.log"));
     let log_path = PathBuf::from("./log");
 
-    add_to_archive_if_exists(&mut archive, &res.to_string(), &res_path, Compression::None)?;
-    add_to_archive_if_exists(&mut archive, "student_log", &student_log_path, Compression::Zopfli)?;
-    add_to_archive_if_exists(&mut archive, "log", &log_path, Compression::Zopfli)?;
+    if let Some(d) = open_if_exists(&res_path)? {
+        if d.len() <= RESULT_SIZE_LIMIT {
+            archive.append_data(&res.to_string(), &d)?;
+        } else {
+            log::warn!("Result file for {res} is too large ({})", d.len());
+        }
+    }
+
+    if let Some(d) = open_if_exists(&log_path)? {
+        compress_into_archive_if_it_fits(&mut archive, "log", &d)?;
+    }
+
+    if let Some(d) = open_if_exists(&student_log_path)? {
+        compress_into_archive_if_it_fits(&mut archive, "student_log", &d)?;
+    }
+
+    std::fs::write(out_path, archive.into_inner())?;
 
     let _ = std::fs::remove_file(res_path);
     let _ = std::fs::remove_file(student_log_path);
@@ -164,19 +175,32 @@ fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn add_to_archive_if_exists<T: Write>(
-    archive: &mut simple_archive::Writer<T>,
-    name: &str,
-    path: impl AsRef<Path>,
-    compression: simple_archive::Compression,
-) -> std::io::Result<()> {
+fn open_if_exists(path: impl AsRef<Path>) -> std::io::Result<Option<Vec<u8>>> {
     match std::fs::read(path) {
-        Ok(mut data) => {
-            data.truncate(MAXIMUM_FILE_SIZE);
-            archive.append_data(name, &data, compression)?;
-            Ok(())
-        }
-        Err(ref e) if e.kind() == ErrorKind::NotFound => Ok(()),
+        Ok(d) => Ok(Some(d)),
+        Err(ref e) if e.kind() == ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e),
     }
+}
+
+fn compress_into_archive_if_it_fits(
+    archive: &mut simple_archive::Writer<Vec<u8>>,
+    path: &str,
+    data: &[u8],
+) -> std::io::Result<()> {
+    let mut compressed = Vec::new();
+    zopfli::compress(Options::default(), zopfli::Format::Gzip, data, &mut compressed)?;
+
+    if compressed.len()
+        <= communication::MAXIMUM_DATA_LENGTH
+            - archive.inner().len()
+            - path.len()
+            - simple_archive::HEADER_SIZE
+    {
+        archive.append_data(path, &compressed)?;
+    } else {
+        log::warn!("Could not fit {path} into result");
+    }
+
+    Ok(())
 }

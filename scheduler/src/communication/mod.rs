@@ -9,13 +9,14 @@ use std::{
 
 pub type ComResult<T> = Result<T, CommunicationError>;
 
+pub const MAXIMUM_MULTI_PACKETS: usize = 100;
+pub const MAXIMUM_DATA_LENGTH: usize = MAXIMUM_MULTI_PACKETS * CEPPacket::MAXIMUM_DATA_LENGTH;
+
 pub trait CommunicationHandle: Read + Write {
     const INTEGRITY_ACK_TIMEOUT: Duration;
     const UNLIMITED_TIMEOUT: Duration;
 
     const DATA_PACKET_RETRIES: usize = 4;
-    const MAXIMUM_MULTI_PACKETS: usize = 100;
-    const MAXIMUM_DATA_LENGTH: usize = Self::MAXIMUM_MULTI_PACKETS * CEPPacket::MAXIMUM_DATA_LENGTH;
 
     fn set_timeout(&mut self, timeout: Duration);
 
@@ -45,7 +46,7 @@ pub trait CommunicationHandle: Read + Write {
     }
 
     fn send_multi_packet(&mut self, bytes: &[u8]) -> ComResult<()> {
-        if bytes.len() > Self::MAXIMUM_DATA_LENGTH {
+        if bytes.len() > MAXIMUM_DATA_LENGTH {
             return Err(CommunicationError::TooManyBytes);
         }
 
