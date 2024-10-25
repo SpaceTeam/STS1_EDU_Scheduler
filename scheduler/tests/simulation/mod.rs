@@ -3,6 +3,7 @@ mod full_run;
 mod logging;
 mod socket;
 mod timeout;
+mod results;
 
 use std::{
     io::{Read, Write},
