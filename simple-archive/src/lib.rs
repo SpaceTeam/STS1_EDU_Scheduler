@@ -1,55 +1,37 @@
 use std::io::{ErrorKind, Read, Write};
-use zopfli::{Format, Options};
+
+pub const HEADER_SIZE: usize = 5;
 
 pub struct Writer<T: Write>(T);
-
-#[derive(Debug, Clone, Copy)]
-pub enum Compression {
-    None,
-    Zopfli,
-}
 
 impl<T: Write> Writer<T> {
     pub fn new(target: T) -> Self {
         Self(target)
     }
 
+    pub fn inner(&self) -> &T {
+        &self.0
+    }
+
     pub fn into_inner(self) -> T {
         self.0
     }
 
-    pub fn append_data(
-        &mut self,
-        path: &str,
-        data: &[u8],
-        compression: Compression,
-    ) -> std::io::Result<()> {
+    pub fn append_data(&mut self, path: &str, data: &[u8]) -> std::io::Result<()> {
         let path_len: u8 =
             try_into_io_result(path.len(), "path must not be longer than 255 chars")?;
         self.0.write_all(&path_len.to_le_bytes())?;
         self.0.write_all(path.as_bytes())?;
 
-        match compression {
-            Compression::None => self.write_data(data),
-            Compression::Zopfli => {
-                let mut buffer = vec![];
-                zopfli::compress(Options::default(), Format::Gzip, data, &mut buffer)?;
-                self.write_data(&buffer)
-            }
-        }
-    }
-
-    fn write_data(&mut self, data: &[u8]) -> std::io::Result<()> {
         let data_len: u32 =
-            try_into_io_result(data.len(), "data must not be longer than u32::MAX")?;
+            try_into_io_result(data.len(), "data must not be larger than u32::MAX")?;
         self.0.write_all(&data_len.to_le_bytes())?;
-        self.0.write_all(data)?;
-        Ok(())
+        self.0.write_all(data)
     }
 
-    pub fn append_file(&mut self, path: &str, compression: Compression) -> std::io::Result<()> {
+    pub fn append_file(&mut self, path: &str) -> std::io::Result<()> {
         let data = std::fs::read(path)?;
-        self.append_data(path, &data, compression)
+        self.append_data(path, &data)
     }
 }
 
@@ -81,26 +63,7 @@ impl<T: Read> Reader<T> {
         let mut data = vec![0; u32::from_le_bytes(data_len) as usize];
         self.0.read_exact(&mut data)?;
 
-        Ok(Entry {
-            path: String::from_utf8_lossy(&path).to_string(),
-            data: Self::try_to_enflate(data),
-        })
-    }
-
-    fn try_to_enflate(data: Vec<u8>) -> Vec<u8> {
-        const GZIP_MAGIC_NUMBER: [u8; 2] = [0x1f, 0x8b];
-        if !data.starts_with(&GZIP_MAGIC_NUMBER) {
-            return data;
-        }
-
-        let mut decoder = flate2::read::GzDecoder::new(&data[..]);
-        let mut result = vec![];
-        if decoder.read_to_end(&mut result).is_ok() {
-            result
-        } else {
-            drop(decoder);
-            data
-        }
+        Ok(Entry { path: String::from_utf8_lossy(&path).to_string(), data })
     }
 }
 
@@ -123,18 +86,14 @@ pub struct Entry {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        io::Cursor,
-        process::{Command, Stdio},
-    };
-
     use super::*;
+    use std::io::Cursor;
 
     #[test]
     fn data_is_encoded_correctly() {
         let mut res = dummy();
 
-        res.append_data("abc", &[1, 2, 3, 4], Compression::None).unwrap();
+        res.append_data("abc", &[1, 2, 3, 4]).unwrap();
 
         assert_eq!(
             res.into_inner().into_inner(),
@@ -146,7 +105,7 @@ mod tests {
     fn path_longer_than_255_is_rejected() {
         let mut res = dummy();
 
-        let err = res.append_data(&"a".repeat(256), &[], Compression::None).unwrap_err();
+        let err = res.append_data(&"a".repeat(256), &[]).unwrap_err();
 
         assert_eq!(err.kind(), std::io::ErrorKind::Other);
     }
@@ -155,48 +114,25 @@ mod tests {
     fn data_longer_than_u32_max_is_rejected() {
         let mut res = dummy();
 
-        let err =
-            res.append_data("abc", &vec![0; u32::MAX as usize + 1], Compression::None).unwrap_err();
+        let err = res.append_data("abc", &vec![0; u32::MAX as usize + 1]).unwrap_err();
 
         assert_eq!(err.kind(), std::io::ErrorKind::Other);
     }
 
     #[test]
-    fn data_is_compressed() {
+    fn multiple_files_are_encoded_correctly() {
         let mut res = dummy();
 
-        res.append_data("abc", &[0; 512], Compression::Zopfli).unwrap();
+        res.append_data("hello", &[0xde, 0xad, 0xbe, 0xef]).unwrap();
+        res.append_data("world!", &[0xde, 0xad, 0xc0, 0xde]).unwrap();
 
-        let res = res.into_inner().into_inner();
-        assert!(res.len() < 100);
-        assert_eq!(u32::from_le_bytes(res[4..8].try_into().unwrap()) as usize, res.len() - 8);
-
-        let mut zcat =
-            Command::new("zcat").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
-        zcat.stdin.take().unwrap().write_all(&res[8..]).unwrap();
-        let decompressed = zcat.wait_with_output().unwrap().stdout;
-
-        assert_eq!(decompressed, vec![0; 512]);
-    }
-
-    #[test]
-    fn can_decompress() {
-        let mut data = dummy();
-
-        data.append_data("abc", &[1, 2, 3, 4, 5], Compression::Zopfli).unwrap();
-        data.append_data("def", &[1, 2], Compression::None).unwrap();
-
-        let mut data = data.into_inner();
-        data.set_position(0);
-        let mut decoder = Reader::new(data);
-
-        let first = decoder.next().unwrap().unwrap();
-        assert_eq!(first.path, "abc");
-        assert_eq!(first.data, vec![1, 2, 3, 4, 5]);
-        let second = decoder.next().unwrap().unwrap();
-        assert_eq!(second.path, "def");
-        assert_eq!(second.data, vec![1, 2]);
-        assert!(decoder.next().is_none());
+        assert_eq!(
+            res.into_inner().into_inner(),
+            vec![
+                5, b'h', b'e', b'l', b'l', b'o', 4, 0, 0, 0, 0xde, 0xad, 0xbe, 0xef, 6, b'w', b'o',
+                b'r', b'l', b'd', b'!', 4, 0, 0, 0, 0xde, 0xad, 0xc0, 0xde
+            ]
+        );
     }
 
     fn dummy() -> Writer<Cursor<Vec<u8>>> {
