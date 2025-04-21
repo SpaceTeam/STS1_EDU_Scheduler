@@ -1,4 +1,4 @@
-use crc::{Crc, CRC_32_MPEG_2};
+use crc::{Crc, CRC_32_JAMCRC};
 use std::io::Read;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,7 +21,7 @@ impl CEPPacket {
     pub const MAXIMUM_DATA_LENGTH: usize = 11_000;
     pub const MAXIMUM_PACKET_LENGTH: usize = 7 + Self::MAXIMUM_DATA_LENGTH;
 
-    const CRC: Crc<u32> = Crc::<u32>::new(&CRC_32_MPEG_2);
+    const CRC: Crc<u32> = Crc::<u32>::new(&CRC_32_JAMCRC);
 
     /// Calculates the CRC32 MPEG-2 checksum for the contained data. For variants other than `Self::Data`, 0 is returned
     #[must_use]
@@ -138,7 +138,7 @@ mod tests {
     #[test_case(vec![0x27], CEPPacket::Nack)]
     #[test_case(vec![0x59], CEPPacket::Eof)]
     #[test_case(vec![0x8B, 0, 0, 0xff, 0xff, 0xff, 0xff], CEPPacket::Data(vec![]); "empty Data packet")]
-    #[test_case(vec![0x8B, 4, 0, 0x0a, 0x0b, 0x05, 0x73, 0x52, 0x27, 0x92, 0xf4], CEPPacket::Data(vec![0x0a, 0x0b, 0x05, 0x73]); "filled data packet")]
+    #[test_case(vec![0x8B, 4, 0, 0x0a, 0x0b, 0x05, 0x73, 0xA5, 0xFB, 0x28, 0x09], CEPPacket::Data(vec![0x0a, 0x0b, 0x05, 0x73]); "filled data packet")]
     fn packet_is_parsed_and_serialized_correctly(vec: Vec<u8>, packet: CEPPacket) {
         assert_eq!(&packet.clone().serialize(), &vec);
         assert_eq!(CEPPacket::try_from(vec).unwrap(), packet);
