@@ -133,7 +133,7 @@ impl<T: Serialize + DeserializeOwned> Extend<T> for FileVec<T> {
 
 pub struct FileVecGuard<'a, T: Serialize + DeserializeOwned>(&'a mut FileVec<T>);
 
-impl<'a, T: Serialize + DeserializeOwned> Deref for FileVecGuard<'a, T> {
+impl<T: Serialize + DeserializeOwned> Deref for FileVecGuard<'_, T> {
     type Target = Vec<T>;
 
     fn deref(&self) -> &Self::Target {
@@ -141,13 +141,13 @@ impl<'a, T: Serialize + DeserializeOwned> Deref for FileVecGuard<'a, T> {
     }
 }
 
-impl<'a, T: Serialize + DeserializeOwned> DerefMut for FileVecGuard<'a, T> {
+impl<T: Serialize + DeserializeOwned> DerefMut for FileVecGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0.vec
     }
 }
 
-impl<'a, T: Serialize + DeserializeOwned> Drop for FileVecGuard<'a, T> {
+impl<T: Serialize + DeserializeOwned> Drop for FileVecGuard<'_, T> {
     fn drop(&mut self) {
         let _ = self.0.write_to_file();
     }
