@@ -111,7 +111,7 @@ pub trait CommunicationHandle: Read + Write {
                     log::error!("Received invalid data {:?}", e);
                     self.send_packet(&CEPPacket::Nack)?;
                 }
-            };
+            }
         }
 
         self.send_packet(&CEPPacket::Ack)?;

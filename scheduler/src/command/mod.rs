@@ -42,7 +42,7 @@ pub fn handle_command(com: &mut impl CommunicationHandle, exec: &mut SyncExecuti
         Err(CommandError::External(e)) => {
             log::error!("External error: {e}");
         }
-    };
+    }
 }
 
 pub fn process_command(
@@ -70,7 +70,7 @@ pub fn process_command(
         b => {
             return Err(CommandError::ProtocolViolation(anyhow!("Unknown command {b:#x}")));
         }
-    };
+    }
 
     Ok(())
 }
