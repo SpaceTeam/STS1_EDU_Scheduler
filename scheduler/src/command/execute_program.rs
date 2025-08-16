@@ -99,12 +99,12 @@ fn supervise_process(
     if let Ok(code) = run_until_timeout(&mut process, timeout, exec) {
         Ok(code)
     } else {
-        log::warn!("Student Process timed out or is stopped");
-        process.kill().unwrap(); // send SIGKILL
-        process
-            .wait_timeout(Duration::from_millis(200)) // wait for it to do its magic
-            .unwrap()
-            .unwrap(); // Panic if not stopped
+        log::warn!("Student Process timed out or should be stopped");
+        process.terminate().unwrap();
+        if process.wait_timeout(Duration::from_millis(200)).unwrap().is_none() {
+            log::warn!("Student Process did not react to SIGTERM, killing...");
+            process.kill().unwrap();
+        }
         Err(())
     }
 }
