@@ -21,7 +21,7 @@ pub fn update_time(
 fn set_system_time(s_since_epoch: i32) -> CommandResult {
     let exit_status = Command::new("date").arg("-s").arg(format!("@{s_since_epoch}")).status()?;
     if !exit_status.success() {
-        return Err(CommandError::NonRecoverable(anyhow!("date utility failed")));
+        return Err(CommandError::External(anyhow!("date utility failed with {:?}", exit_status)));
     }
 
     Ok(())
