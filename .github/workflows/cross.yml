@@ -17,6 +17,7 @@ jobs:
         cross build --examples --bins --release --target aarch64-unknown-linux-gnu
         mv target/aarch64-unknown-linux-gnu/release/STS1_EDU_Scheduler .
         mv target/aarch64-unknown-linux-gnu/release/examples/cli .
+        mv target/aarch64-unknown-linux-gnu/release/simple-archive
         cp scheduler/config.toml .
         cp scheduler/scheduler.service .
     - name: Upload artifact
@@ -28,3 +29,4 @@ jobs:
           config.toml
           scheduler.service
           cli
+          simple-archive
