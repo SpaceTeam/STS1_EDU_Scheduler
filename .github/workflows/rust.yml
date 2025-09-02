@@ -15,7 +15,7 @@ jobs:
     - name: Install
       run: sudo apt install socat libudev-dev
     - name: Build
-      run: cargo build --release
+      run: cargo build --release -p STS1_EDU_Scheduler
     - name: Run tests
       run: cargo test --release --features mock
 
@@ -29,3 +29,17 @@ jobs:
         run: cargo clippy -- -D warnings
       - name: Formatting
         run: cargo fmt --all --check
+
+  tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          cargo build --release -p simple-archive
+          mv target/release/simple-archive ./sa
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: amd64 package
+          path: sa
