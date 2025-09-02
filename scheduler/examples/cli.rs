@@ -1,7 +1,7 @@
 use std::{
     error::Error,
     io::{Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Stdio},
     time::Duration,
 };
@@ -9,13 +9,14 @@ use std::{
 use STS1_EDU_Scheduler::communication::{CEPPacket, CommunicationHandle};
 
 fn main() {
-    let scheduler_path =
-        std::env::args().nth(1).expect("Pass in the directory containing the scheduler binary");
+    let scheduler_path = PathBuf::from(
+        std::env::args().nth(1).expect("Pass in the directory containing the scheduler binary"),
+    );
 
-    let mut serial = SocatSerialPort::new(&format!("{scheduler_path}/virtualserial"));
+    let mut serial = SocatSerialPort::new(&scheduler_path.join("virtualserial"));
     write_scheduler_config(&scheduler_path);
     let _scheduler = PoisonedChild(
-        std::process::Command::new(format!("{scheduler_path}/STS1_EDU_Scheduler"))
+        std::process::Command::new("./STS1_EDU_Scheduler")
             .current_dir(&scheduler_path)
             .spawn()
             .unwrap(),
@@ -35,10 +36,10 @@ pub struct SocatSerialPort<T: Read, U: Write> {
 }
 
 impl SocatSerialPort<ChildStdout, ChildStdin> {
-    fn new(path: &str) -> Self {
+    fn new(path: &Path) -> Self {
         let mut child = std::process::Command::new("socat")
             .arg("stdio")
-            .arg(format!("pty,raw,echo=0,link={path},b921600,wait-slave"))
+            .arg(format!("pty,raw,echo=0,link={},b921600,wait-slave", path.display()))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -57,9 +58,9 @@ impl SocatSerialPort<ChildStdout, ChildStdin> {
     }
 }
 
-fn write_scheduler_config(path: &str) {
+fn write_scheduler_config(path: &Path) {
     std::fs::write(
-        format!("{path}/config.toml"),
+        path.join("config.toml"),
         "
         uart = \"virtualserial\"
         baudrate = 921600
@@ -67,6 +68,7 @@ fn write_scheduler_config(path: &str) {
     update_pin = 35
     heartbeat_freq = 10
     log_path = \"log\"
+    socket = \"/tmp/scheduler_socket\"
     ",
     )
     .unwrap();
@@ -77,10 +79,10 @@ const COMMANDS: &[&str] =
 
 fn inquire_and_send_command(
     edu: &mut impl CommunicationHandle,
-    path: &str,
+    path: &Path,
 ) -> Result<(), Box<dyn Error>> {
     let mut select = inquire::Select::new("Select command", COMMANDS.to_vec());
-    if Path::new(&format!("{path}/updatepin")).exists() {
+    if path.join("updatepin").exists() {
         select.help_message = Some("Update Pin is high");
     }
     let command = select.prompt()?;
