@@ -44,7 +44,7 @@ pub fn execute_program(
     let wd_handle = std::thread::spawn(move || {
         let exit_code = supervise_process(student_process, timeout, &mut wd_context).unwrap_or(255);
 
-        log::info!("Program {}:{} finished with {}", program_id, timestamp, exit_code);
+        log::info!("Program {program_id}:{timestamp} finished with {exit_code}");
         let sid = ProgramStatus { program_id, timestamp, exit_code };
         let rid = ResultId { program_id, timestamp };
         build_result_archive(rid).unwrap(); // create the tar file with result and log

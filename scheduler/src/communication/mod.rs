@@ -108,7 +108,7 @@ pub trait CommunicationHandle: Read + Write {
                     return Err(CommunicationError::TimedOut);
                 }
                 e => {
-                    log::error!("Received invalid data {:?}", e);
+                    log::error!("Received invalid data {e:?}");
                     self.send_packet(&CEPPacket::Nack)?;
                 }
             }
