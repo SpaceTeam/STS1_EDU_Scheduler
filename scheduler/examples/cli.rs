@@ -1,3 +1,4 @@
+use clap::Parser;
 use std::{
     error::Error,
     io::{Read, Write},
@@ -5,37 +6,55 @@ use std::{
     process::{Child, ChildStdin, ChildStdout, Stdio},
     time::Duration,
 };
-
 use STS1_EDU_Scheduler::communication::{CEPPacket, CommunicationHandle};
 
+#[derive(clap::Parser)]
+enum Args {
+    /// Simulate a serialport through socat, with the scheduler running on your host
+    Simulate {
+        #[arg(default_value = "target/release")]
+        target_dir: PathBuf,
+    },
+    /// Connect serialport which has an EDU already running
+    Serial {
+        serialport: String,
+        #[arg(long, short, default_value_t = 115200)]
+        baudrate: u32,
+    },
+}
+
 fn main() {
-    let scheduler_path = PathBuf::from(
-        std::env::args().nth(1).expect("Pass in the directory containing the scheduler binary"),
-    );
+    let args = Args::parse();
 
-    let mut serial = SocatSerialPort::new(&scheduler_path.join("virtualserial"));
-    write_scheduler_config(&scheduler_path);
-    let _scheduler = PoisonedChild(
-        std::process::Command::new("./STS1_EDU_Scheduler")
-            .current_dir(&scheduler_path)
-            .spawn()
-            .unwrap(),
-    );
+    match args {
+        Args::Simulate { target_dir } => {
+            write_scheduler_config(&target_dir);
+            let mut handle = SimulationContext::new(&target_dir.join("virtualserial"));
+            inquire_loop(&mut handle);
+        }
+        Args::Serial { serialport, baudrate } => {
+            let mut serial = serialport::new(serialport, baudrate).open().unwrap();
+            inquire_loop(&mut serial);
+        }
+    };
+}
 
+fn inquire_loop(handle: &mut impl CommunicationHandle) -> ! {
     loop {
-        inquire_and_send_command(&mut serial, &scheduler_path).unwrap();
+        inquire_and_send_command(handle).unwrap();
         println!("------------------------");
         std::thread::sleep(Duration::from_millis(100));
     }
 }
 
-pub struct SocatSerialPort<T: Read, U: Write> {
-    child: Child,
+pub struct SimulationContext<T: Read, U: Write> {
+    socat: Child,
+    _scheduler: PoisonedChild,
     stdout: T,
     stdin: U,
 }
 
-impl SocatSerialPort<ChildStdout, ChildStdin> {
+impl SimulationContext<ChildStdout, ChildStdin> {
     fn new(path: &Path) -> Self {
         let mut child = std::process::Command::new("socat")
             .arg("stdio")
@@ -52,9 +71,13 @@ impl SocatSerialPort<ChildStdout, ChildStdin> {
             std::thread::sleep(Duration::from_millis(50));
         }
 
+        let scheduler = PoisonedChild(
+            std::process::Command::new("./STS1_EDU_Scheduler").current_dir(path).spawn().unwrap(),
+        );
+
         let stdout = child.stdout.take().unwrap();
         let stdin = child.stdin.take().unwrap();
-        Self { child, stdout, stdin }
+        Self { socat: child, _scheduler: scheduler, stdout, stdin }
     }
 }
 
@@ -77,14 +100,8 @@ fn write_scheduler_config(path: &Path) {
 const COMMANDS: &[&str] =
     &["StoreArchive", "ExecuteProgram", "StopProgram", "GetStatus", "ReturnResult", "UpdateTime"];
 
-fn inquire_and_send_command(
-    edu: &mut impl CommunicationHandle,
-    path: &Path,
-) -> Result<(), Box<dyn Error>> {
-    let mut select = inquire::Select::new("Select command", COMMANDS.to_vec());
-    if path.join("updatepin").exists() {
-        select.help_message = Some("Update Pin is high");
-    }
+fn inquire_and_send_command(edu: &mut impl CommunicationHandle) -> Result<(), Box<dyn Error>> {
+    let select = inquire::Select::new("Select command", COMMANDS.to_vec());
     let command = select.prompt()?;
 
     match command {
@@ -148,19 +165,30 @@ fn inquire_and_send_command(
                 Err(e) => println!("Received {e:?}"),
             }
         }
-        _ => (),
+        "UpdateTime" => {
+            let actual = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let since_epoch = inquire::prompt_u32("Seconds since epoch (empty for current time):")
+                .unwrap_or(actual as u32);
+
+            edu.send_packet(&CEPPacket::Data(update_time(since_epoch)))?;
+            println!("Received {:?}", edu.receive_packet()?);
+        }
+        c => unimplemented!("{c}"),
     }
 
     Ok(())
 }
 
-impl<T: Read, U: Write> Read for SocatSerialPort<T, U> {
+impl<T: Read, U: Write> Read for SimulationContext<T, U> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.stdout.read(buf)
     }
 }
 
-impl<T: Read, U: Write> Write for SocatSerialPort<T, U> {
+impl<T: Read, U: Write> Write for SimulationContext<T, U> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.stdin.write(buf)
     }
@@ -170,13 +198,13 @@ impl<T: Read, U: Write> Write for SocatSerialPort<T, U> {
     }
 }
 
-impl<T: Read, U: Write> Drop for SocatSerialPort<T, U> {
+impl<T: Read, U: Write> Drop for SimulationContext<T, U> {
     fn drop(&mut self) {
-        self.child.kill().unwrap();
+        self.socat.kill().unwrap();
     }
 }
 
-impl<T: Read, U: Write> CommunicationHandle for SocatSerialPort<T, U> {
+impl<T: Read, U: Write> CommunicationHandle for SimulationContext<T, U> {
     const INTEGRITY_ACK_TIMEOUT: Duration = Duration::MAX;
     const UNLIMITED_TIMEOUT: Duration = Duration::MAX;
 
@@ -221,5 +249,12 @@ pub fn return_result(program_id: u16, timestamp: u32) -> Vec<u8> {
     let mut vec = vec![5u8];
     vec.extend(program_id.to_le_bytes());
     vec.extend(timestamp.to_le_bytes());
+    vec
+}
+
+#[must_use]
+pub fn update_time(since_epoch: u32) -> Vec<u8> {
+    let mut vec = vec![6u8];
+    vec.extend(since_epoch.to_le_bytes());
     vec
 }

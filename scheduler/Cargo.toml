@@ -24,6 +24,7 @@ mock = []
 rpi = []
 
 [dev-dependencies]
+clap = "4.5.47"
 file-per-thread-logger = "0.2.0"
 inquire = "0.7.5"
 test-case = "3.3.1"

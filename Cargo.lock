@@ -7,6 +7,7 @@ name = "STS1_EDU_Scheduler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "crc",
  "file-per-thread-logger",
  "filevec",
