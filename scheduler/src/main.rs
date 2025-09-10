@@ -5,8 +5,8 @@ use communication::socket::UnixSocketParser;
 use core::time;
 use rppal::gpio::Gpio;
 use serialport::SerialPort;
-use simplelog as sl;
 use std::{
+    fs::OpenOptions,
     io::ErrorKind,
     sync::{Arc, Mutex},
     thread,
@@ -40,11 +40,24 @@ impl Default for Configuration {
 }
 
 fn main() -> ! {
-    let _ = sl::WriteLogger::init(
-        sl::LevelFilter::Info,
-        sl::Config::default(),
-        std::fs::OpenOptions::new().create(true).append(true).open("log").unwrap(),
-    );
+    create_directory_if_not_exists("archives").unwrap();
+    create_directory_if_not_exists("data").unwrap();
+
+    let _ = trim_permalog(); // failure is not critical
+
+    simplelog::CombinedLogger::init(vec![
+        simplelog::WriteLogger::new(
+            log::LevelFilter::Info,
+            simplelog::Config::default(),
+            OpenOptions::new().create(true).append(true).open("log").unwrap(),
+        ),
+        simplelog::WriteLogger::new(
+            log::LevelFilter::Debug,
+            simplelog::Config::default(),
+            OpenOptions::new().create(true).append(true).open("permalog").unwrap(),
+        ),
+    ])
+    .unwrap();
 
     let config: Configuration = if let Ok(s) = std::fs::read_to_string("./config.toml") {
         toml::from_str(&s)
@@ -54,9 +67,6 @@ fn main() -> ! {
         log::error!("Could not open config.toml, using default");
         Configuration::default()
     };
-
-    create_directory_if_not_exists("archives").unwrap();
-    create_directory_if_not_exists("data").unwrap();
 
     log::info!("Scheduler started");
 
@@ -122,4 +132,15 @@ fn create_directory_if_not_exists(path: impl AsRef<std::path::Path>) -> std::io:
         Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
         Err(e) => Err(e),
     }
+}
+
+fn trim_permalog() -> anyhow::Result<()> {
+    const PERMALOG_MAX_SIZE: u64 = 1_000_000;
+
+    let file = OpenOptions::new().write(true).open("permalog")?;
+    if file.metadata()?.len() > PERMALOG_MAX_SIZE {
+        file.set_len(0)?;
+    }
+
+    Ok(())
 }
