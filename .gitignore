@@ -1,13 +1,9 @@
-.idea
-__pycache__/
-*.py[cod]
-venv
 .vscode
-log
-archives/*
-data/*
-tests/tmp/
-lib/**/target
+
+scheduler/tests/tmp
+scheduler/data
+updatepin
+ThreadId**
 
 # Added by cargo
 
