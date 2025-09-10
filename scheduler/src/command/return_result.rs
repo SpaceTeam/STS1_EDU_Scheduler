@@ -26,7 +26,7 @@ pub fn return_result(
     }
 
     let bytes = std::fs::read(result_path)?;
-    log::info!("Returning result for {}:{}", program_id, timestamp);
+    log::info!("Returning result for {program_id}:{timestamp}");
     com.send_multi_packet(&bytes)?;
 
     com.await_ack(COMMAND_TIMEOUT)?;

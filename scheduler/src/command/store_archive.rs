@@ -15,7 +15,7 @@ pub fn store_archive(
     check_length(com, data, 3)?;
 
     let id = u16::from_le_bytes([data[1], data[2]]).to_string();
-    log::info!("Storing Archive {}", id);
+    log::info!("Storing Archive {id}");
 
     let bytes = com.receive_multi_packet()?;
     unpack_archive(&id, &bytes)?;
