@@ -7,6 +7,7 @@ mod timeout;
 
 use std::{
     io::{Read, Write},
+    path::Path,
     process::{Child, ChildStdin, ChildStdout, Stdio},
     time::Duration,
 };
@@ -92,17 +93,21 @@ fn start_scheduler(
     (PoisonedChild, SimulationComHandle<ChildStdout, ChildStdin>, PoisonedChild),
     std::io::Error,
 > {
-    let test_dir = format!("./tests/tmp/{unique}");
-    let scheduler_bin = std::fs::canonicalize("../target/release/STS1_EDU_Scheduler")?;
+    let test_dir = Path::new("./tests/tmp/").join(unique);
     let _ = std::fs::remove_dir_all(&test_dir);
     std::fs::create_dir_all(&test_dir)?;
-    std::fs::write(format!("{}/config.toml", &test_dir), get_config_str(unique))?;
-    let (handle, socat) = SimulationComHandle::with_socat_proc(&format!("{test_dir}/uart"));
+    std::fs::write(test_dir.join("config.toml"), get_config_str(unique))?;
+    let (handle, socat) =
+        SimulationComHandle::with_socat_proc(&test_dir.join("uart").as_os_str().to_string_lossy());
 
-    let scheduler =
-        std::process::Command::new(scheduler_bin).current_dir(test_dir).spawn().unwrap();
+    let scheduler = spawn_scheduler(&test_dir)?;
 
-    Ok((PoisonedChild(scheduler), handle, socat))
+    Ok((scheduler, handle, socat))
+}
+
+fn spawn_scheduler(work_dir: &Path) -> std::io::Result<PoisonedChild> {
+    let scheduler_bin = std::fs::canonicalize("../target/release/STS1_EDU_Scheduler")?;
+    Ok(PoisonedChild(std::process::Command::new(scheduler_bin).current_dir(work_dir).spawn()?))
 }
 
 pub fn simulate_test_store_archive(

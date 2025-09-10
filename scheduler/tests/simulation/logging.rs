@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::simulation::*;
 
 #[test]
@@ -22,8 +24,32 @@ fn logfile_is_cleared_after_sent() -> std::io::Result<()> {
     com.send_packet(&CEPPacket::Ack).unwrap();
     std::thread::sleep(std::time::Duration::from_millis(100));
 
-    let log_metadata = std::fs::metadata("./tests/tmp/log_is_cleared_after_sent/log")?;
-    assert!(log_metadata.len() < 100, "Logfile is not empty");
+    assert!(
+        file_size("./tests/tmp/log_is_cleared_after_sent/log")? < 100,
+        "Logfile is not cleared"
+    );
 
     Ok(())
+}
+
+#[test]
+fn permalog_is_truncated() -> std::io::Result<()> {
+    // Fill up log well above 1 MB
+    {
+        let (_sched, mut com, _socat) = start_scheduler("permalog_is_truncated")?;
+        for _ in 0..50_000 {
+            simulate_get_status(&mut com).unwrap();
+        }
+        assert!(file_size("./tests/tmp/permalog_is_truncated/permalog")? > 1_000_000);
+    }
+    // Restart
+    let _sched = spawn_scheduler(&Path::new("tests/tmp").join("permalog_is_truncated"))?;
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    assert!(file_size("./tests/tmp/permalog_is_truncated/permalog")? < 100);
+
+    Ok(())
+}
+
+fn file_size(file: impl AsRef<Path>) -> std::io::Result<u64> {
+    Ok(std::fs::File::open(file)?.metadata()?.len())
 }

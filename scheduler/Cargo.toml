@@ -24,9 +24,9 @@ mock = []
 rpi = []
 
 [dev-dependencies]
-test-case = "3.3.1"
 file-per-thread-logger = "0.2.0"
 inquire = "0.7.5"
+test-case = "3.3.1"
 
 [lints]
 workspace = true
