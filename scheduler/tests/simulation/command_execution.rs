@@ -55,8 +55,5 @@ fn result_is_deleted_after_transfer() {
 
     assert_eq!(simulate_get_status(&mut com).unwrap(), vec![0]);
     assert_eq!(std::fs::read_dir("tests/tmp/results_deleted/data").unwrap().count(), 0);
-    assert_eq!(
-        std::fs::read_dir("tests/tmp/results_deleted/archives/8/results").unwrap().count(),
-        0
-    );
+    assert!(std::fs::read_dir("tests/tmp/results_deleted/archives/8/3").is_err());
 }

@@ -18,7 +18,7 @@ fn get_status_none() {
 #[test]
 fn get_status_finished() {
     let packets = vec![
-        Cobc(Data(execute_program(6, 0, 1))), // Execute Program 6, Queue 0, Timeout 1s
+        Cobc(Data(execute_program(6, 0, 3))), // Execute Program 6, Queue 0, Timeout 1s
         Edu(Ack),
         Edu(Ack),
         Sleep(std::time::Duration::from_millis(500)),

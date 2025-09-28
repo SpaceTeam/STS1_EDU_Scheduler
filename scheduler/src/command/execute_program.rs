@@ -1,7 +1,7 @@
 use super::{CommandError, CommandResult, SyncExecutionContext};
 use crate::{
     command::{
-        check_length, terminate_student_program, Event, ProgramStatus, ResultId, RetryEvent,
+        Event, ProgramStatus, ResultId, RetryEvent, check_length, terminate_student_program,
     },
     communication::{self, CEPPacket, CommunicationHandle},
 };
@@ -9,9 +9,11 @@ use anyhow::anyhow;
 use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
+    result,
     time::Duration,
 };
 use subprocess::Popen;
+use tempfile::tempdir;
 use zopfli::Options;
 
 /// Executes a students program and starts a watchdog for it. The watchdog also creates entries in the
@@ -139,68 +141,119 @@ fn run_until_timeout(
     Err(())
 }
 
-const RESULT_SIZE_LIMIT: usize = 1_000_000;
+const RESULT_SIZE_LIMIT: u64 = 1_000_000;
 
 fn build_result_archive(res: ResultId) -> Result<(), std::io::Error> {
-    let out_path = PathBuf::from(&format!("./data/{res}"));
-    let mut archive = simple_archive::Writer::new(Vec::new());
+    let result_dir =
+        Path::new("archives").join(res.program_id.to_string()).join(res.timestamp.to_string());
+    let log = Path::new("log");
+    let student_log = Path::new("data").join(res.to_string() + ".log");
 
-    let res_path =
-        PathBuf::from(format!("./archives/{}/results/{}", res.program_id, res.timestamp));
-    let student_log_path = PathBuf::from(format!("./data/{res}.log"));
-    let log_path = PathBuf::from("./log");
+    let mut entries = Vec::new();
 
-    if let Some(d) = open_if_exists(&res_path)? {
-        if d.len() <= RESULT_SIZE_LIMIT {
-            archive.append_data(&res.to_string(), &d)?;
-        } else {
-            log::warn!("Result file for {res} is too large ({})", d.len());
+    if let Ok(size) = directory_file_size(&result_dir)
+        && size < RESULT_SIZE_LIMIT
+        && let Ok(files) = list_files(&result_dir)
+    {
+        let result_entries = files.into_iter().filter_map(|f| create_cpio_entry(f).ok());
+        entries.extend(result_entries);
+    } else {
+        log::warn!(
+            "Result directory for {res} cannot be read or exceeds {RESULT_SIZE_LIMIT} bytes"
+        );
+    }
+
+    if let Ok(log) = create_compressed_cpio_entry(log) {
+        entries.push(log);
+    }
+    if let Ok(student_log) = create_compressed_cpio_entry(&student_log) {
+        entries.push(student_log);
+    }
+
+    let output_path = Path::new("data").join(res.to_string());
+    let output_file =
+        std::fs::OpenOptions::new().create(true).write(true).truncate(true).open(output_path)?;
+
+    cpio::write_cpio(entries.into_iter(), output_file)?;
+
+    let _ = std::fs::OpenOptions::new().write(true).truncate(true).open(log);
+    let _ = std::fs::remove_file(student_log);
+    let _ = std::fs::remove_dir_all(result_dir);
+
+    Ok(())
+}
+
+fn create_cpio_entry(
+    path: impl AsRef<Path>,
+) -> std::io::Result<(cpio::NewcBuilder, std::fs::File)> {
+    let file_name = path
+        .as_ref()
+        .file_name()
+        .and_then(|f| f.to_str())
+        .ok_or(std::io::Error::from(ErrorKind::InvalidFilename))?;
+
+    let builder = cpio::NewcBuilder::new(file_name).uid(1000).gid(1000).mode(0o100_644);
+    let file = std::fs::File::open(path)?;
+
+    Ok((builder, file))
+}
+
+fn create_compressed_cpio_entry(
+    path: impl AsRef<Path>,
+) -> std::io::Result<(cpio::NewcBuilder, std::fs::File)> {
+    let compressed_path = Path::new("/tmp").join(path.as_ref().file_name().unwrap());
+    let compressed = std::fs::File::create(&compressed_path)?;
+
+    zopfli::compress(
+        Options::default(),
+        zopfli::Format::Gzip,
+        std::fs::File::open(path)?,
+        &compressed,
+    )?;
+
+    create_cpio_entry(compressed_path)
+}
+
+/// List all files in a directory non-recursively
+fn list_files(path: impl AsRef<Path>) -> std::io::Result<Vec<PathBuf>> {
+    let dir = std::fs::read_dir(path)?;
+    let mut res = Vec::new();
+
+    for e in dir {
+        let e = e?;
+        if e.file_type()?.is_file() {
+            res.push(e.path());
         }
     }
 
-    if let Some(d) = open_if_exists(&log_path)? {
-        compress_into_archive_if_it_fits(&mut archive, "log", &d)?;
-    }
-
-    if let Some(d) = open_if_exists(&student_log_path)? {
-        compress_into_archive_if_it_fits(&mut archive, "student_log", &d)?;
-    }
-
-    std::fs::write(out_path, archive.into_inner())?;
-
-    let _ = std::fs::remove_file(res_path);
-    let _ = std::fs::remove_file(student_log_path);
-    let _ = std::fs::OpenOptions::new().write(true).truncate(true).open(log_path);
-
-    Ok(())
+    Ok(res)
 }
 
-fn open_if_exists(path: impl AsRef<Path>) -> std::io::Result<Option<Vec<u8>>> {
-    match std::fs::read(path) {
-        Ok(d) => Ok(Some(d)),
-        Err(ref e) if e.kind() == ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(e),
+fn directory_file_size(path: impl AsRef<Path>) -> std::io::Result<u64> {
+    let mut size = 0;
+    for p in list_files(path)? {
+        size += p.metadata()?.len();
     }
+    Ok(size)
 }
 
-fn compress_into_archive_if_it_fits(
-    archive: &mut simple_archive::Writer<Vec<u8>>,
-    path: &str,
-    data: &[u8],
-) -> std::io::Result<()> {
-    let mut compressed = Vec::new();
-    zopfli::compress(Options::default(), zopfli::Format::Gzip, data, &mut compressed)?;
+#[cfg(test)]
+mod tests {
+    use crate::command::execute_program::{directory_file_size, list_files};
+    use tempfile::tempdir;
 
-    if compressed.len()
-        <= communication::MAXIMUM_DATA_LENGTH
-            - archive.inner().len()
-            - path.len()
-            - simple_archive::HEADER_SIZE
-    {
-        archive.append_data(path, &compressed)?;
-    } else {
-        log::warn!("Could not fit {path} into result");
+    #[test]
+    fn directory_files_and_size_are_correct() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        std::fs::create_dir(path.join("eyyy")).unwrap();
+        std::fs::write(path.join("a"), [0; 10]).unwrap();
+        std::fs::write(path.join("b"), [0; 15]).unwrap();
+
+        let files = list_files(path).unwrap();
+        assert_eq!(files.len(), 2);
+        assert!(files.contains(&path.join("a")) && files.contains(&path.join("b")));
+
+        assert_eq!(directory_file_size(path).unwrap(), 25);
     }
-
-    Ok(())
 }
