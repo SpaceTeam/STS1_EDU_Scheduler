@@ -1,10 +1,11 @@
 [package]
 name = "STS1_EDU_Scheduler"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 anyhow = { version = "1.0.86", features = ["backtrace"] }
+cpio = "0.4.1"
 crc = "3.2.1"
 filevec = { path = "../filevec" }
 log = "0.4.22"
@@ -15,6 +16,7 @@ simple-archive = { path = "../simple-archive" }
 simplelog = "0.12.2"
 strum = { version = "0.26.3", features = ["derive"] }
 subprocess = "0.2.9"
+tempfile = "3.23.0"
 thiserror = "1.0.63"
 toml = "0.8.19"
 zopfli = "0.8.1"
@@ -27,6 +29,7 @@ rpi = []
 clap = "4.5.47"
 file-per-thread-logger = "0.2.0"
 inquire = "0.7.5"
+tempfile = "3.23.0"
 test-case = "3.3.1"
 
 [lints]

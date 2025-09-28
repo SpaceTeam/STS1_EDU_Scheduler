@@ -1,9 +1,10 @@
+use std::io::Read;
+
 use crate::software_tests::common;
 use crate::software_tests::common::ComEvent::*;
-use common::*;
-use simple_archive::Entry;
 use STS1_EDU_Scheduler::command::{self};
 use STS1_EDU_Scheduler::communication::CEPPacket::*;
+use common::*;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -43,12 +44,20 @@ fn returns_result_correctly() -> TestResult {
     command::handle_command(&mut com, &mut exec);
     assert!(com.is_complete());
 
-    let results = simple_archive::Reader::new(std::fs::File::open("tests/tmp/7_3")?)
-        .map(Result::unwrap)
-        .collect::<Vec<_>>();
-    dbg!(&results);
-    assert!(results.contains(&Entry { path: "7_3".to_string(), data: vec![0xde, 0xad] }));
-    assert!(results.iter().any(|e| e.path == "student_log"));
+    let mut results = cpio::NewcReader::new(std::fs::File::open("tests/tmp/7_3")?)?;
+    while !results.entry().is_trailer() {
+        match results.entry().name() {
+            "result" => {
+                let mut buf = [0; 2];
+                results.read_exact(&mut buf)?;
+                assert_eq!(buf, [0xde, 0xad]);
+            }
+            "log" | "7_3.log" => (),
+            n => panic!("Invalid name {n}"),
+        }
+
+        results = cpio::NewcReader::new(results.skip()?)?;
+    }
 
     common::cleanup("7");
     Ok(())
