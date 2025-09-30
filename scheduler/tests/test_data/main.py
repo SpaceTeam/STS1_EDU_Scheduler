@@ -1,6 +1,8 @@
 import os
 import sys
 import time
+import socket
+from pathlib import Path
 
 
 def main(queue_id: str):
@@ -30,6 +32,12 @@ def main(queue_id: str):
         with open(f"{queue_id}/result", "wb") as f:
             for _ in range(1700000):
                 f.write(b"\xfe")
+    elif queue_id == "6":
+        socket_path = "/tmp/scheduler_socket" if Path("/tmp/scheduler_socket").exists() else "/tmp/STS1_EDU_Scheduler_SIM_dosimeter_python"
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.connect(socket_path)
+            client.send(b"dosimeter/on\n")
+            client.close()
 
 
 if __name__ == "__main__":
