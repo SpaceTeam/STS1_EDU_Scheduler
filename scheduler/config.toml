@@ -1,5 +1,5 @@
 uart = "/dev/serial0"
-baudrate = 921600
+baudrate = 115200
 heartbeat_pin = 34
 update_pin = 35
 heartbeat_freq = 10 # Hz
