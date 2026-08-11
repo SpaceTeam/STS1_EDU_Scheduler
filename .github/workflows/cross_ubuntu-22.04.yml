@@ -1,0 +1,32 @@
+name: Compile for the RPi (ubuntu 22.04)
+
+on:
+  push:
+    branches: [ "master" ]
+  workflow_dispatch:
+
+jobs:
+  cross-compile:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+    - name: Prepare
+      run: cargo install cross --git https://github.com/cross-rs/cross
+    - name: Build
+      run: |
+        cross build --examples --bins --release --target aarch64-unknown-linux-gnu
+        mv target/aarch64-unknown-linux-gnu/release/STS1_EDU_Scheduler .
+        mv target/aarch64-unknown-linux-gnu/release/examples/cli .
+        mv target/aarch64-unknown-linux-gnu/release/simple-archive ./sa
+        cp scheduler/config.toml .
+        cp scheduler/scheduler.service .
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: aarch64 package
+        path: |
+          STS1_EDU_Scheduler
+          config.toml
+          scheduler.service
+          cli
+          sa
